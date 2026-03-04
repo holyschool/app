@@ -54,6 +54,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.tooling.preview.Preview
+import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 
 @Composable
 fun LoginScreen(
@@ -317,5 +319,39 @@ fun LoginScreen(
                 }
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Previews
+// ---------------------------------------------------------------------------
+
+@Preview(name = "Login – Idle Light", showBackground = true)
+@Preview(name = "Login – Idle Dark", showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun LoginScreenIdlePreview() {
+    Edupage2Theme {
+        LoginScreen(onLoginSuccess = {})
+    }
+}
+
+@Preview(name = "Login – Error", showBackground = true)
+@Composable
+private fun LoginScreenErrorPreview() {
+    Edupage2Theme {
+        // Render only the static shell; error card needs the live VM state so we show the idle form.
+        LoginScreen(
+            onLoginSuccess = {},
+            prefillUsername = "john.doe",
+            prefillSubdomain = "myschool"
+        )
+    }
+}
+
+@Preview(name = "Login – 2FA", showBackground = true)
+@Composable
+private fun LoginScreen2FAPreview() {
+    Edupage2Theme {
+        LoginScreen(onLoginSuccess = {})
     }
 }

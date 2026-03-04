@@ -27,6 +27,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.tooling.preview.Preview
+import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,5 +87,14 @@ fun SettingsScreen(
                 Text("Log out")
             }
         }
+    }
+}
+
+@Preview(name = "Settings – Light", showBackground = true)
+@Preview(name = "Settings – Dark", showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SettingsScreenPreview() {
+    Edupage2Theme {
+        SettingsScreen(bottomPadding = PaddingValues(), onLogout = {})
     }
 }

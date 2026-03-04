@@ -13,6 +13,7 @@ import com.edupage.api.model.EduClass
 import com.edupage.api.model.Classroom
 import com.edupage.api.model.people.EduStudent
 import com.edupage.api.model.people.EduTeacher
+import com.google.gson.JsonElement
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -25,6 +26,17 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+
+// Safe accessors: return null for JsonNull or missing keys instead of throwing.
+private fun JsonElement?.safeString(): String? =
+    if (this == null || this.isJsonNull) null else try { this.asString } catch (_: Exception) { null }
+private fun JsonElement?.safeBoolean(): Boolean? =
+    if (this == null || this.isJsonNull) null else try { this.asBoolean } catch (_: Exception) { null }
+private fun JsonElement?.safeInt(): Int? =
+    if (this == null || this.isJsonNull) null else try { this.asInt } catch (_: Exception) { null }
+private fun JsonElement?.safeObj(): JsonObject? =
+    if (this == null || this.isJsonNull) null else try { this.asJsonObject } catch (_: Exception) { null }
+private fun JsonObject?.field(key: String): JsonElement? = this?.get(key)
 
 /**
  * Provides timetable fetching functionality.
@@ -143,7 +155,7 @@ internal class Timetables(private val session: EdupageSession) {
 
         for (lessonJson in plan) {
             // Skip header entries (empty header or addlesson type)
-            val headerArray = lessonJson.getAsJsonArray("header")
+            val headerArray = lessonJson.get("header")?.takeIf { !it.isJsonNull }?.asJsonArray
             if (headerArray != null) {
                 val isEmpty = headerArray.size() == 0
                 val isAddLesson = headerArray.size() > 0 &&
@@ -151,53 +163,88 @@ internal class Timetables(private val session: EdupageSession) {
                 if (isEmpty || isAddLesson) continue
             }
 
-            val periodStr = lessonJson.get("uniperiod")?.asString
+            val periodStr = lessonJson.field("uniperiod").safeString()
             val period = periodStr?.toIntOrNull()
 
-            val startTimeStr = lessonJson.get("starttime")?.asString?.replace("24:00", "23:59")
+            val startTimeStr = lessonJson.field("starttime").safeString()?.replace("24:00", "23:59")
             val startTime = parseTime(startTimeStr)
 
-            val endTimeStr = lessonJson.get("endtime")?.asString?.replace("24:00", "23:59")
+            val endTimeStr = lessonJson.field("endtime").safeString()?.replace("24:00", "23:59")
             val endTime = parseTime(endTimeStr)
 
-            val duration = lessonJson.get("durationperiods")?.asInt ?: 1
+            val duration = lessonJson.field("durationperiods").safeInt() ?: 1
 
-            val subjectId = lessonJson.get("subjectid")?.asString
+            val subjectId = lessonJson.field("subjectid").safeString()
             val subject = subjects.getSubject(subjectId)
 
-            val classIds = lessonJson.getAsJsonArray("classids")
-            val lessonClasses = classIds?.mapNotNull {
-                classes.getClass(it.asString)
-            }
+            val classIds = lessonJson.get("classids")?.takeIf { !it.isJsonNull }?.asJsonArray
+            val lessonClasses = classIds?.mapNotNull { classes.getClass(it.asString) }
 
-            val groupNames = lessonJson.getAsJsonArray("groupnames")
+            val groupNames = lessonJson.get("groupnames")?.takeIf { !it.isJsonNull }?.asJsonArray
             val groups = groupNames?.mapNotNull { it.asString.takeIf { s -> s.isNotEmpty() } }
 
-            val teacherIds = lessonJson.getAsJsonArray("teacherids")
+            val teacherIds = lessonJson.get("teacherids")?.takeIf { !it.isJsonNull }?.asJsonArray
             val teachers = teacherIds?.mapNotNull {
                 people.getTeacher(it.asString.toIntOrNull() ?: return@mapNotNull null)
             }
 
-            val classroomIds = lessonJson.getAsJsonArray("classroomids")
-            val lessonClassrooms = classroomIds?.mapNotNull {
-                classrooms.getClassroom(it.asString)
+            val classroomIds = lessonJson.get("classroomids")?.takeIf { !it.isJsonNull }?.asJsonArray
+            val lessonClassrooms = classroomIds?.mapNotNull { classrooms.getClassroom(it.asString) }
+
+            val isEvent = lessonJson.field("type").safeString().let { it == "event" || it == "out" } ||
+                    lessonJson.field("main").safeBoolean() == true
+
+            val onlineLessonLink = lessonJson.field("ol_url").safeString()
+
+            val flags = lessonJson.get("flags").safeObj()
+            val dp0   = flags?.get("dp0").safeObj()
+
+            val curriculum = dp0?.field("note_wd").safeString()
+                ?: flags?.get("event").safeObj()?.field("name").safeString()
+
+            // isCancelled: prefer dp0.cancelled, fall back to legacy signals
+            val isCancelled = dp0?.field("cancelled").safeBoolean() == true ||
+                    lessonJson.field("removed").safeBoolean() == true ||
+                    lessonJson.field("type").safeString() == "absent" ||
+                    lessonJson.field("type").safeString() == ""
+
+            // --- orig fields from dp0.orig (non-null only when a substitution changed something) ---
+            // dp0.orig is the original timetable card; top-level ids are the new/current values.
+            val origCard = dp0?.get("orig").safeObj()
+
+            // Log when we find a substitution (dp0.changes non-empty or orig non-null)
+            val dp0Changes = dp0?.get("changes")?.takeIf { !it.isJsonNull }?.asJsonArray
+            if (origCard != null || (dp0Changes != null && dp0Changes.size() > 0)) {
+                System.err.println(
+                    "EduTT subst: period=$period subj=$subjectId " +
+                    "dp0.cancelled=${dp0?.field("cancelled").safeBoolean()} " +
+                    "dp0.changes=$dp0Changes " +
+                    "dp0.orig=$origCard"
+                )
             }
 
-            val isCancelled = lessonJson.get("removed")?.asBoolean == true ||
-                    lessonJson.get("type")?.asString == "absent" ||
-                    lessonJson.get("type")?.asString == ""
+            val origSubjectId = origCard?.field("subjectid").safeString()
+            val origSubject = if (origSubjectId != null && origSubjectId != subjectId)
+                subjects.getSubject(origSubjectId)
+            else null
 
-            val isEvent = lessonJson.get("type")?.asString == "event" ||
-                    lessonJson.get("type")?.asString == "out" ||
-                    lessonJson.get("main")?.asBoolean == true
+            val origTeacherIdArray = origCard?.get("teacherids")?.takeIf { !it.isJsonNull }?.asJsonArray
+            val origTeachers = if (origTeacherIdArray != null &&
+                origTeacherIdArray.map { it.asString } != teacherIds?.map { it.asString }
+            ) {
+                origTeacherIdArray.mapNotNull {
+                    people.getTeacher(it.asString.toIntOrNull() ?: return@mapNotNull null)
+                }.ifEmpty { null }
+            } else null
 
-            val onlineLessonLink = lessonJson.get("ol_url")?.asString
-
-            val curriculum = try {
-                val flags = lessonJson.getAsJsonObject("flags")
-                flags?.getAsJsonObject("dp0")?.get("note_wd")?.asString
-                    ?: flags?.getAsJsonObject("event")?.get("name")?.asString
-            } catch (e: Exception) { null }
+            val origClassroomIdArray = origCard?.get("classroomids")?.takeIf { !it.isJsonNull }?.asJsonArray
+            val origClassrooms = if (origClassroomIdArray != null &&
+                origClassroomIdArray.map { it.asString } != classroomIds?.map { it.asString }
+            ) {
+                origClassroomIdArray.mapNotNull {
+                    classrooms.getClassroom(it.asString)
+                }.ifEmpty { null }
+            } else null
 
             lessons.add(
                 Lesson(
@@ -213,7 +260,10 @@ internal class Timetables(private val session: EdupageSession) {
                     curriculum = curriculum,
                     onlineLessonLink = onlineLessonLink,
                     isCancelled = isCancelled,
-                    isEvent = isEvent
+                    isEvent = isEvent,
+                    origSubject = origSubject,
+                    origTeachers = origTeachers,
+                    origClassrooms = origClassrooms,
                 )
             )
         }

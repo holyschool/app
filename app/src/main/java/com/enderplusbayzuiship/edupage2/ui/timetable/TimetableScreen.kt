@@ -45,14 +45,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.edupage.api.model.timetable.Lesson
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import androidx.compose.ui.tooling.preview.Preview
+import com.edupage.api.model.Classroom
+import com.edupage.api.model.Subject
+import com.edupage.api.model.people.EduTeacher
+import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,7 +106,6 @@ fun TimetableScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(bottom = bottomPadding.calculateBottomPadding())
         ) {
             DateNavigationBar(
                 date = selectedDate,
@@ -164,7 +173,12 @@ fun TimetableScreen(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 12.dp,
+                                bottom = 12.dp + bottomPadding.calculateBottomPadding()
+                            ),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(state.lessons) { lesson ->
@@ -244,12 +258,10 @@ private fun LessonCard(lesson: Lesson) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     val startStr = lesson.startTime?.format(timeFormatter) ?: "?"
     val endStr = lesson.endTime?.format(timeFormatter) ?: "?"
-    val subjectName = lesson.subject?.name ?: "Unknown subject"
-    val teacherNames = lesson.teachers?.joinToString(", ") { it.name ?: "?" } ?: ""
-    val classroomNames = lesson.classrooms?.joinToString(", ") { it.name ?: "?" } ?: ""
 
     val containerColor = when {
         lesson.isCancelled -> MaterialTheme.colorScheme.errorContainer
+        lesson.hasChange() -> MaterialTheme.colorScheme.tertiaryContainer
         lesson.isOnlineLesson() -> MaterialTheme.colorScheme.secondaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
@@ -293,34 +305,63 @@ private fun LessonCard(lesson: Lesson) {
                 )
             }
 
-            // Subject + teacher + classroom
+            // Subject + teacher + classroom (with diff rendering)
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 14.dp)
+                    .padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(
-                    text = subjectName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                if (teacherNames.isNotEmpty()) {
-                    Spacer(Modifier.height(2.dp))
+                // Subject
+                val subjectName = lesson.subject?.name ?: "Unknown subject"
+                val origSubjectName = lesson.origSubject?.name
+                if (origSubjectName != null) {
+                    Text(
+                        text = buildChangedText(old = origSubjectName, new = subjectName),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                } else {
+                    Text(
+                        text = subjectName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // Teachers
+                val teacherNames    = lesson.teachers?.joinToString(", ") { it.name ?: "?" } ?: ""
+                val origTeacherNames = lesson.origTeachers?.joinToString(", ") { it.name ?: "?" }
+                if (!origTeacherNames.isNullOrEmpty() && origTeacherNames != teacherNames) {
+                    Text(
+                        text = buildChangedText(old = origTeacherNames, new = teacherNames),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else if (teacherNames.isNotEmpty()) {
                     Text(
                         text = teacherNames,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (classroomNames.isNotEmpty()) {
+
+                // Classrooms
+                val classroomNames    = lesson.classrooms?.joinToString(", ") { it.name ?: "?" } ?: ""
+                val origClassroomNames = lesson.origClassrooms?.joinToString(", ") { it.name ?: "?" }
+                if (!origClassroomNames.isNullOrEmpty() && origClassroomNames != classroomNames) {
+                    Text(
+                        text = buildChangedText(old = origClassroomNames, new = classroomNames),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else if (classroomNames.isNotEmpty()) {
                     Text(
                         text = classroomNames,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
                 if (!lesson.curriculum.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = lesson.curriculum!!,
                         style = MaterialTheme.typography.bodySmall,
@@ -343,6 +384,15 @@ private fun LessonCard(lesson: Lesson) {
                         )
                     }
                 }
+                if (lesson.hasChange() && !lesson.isCancelled) {
+                    Badge(containerColor = MaterialTheme.colorScheme.tertiary) {
+                        Text(
+                            "Changed",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiary
+                        )
+                    }
+                }
                 if (lesson.isOnlineLesson()) {
                     Badge(containerColor = MaterialTheme.colorScheme.secondary) {
                         Text(
@@ -354,5 +404,147 @@ private fun LessonCard(lesson: Lesson) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Builds an AnnotatedString showing "~~old~~ → **new**".
+ * The old value is rendered with strikethrough in a muted colour;
+ * the arrow separator is plain; the new value is bold.
+ */
+@Composable
+private fun buildChangedText(old: String, new: String) = buildAnnotatedString {
+    withStyle(
+        SpanStyle(
+            textDecoration = TextDecoration.LineThrough,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+    ) { append(old) }
+    append("  →  ")
+    withStyle(
+        SpanStyle(fontWeight = FontWeight.Bold)
+    ) { append(new) }
+}
+
+// ---------------------------------------------------------------------------
+// Preview helpers
+// ---------------------------------------------------------------------------
+
+private fun previewTeacher(name: String) = EduTeacher(
+    personId = 1, name = name, gender = null, inSchoolSince = null,
+    classroomName = null, teacherTo = null
+)
+
+private fun previewLesson(
+    period: Int = 1,
+    subjectName: String = "Mathematics",
+    teacherName: String = "Mgr. Novák",
+    classroomName: String = "A12",
+    startTime: LocalTime = LocalTime.of(8, 0),
+    endTime: LocalTime = LocalTime.of(8, 45),
+    isCancelled: Boolean = false,
+    isOnline: Boolean = false,
+    origSubjectName: String? = null,
+    origTeacherName: String? = null,
+    origClassroomName: String? = null,
+) = Lesson(
+    period = period,
+    startTime = startTime,
+    endTime = endTime,
+    duration = 1,
+    subject = Subject(subjectId = 1, name = subjectName, shortName = subjectName.take(3)),
+    classes = null,
+    groups = null,
+    teachers = listOf(previewTeacher(teacherName)),
+    classrooms = listOf(Classroom(classroomId = 1, name = classroomName, shortName = classroomName)),
+    curriculum = null,
+    onlineLessonLink = if (isOnline) "https://meet.example.com/abc" else null,
+    isCancelled = isCancelled,
+    isEvent = false,
+    origSubject = origSubjectName?.let { Subject(subjectId = 2, name = it, shortName = it.take(3)) },
+    origTeachers = origTeacherName?.let { listOf(previewTeacher(it)) },
+    origClassrooms = origClassroomName?.let { listOf(Classroom(classroomId = 2, name = it, shortName = it)) },
+)
+
+@Preview(name = "LessonCard – Normal", showBackground = true, widthDp = 360)
+@Composable
+private fun LessonCardNormalPreview() {
+    Edupage2Theme { LessonCard(previewLesson()) }
+}
+
+@Preview(name = "LessonCard – Cancelled", showBackground = true, widthDp = 360)
+@Composable
+private fun LessonCardCancelledPreview() {
+    Edupage2Theme { LessonCard(previewLesson(isCancelled = true)) }
+}
+
+@Preview(name = "LessonCard – Changed (teacher + room)", showBackground = true, widthDp = 360)
+@Composable
+private fun LessonCardChangedPreview() {
+    Edupage2Theme {
+        LessonCard(
+            previewLesson(
+                teacherName = "Mgr. Svobodová",
+                classroomName = "B03",
+                origTeacherName = "Mgr. Novák",
+                origClassroomName = "A12"
+            )
+        )
+    }
+}
+
+@Preview(name = "LessonCard – Changed (subject)", showBackground = true, widthDp = 360)
+@Composable
+private fun LessonCardSubjectChangedPreview() {
+    Edupage2Theme {
+        LessonCard(
+            previewLesson(
+                subjectName = "Physics",
+                origSubjectName = "Mathematics"
+            )
+        )
+    }
+}
+
+@Preview(name = "LessonCard – Online", showBackground = true, widthDp = 360)
+@Composable
+private fun LessonCardOnlinePreview() {
+    Edupage2Theme { LessonCard(previewLesson(isOnline = true)) }
+}
+
+@Preview(name = "LessonCard – Dark", showBackground = true, widthDp = 360, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun LessonCardDarkPreview() {
+    Edupage2Theme {
+        LessonCard(
+            previewLesson(
+                teacherName = "Mgr. Svobodová",
+                classroomName = "B03",
+                origTeacherName = "Mgr. Novák",
+                origClassroomName = "A12"
+            )
+        )
+    }
+}
+
+@Preview(name = "DateNavigationBar – Today", showBackground = true, widthDp = 360)
+@Composable
+private fun DateNavBarTodayPreview() {
+    Edupage2Theme {
+        DateNavigationBar(
+            date = LocalDate.now(),
+            onPreviousDay = {}, onNextDay = {}, onToday = {}
+        )
+    }
+}
+
+@Preview(name = "DateNavigationBar – Other day", showBackground = true, widthDp = 360)
+@Composable
+private fun DateNavBarOtherPreview() {
+    Edupage2Theme {
+        DateNavigationBar(
+            date = LocalDate.now().plusDays(2),
+            onPreviousDay = {}, onNextDay = {}, onToday = {}
+        )
     }
 }

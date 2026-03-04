@@ -8,5 +8,12 @@
 * "support for multiple accounts (e.g. students, parents, teachers)"
 * "haptic feedback for notifications"
 * "languages"
+* "fix the wierd padding from bar and the timetable view"
+* "remove weekends from timetable view"
+* "canceled classes make gray instead of red"
+* "auto skip to next day after end of day"
+* "show empty classes in timetable view as "volna hodina""
 
-# LONG TERM GOALS:
+# FINISHED:
+
+✅ "substitution show"

@@ -11,7 +11,7 @@
         windowSplashScreenBackground matches our M3 surface color so there's no flash.
     -->
     <style name="Theme.Edupage2.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#FFFBFCFF</item>
+        <item name="windowSplashScreenBackground">#010202</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
         <item name="postSplashScreenTheme">@style/Theme.Edupage2</item>
     </style>

@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -24,6 +25,7 @@ import com.enderplusbayzuiship.edupage2.ui.grades.GradesScreen
 import com.enderplusbayzuiship.edupage2.ui.overview.OverviewScreen
 import com.enderplusbayzuiship.edupage2.ui.settings.SettingsScreen
 import com.enderplusbayzuiship.edupage2.ui.timetable.TimetableScreen
+import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 
 private data class TabItem(
     val tab: Tab,
@@ -78,6 +80,31 @@ fun MainScreen(onLogout: () -> Unit) {
             composable(Tab.Timetable.route) { TimetableScreen(innerPadding) }
             composable(Tab.Grades.route)    { GradesScreen(innerPadding) }
             composable(Tab.Settings.route)  { SettingsScreen(innerPadding, onLogout) }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Previews
+// ---------------------------------------------------------------------------
+
+/**
+ * Previews the bottom navigation bar in isolation, with "Overview" selected.
+ */
+@Preview(name = "BottomNav – Light", showBackground = true, widthDp = 360)
+@Preview(name = "BottomNav – Dark", showBackground = true, widthDp = 360, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun BottomNavPreview() {
+    Edupage2Theme {
+        NavigationBar {
+            tabs.forEachIndexed { index, item ->
+                NavigationBarItem(
+                    selected = index == 0,
+                    onClick = {},
+                    icon = { Icon(item.icon, contentDescription = item.label) },
+                    label = { Text(item.label) }
+                )
+            }
         }
     }
 }

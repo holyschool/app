@@ -46,6 +46,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.min
+import androidx.compose.ui.tooling.preview.Preview
+import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 
 // ---------------------------------------------------------------------------
 // Polygon shape library — a curated sequence of morphable shapes
@@ -236,4 +238,62 @@ fun MorphingLoadingIndicator(
             }
         }
     )
+}
+
+// ---------------------------------------------------------------------------
+// Previews
+// ---------------------------------------------------------------------------
+
+@Preview(name = "Splash – Light", showBackground = true, widthDp = 360, heightDp = 640)
+@Preview(name = "Splash – Dark", showBackground = true, widthDp = 360, heightDp = 640, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SplashScreenPreview() {
+    Edupage2Theme {
+        // SplashScreen body without the ViewModel (navigation callbacks are no-ops)
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    MorphingLoadingIndicator(
+                        modifier = Modifier.size(72.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
+                    Text(
+                        text = "EduPage",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Signing you in\u2026",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Preview(name = "MorphingIndicator", showBackground = true, widthDp = 120, heightDp = 120)
+@Composable
+private fun MorphingIndicatorPreview() {
+    Edupage2Theme {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            MorphingLoadingIndicator(modifier = Modifier.size(72.dp))
+        }
+    }
 }

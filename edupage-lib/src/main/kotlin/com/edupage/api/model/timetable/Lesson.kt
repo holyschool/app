@@ -8,6 +8,10 @@ import java.time.LocalTime
 
 /**
  * Represents a single lesson in a timetable.
+ *
+ * When [isCancelled] is false but the lesson has been changed (substitution, room swap, etc.),
+ * the `orig*` fields hold what was scheduled originally. If non-null they differ from the current
+ * values, so a UI can render "old → new" diffs.
  */
 data class Lesson(
     /** Period number (lesson slot index), or null if not a standard period. */
@@ -26,7 +30,19 @@ data class Lesson(
     /** URL for joining an online lesson, or null if not online. */
     val onlineLessonLink: String?,
     val isCancelled: Boolean,
-    val isEvent: Boolean
+    val isEvent: Boolean,
+
+    // --- original (pre-change) values, non-null only when they differ from current ---
+
+    /** Original subject before a substitution, if changed. */
+    val origSubject: Subject? = null,
+    /** Original teachers before a substitution, if changed. */
+    val origTeachers: List<EduTeacher>? = null,
+    /** Original classrooms before a room change, if changed. */
+    val origClassrooms: List<Classroom>? = null,
 ) {
     fun isOnlineLesson(): Boolean = onlineLessonLink != null
+
+    /** True when at least one field was changed from the original schedule. */
+    fun hasChange(): Boolean = origSubject != null || origTeachers != null || origClassrooms != null
 }
