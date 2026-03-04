@@ -87,6 +87,12 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.gson)
 
+    // Graphics shapes — morphing loading indicator
+    implementation(libs.androidx.graphics.shapes)
+
+    // Splash screen API (suppress OS splash icon flash)
+    implementation(libs.androidx.core.splashscreen)
+
     // Desugaring (for java.time on API < 26, belt-and-suspenders)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
