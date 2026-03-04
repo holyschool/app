@@ -7,8 +7,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.enderplusbayzuiship.edupage2.ui.login.LoginScreen
+import com.enderplusbayzuiship.edupage2.ui.main.MainScreen
 import com.enderplusbayzuiship.edupage2.ui.splash.SplashScreen
-import com.enderplusbayzuiship.edupage2.ui.timetable.TimetableScreen
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
@@ -19,7 +19,7 @@ fun AppNavGraph(navController: NavHostController) {
         composable(Screen.Splash.route) {
             SplashScreen(
                 onAutoLoginSuccess = {
-                    navController.navigate(Screen.Timetable.route) {
+                    navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Splash.route) { inclusive = true }
                     }
                 },
@@ -43,17 +43,17 @@ fun AppNavGraph(navController: NavHostController) {
                 prefillUsername = prefillUsername,
                 prefillSubdomain = prefillSubdomain,
                 onLoginSuccess = {
-                    navController.navigate(Screen.Timetable.route) {
+                    navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 }
             )
         }
-        composable(Screen.Timetable.route) {
-            TimetableScreen(
+        composable(Screen.Main.route) {
+            MainScreen(
                 onLogout = {
                     navController.navigate(Screen.Login.route()) {
-                        popUpTo(Screen.Timetable.route) { inclusive = true }
+                        popUpTo(Screen.Main.route) { inclusive = true }
                     }
                 }
             )

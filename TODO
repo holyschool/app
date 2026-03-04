@@ -1,2 +1,12 @@
-TODO: "force valid internet connection -> if no connection, show error message and retry button"
-TODO: "tab for timetable, grades, overwiew, etc."
+* "force valid internet connection -> if no connection, show error message and retry button"
+* "tab for timetable, grades, overwiew, etc."
+* "higlight current class in timetable"
+* "live class progress notifications"
+* "grade notifications"
+* "widgets for timetable, grades, etc."
+* "more settings (e.g. theme, notifications, etc.)"
+* "support for multiple accounts (e.g. students, parents, teachers)"
+* "haptic feedback for notifications"
+* "languages"
+
+# LONG TERM GOALS:
