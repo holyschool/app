@@ -1,3 +1,159 @@
 <resources>
     <string name="app_name">Edupage2</string>
+
+    <!-- Tab Navigation -->
+    <string name="tab_overview">Overview</string>
+    <string name="tab_timetable">Timetable</string>
+    <string name="tab_grades">Grades</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">EduPage</string>
+    <string name="login_subtitle">Sign in to continue</string>
+    <string name="login_subtitle_2fa">Two-factor authentication</string>
+    <string name="login_school_subdomain">School subdomain</string>
+    <string name="login_school_placeholder">e.g. myschool</string>
+    <string name="login_school_url_format">https://%s.edupage.org</string>
+    <string name="login_username">Username</string>
+    <string name="login_password">Password</string>
+    <string name="login_password_show">Show</string>
+    <string name="login_password_hide">Hide</string>
+    <string name="login_2fa_message">Enter the verification code sent to your device.</string>
+    <string name="login_verification_code">Verification code</string>
+    <string name="login_back_to_login">Back to login</string>
+    <string name="login_button_verify">Verify</string>
+    <string name="login_button_signin">Sign In</string>
+
+    <!-- Login Error Messages -->
+    <string name="login_error_empty_fields">Please fill in all fields</string>
+    <string name="login_error_bad_credentials">Wrong username or password</string>
+    <string name="login_error_captcha">Captcha required — please try again later</string>
+    <string name="login_error_failed">Login failed: %s</string>
+    <string name="login_error_empty_code">Please enter the verification code</string>
+    <string name="login_error_verification_failed">Verification failed: %s</string>
+
+    <!-- Timetable Screen -->
+    <string name="timetable_title">Timetable</string>
+    <string name="timetable_refresh">Refresh</string>
+    <string name="timetable_previous_day">Previous day</string>
+    <string name="timetable_next_day">Next day</string>
+    <string name="timetable_today">Today</string>
+    <string name="timetable_retry">Retry</string>
+    <string name="timetable_no_lessons">No lessons today</string>
+    <string name="timetable_unknown_subject">Unknown subject</string>
+
+    <!-- Timetable Badges -->
+    <string name="timetable_badge_now">Now</string>
+    <string name="timetable_badge_cancelled">Cancelled</string>
+    <string name="timetable_badge_changed">Changed</string>
+    <string name="timetable_badge_online">Online</string>
+    <string name="timetable_time_left">%s left</string>
+
+    <!-- Timetable Break Separator -->
+    <string name="timetable_break_minutes">%dm break</string>
+    <string name="timetable_break_hours">%dh break</string>
+    <string name="timetable_break_hours_minutes">%dh %dm break</string>
+
+    <!-- Grades Screen -->
+    <string name="grades_title">Grades</string>
+    <string name="grades_coming_soon">Coming soon</string>
+    <string name="grades_error_failed_to_load">Failed to load grades</string>
+    <string name="grades_retry">Retry</string>
+    <string name="grades_no_grades">No grades available</string>
+    <string name="grades_term_first">Term 1</string>
+    <string name="grades_term_second">Term 2</string>
+    <string name="grades_verbal">Verbal</string>
+    <string name="grades_average">Avg</string>
+    <string name="grades_percent">%s%%</string>
+    <string name="grades_points">%1$s / %2$s pts</string>
+    <string name="grades_count">%d grade(s)</string>
+    <string name="grades_unknown_subject">Unknown subject</string>
+    <string name="grades_refresh">Refresh</string>
+    <string name="grades_mark_all_read">Mark all as read</string>
+
+    <!-- Overview Screen -->
+    <string name="overview_title">Overview</string>
+    <string name="overview_coming_soon">Coming soon</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_timetable">Timetable</string>
+    <string name="settings_section_account">Account</string>
+    <string name="settings_break_visibility_label">Show breaks</string>
+    <string name="settings_break_visibility_all">All</string>
+    <string name="settings_break_visibility_active">Active</string>
+    <string name="settings_break_visibility_active_or_long">Active / long</string>
+    <string name="settings_break_visibility_desc_all">Every gap between lessons is shown.</string>
+    <string name="settings_break_visibility_desc_active">Only the break you are currently in is shown.</string>
+    <string name="settings_break_visibility_desc_active_or_long">Shows the active break and any free period of %d+ minutes.</string>
+    <string name="settings_logout">Log out</string>
+
+    <!-- Settings – Language -->
+    <string name="settings_section_language">Language</string>
+    <string name="settings_language_label">App language</string>
+    <string name="settings_language_system">System</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_czech">Czech</string>
+    <string name="settings_language_slovak">Slovak</string>
+
+    <!-- Settings – Notifications -->
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_notif_label">Live class notifications</string>
+    <string name="settings_notif_desc_on">Showing a notification with time remaining during the school day.</string>
+    <string name="settings_notif_desc_off">A persistent notification will show the current class and time remaining.</string>
+    <string name="settings_notif_show_breaks">Show break countdowns</string>
+    <string name="settings_notif_show_breaks_desc">Display \"Break ends in Xm\" between classes.</string>
+    <string name="settings_notif_update_interval">Update every</string>
+    <string name="settings_notif_interval_30s">30 sec</string>
+    <string name="settings_notif_interval_1m">1 min</string>
+    <string name="settings_notif_interval_2m">2 min</string>
+    <string name="settings_notif_early_start">Start notification before first class</string>
+    <string name="settings_notif_early_start_on_start">On start</string>
+    <string name="settings_notif_early_start_xm">%dm</string>
+    <string name="settings_notif_early_start_desc">How early to show the notification before the first class begins.</string>
+
+    <!-- Splash Screen -->
+    <string name="splash_signing_in">Signing you in\u2026</string>
+
+    <!-- Timetable – fallback / misc -->
+    <string name="timetable_unknown_placeholder">?</string>
+    <string name="timetable_time_left_under_1m">&lt;1m</string>
+    <string name="timetable_time_left_minutes">%dm</string>
+    <string name="timetable_time_left_hours">%dh</string>
+    <string name="timetable_time_left_hours_minutes">%dh %dm</string>
+
+    <!-- Notification Channel -->
+    <string name="notif_channel_name">Live timetable</string>
+    <string name="notif_channel_description">Shows the current class and time remaining during the school day</string>
+
+    <!-- Notification Service Content -->
+    <string name="notif_loading">Timetable loading\u2026</string>
+    <string name="notif_subject_fallback">Class</string>
+    <string name="notif_class_ends_in">%1$s ends in %2$dm</string>
+    <string name="notif_next">Next: %s</string>
+    <string name="notif_break_ends_in">Break ends in %dm</string>
+    <string name="notif_starts_in">%1$s starts in %2$dm</string>
+    <string name="notif_subject_in">%1$s in %2$dm</string>
+    <string name="notif_day_ended">School day ended</string>
+
+    <!-- Timetable Error -->
+    <string name="timetable_error_failed_to_load">Failed to load timetable</string>
+
+    <!-- Settings – Timetable extra -->
+    <string name="settings_show_weekends">Show weekends</string>
+    <string name="settings_show_weekends_desc">Include Saturday and Sunday in the date navigation.</string>
+    <string name="settings_cancelled_lesson_style">Cancelled lesson style</string>
+    <string name="settings_cancelled_lesson_style_red">Red</string>
+    <string name="settings_cancelled_lesson_style_grey">Grey</string>
+    <string name="settings_cancelled_lesson_style_desc_red">Cancelled lessons are highlighted in red.</string>
+    <string name="settings_cancelled_lesson_style_desc_grey">Cancelled lessons are shown greyed out.</string>
+
+    <!-- Settings – Appearance -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_dark_mode">Dark mode</string>
+    <string name="settings_dark_mode_system">System</string>
+    <string name="settings_dark_mode_light">Light</string>
+    <string name="settings_dark_mode_dark">Dark</string>
+    <string name="settings_amoled">AMOLED black</string>
+    <string name="settings_amoled_desc">Use pure black backgrounds in dark mode to save power on OLED screens.</string>
 </resources>

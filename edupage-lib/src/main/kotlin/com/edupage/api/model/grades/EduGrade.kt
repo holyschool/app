@@ -12,6 +12,27 @@ enum class Term(val value: String) {
 }
 
 /**
+ * Slovak/Czech letter grade mapping to numeric equivalent.
+ * 1 = best, 5 = worst.
+ */
+val SLOVAK_GRADE_MAP: Map<String, Double> = mapOf(
+    "1" to 1.0,
+    "2" to 2.0,
+    "3" to 3.0,
+    "4" to 4.0,
+    "5" to 5.0,
+    // Slovak verbal marks
+    "v" to 1.0,   // výborný (excellent)
+    "ch" to 2.0,  // chválitebný (commendable)
+    "d" to 3.0,   // dobrý (good)
+    "ds" to 4.0,  // dostatočný (sufficient)
+    "n" to 5.0,   // nedostatočný (insufficient)
+    // Also used abbreviations
+    "m" to 5.0,   // malo/nedostatočný
+    "p" to 1.0,   // prospel s vyznamenaním
+)
+
+/**
  * Represents a single grade entry.
  */
 data class EduGrade(

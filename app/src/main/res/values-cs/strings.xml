@@ -1,0 +1,159 @@
+<resources>
+    <string name="app_name">Edupage2</string>
+
+    <!-- Tab Navigation -->
+    <string name="tab_overview">Přehled</string>
+    <string name="tab_timetable">Timetable</string>
+    <string name="tab_grades">Známky</string>
+    <string name="tab_settings">Nastavení</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">EduPage</string>
+    <string name="login_subtitle">Přihlaste se abyste mohli pokračovat</string>
+    <string name="login_subtitle_2fa">Dvou-faktorové ověření</string>
+    <string name="login_school_subdomain">Skolní subdoména</string>
+    <string name="login_school_placeholder">např. moješkola</string>
+    <string name="login_school_url_format">https://%s.edupage.org</string>
+    <string name="login_username">Přihlašovací Jméno</string>
+    <string name="login_password">Heslo</string>
+    <string name="login_password_show">Ukázat</string>
+    <string name="login_password_hide">Skrýt</string>
+    <string name="login_2fa_message">Zadejte ověrovací kód zaslaný na tvoje zařízení.</string>
+    <string name="login_verification_code">Ověřovací Kód</string>
+    <string name="login_back_to_login">Zpět na přihlášení</string>
+    <string name="login_button_verify">Ověřit</string>
+    <string name="login_button_signin">Přihlásit se</string>
+
+    <!-- Login Error Messages -->
+    <string name="login_error_empty_fields">Prosím vyplnte všechna pole</string>
+    <string name="login_error_bad_credentials">Špatné přihlašovací jméno nebo heslo</string>
+    <string name="login_error_captcha">Captcha potřebná - prosím zkuste to znovu později</string>
+    <string name="login_error_failed">Přihlášení se nezdařilo: %s</string>
+    <string name="login_error_empty_code">Prosím zadejte ověřovací kód.</string>
+    <string name="login_error_verification_failed">Ověřování selhalo: %s</string>
+
+    <!-- Timetable Screen -->
+    <string name="timetable_title">Rozvrh</string>
+    <string name="timetable_refresh">Obnovit</string>
+    <string name="timetable_previous_day">Předchozí den</string>
+    <string name="timetable_next_day">Další den</string>
+    <string name="timetable_today">Dnes</string>
+    <string name="timetable_retry">Znovu</string>
+    <string name="timetable_no_lessons">Žádné předměty dneska</string>
+    <string name="timetable_unknown_subject">Neznámy předmět</string>
+
+    <!-- Timetable Badges -->
+    <string name="timetable_badge_now">Teraz</string>
+    <string name="timetable_badge_cancelled">Zrušené</string>
+    <string name="timetable_badge_changed">Změněné</string>
+    <string name="timetable_badge_online">Online</string>
+    <string name="timetable_time_left">"Ostáva %s "</string>
+
+    <!-- Timetable Break Separator -->
+    <string name="timetable_break_minutes">%dm prestávka</string>
+    <string name="timetable_break_hours">%dh prestávka</string>
+    <string name="timetable_break_hours_minutes">%dh %dm prestávka</string>
+
+    <!-- Grades Screen -->
+    <string name="grades_title">Známky</string>
+    <string name="grades_coming_soon">Už brzy</string>
+    <string name="grades_error_failed_to_load">Nepodařilo se načíst známky</string>
+    <string name="grades_retry">Znovu</string>
+    <string name="grades_no_grades">Žádné známky k dispozici</string>
+    <string name="grades_term_first">1. pololetí</string>
+    <string name="grades_term_second">2. pololetí</string>
+    <string name="grades_verbal">Slovní</string>
+    <string name="grades_average">Prům.</string>
+    <string name="grades_percent">%s%%</string>
+    <string name="grades_points">%1$s / %2$s b.</string>
+    <string name="grades_count">%d zn.</string>
+    <string name="grades_unknown_subject">Neznámý předmět</string>
+    <string name="grades_refresh">Obnovit</string>
+    <string name="grades_mark_all_read">Označit vše jako přečtené</string>
+
+    <!-- Overview Screen -->
+    <string name="overview_title">Přehled</string>
+    <string name="overview_coming_soon">Už brzy</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Nastavení</string>
+    <string name="settings_section_timetable">Rozvrh</string>
+    <string name="settings_section_account">Účet</string>
+    <string name="settings_break_visibility_label">Ukaž přestávky</string>
+    <string name="settings_break_visibility_all">Vše</string>
+    <string name="settings_break_visibility_active">"Aktualní "</string>
+    <string name="settings_break_visibility_active_or_long">Volné hodiny</string>
+    <string name="settings_break_visibility_desc_all">Každá medzera mezi hodinama jsou zobrazeny.</string>
+    <string name="settings_break_visibility_desc_active">Pouze pauza která je právě teď aktivní.</string>
+    <string name="settings_break_visibility_desc_active_or_long">Zobrazuje aktivní přestávku a jakékoli volné období o délce %d+ minut.</string>
+    <string name="settings_logout">Odhlásit se</string>
+
+    <!-- Settings – Language -->
+    <string name="settings_section_language">Jazyk</string>
+    <string name="settings_language_label">Jazyk aplikace</string>
+    <string name="settings_language_system">Systémový</string>
+    <string name="settings_language_english">Angličtina</string>
+    <string name="settings_language_czech">Čeština</string>
+    <string name="settings_language_slovak">Slovenčina</string>
+
+    <!-- Settings – Notifications -->
+    <string name="settings_section_notifications">Oznámení</string>
+    <string name="settings_notif_label">Živá oznámení o hodinách</string>
+    <string name="settings_notif_desc_on">Zobrazuje oznámení se zbývajícím časem během školního dne.</string>
+    <string name="settings_notif_desc_off">Trvalé oznámení bude zobrazovat aktuální hodinu a zbývající čas.</string>
+    <string name="settings_notif_show_breaks">Zobrazit odpočítávání přestávek</string>
+    <string name="settings_notif_show_breaks_desc">Zobrazit \"Přestávka končí za Xm\" mezi hodinami.</string>
+    <string name="settings_notif_update_interval">Aktualizovat každých</string>
+    <string name="settings_notif_interval_30s">30 s</string>
+    <string name="settings_notif_interval_1m">1 min</string>
+    <string name="settings_notif_interval_2m">2 min</string>
+    <string name="settings_notif_early_start">Spustit oznámení před první hodinou</string>
+    <string name="settings_notif_early_start_on_start">Při spuštění</string>
+    <string name="settings_notif_early_start_xm">%d min</string>
+    <string name="settings_notif_early_start_desc">Jak brzy zobrazit oznámení před začátkem první hodiny.</string>
+
+    <!-- Splash Screen -->
+    <string name="splash_signing_in">Přihlašuji vás\u2026</string>
+
+    <!-- Timetable – fallback / misc -->
+    <string name="timetable_unknown_placeholder">?</string>
+    <string name="timetable_time_left_under_1m">&lt;1 min</string>
+    <string name="timetable_time_left_minutes">%d min</string>
+    <string name="timetable_time_left_hours">%d hod</string>
+    <string name="timetable_time_left_hours_minutes">%d hod %d min</string>
+
+    <!-- Notification Channel -->
+    <string name="notif_channel_name">Živý rozvrh</string>
+    <string name="notif_channel_description">Zobrazuje aktuální hodinu a zbývající čas během školního dne</string>
+
+    <!-- Notification Service Content -->
+    <string name="notif_loading">Načítání rozvrhu\u2026</string>
+    <string name="notif_subject_fallback">Hodina</string>
+    <string name="notif_class_ends_in">%1$s končí za %2$d min</string>
+    <string name="notif_next">Dále: %s</string>
+    <string name="notif_break_ends_in">Přestávka končí za %d min</string>
+    <string name="notif_starts_in">%1$s začíná za %2$d min</string>
+    <string name="notif_subject_in">%1$s za %2$d min</string>
+    <string name="notif_day_ended">Školní den skončil</string>
+
+    <!-- Timetable Error -->
+    <string name="timetable_error_failed_to_load">Nepodařilo se načíst rozvrh</string>
+
+    <!-- Settings – Timetable extra -->
+    <string name="settings_show_weekends">Zobrazit víkendy</string>
+    <string name="settings_show_weekends_desc">Zahrnout sobotu a neděli do navigace datumů.</string>
+    <string name="settings_cancelled_lesson_style">Styl zrušené hodiny</string>
+    <string name="settings_cancelled_lesson_style_red">Červená</string>
+    <string name="settings_cancelled_lesson_style_grey">Šedá</string>
+    <string name="settings_cancelled_lesson_style_desc_red">Zrušené hodiny jsou zvýrazněny červeně.</string>
+    <string name="settings_cancelled_lesson_style_desc_grey">Zrušené hodiny jsou zobrazeny šedě.</string>
+
+    <!-- Settings – Appearance -->
+    <string name="settings_section_appearance">Vzhled</string>
+    <string name="settings_dark_mode">Tmavý režim</string>
+    <string name="settings_dark_mode_system">Systém</string>
+    <string name="settings_dark_mode_light">Světlý</string>
+    <string name="settings_dark_mode_dark">Tmavý</string>
+    <string name="settings_amoled">AMOLED černá</string>
+    <string name="settings_amoled_desc">Používat čistě černé pozadí v tmavém režimu pro úsporu energie na OLED displejích.</string>
+</resources>
