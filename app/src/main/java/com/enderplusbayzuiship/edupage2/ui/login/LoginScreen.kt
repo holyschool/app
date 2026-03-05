@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.tooling.preview.Preview
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
+import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
 @Composable
 fun LoginScreen(
@@ -66,6 +67,7 @@ fun LoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+    val haptics = rememberAppHaptics()
 
     var username       by remember { mutableStateOf(prefillUsername) }
     var password       by remember { mutableStateOf("") }
@@ -74,7 +76,11 @@ fun LoginScreen(
     var otpCode        by remember { mutableStateOf("") }
 
     LaunchedEffect(uiState) {
-        if (uiState is LoginUiState.Success) onLoginSuccess()
+        when (uiState) {
+            is LoginUiState.Success -> { haptics.confirm(); onLoginSuccess() }
+            is LoginUiState.Error   -> haptics.reject()
+            else                    -> Unit
+        }
     }
 
     val isTwoFactor = uiState is LoginUiState.TwoFactorRequired
@@ -188,14 +194,15 @@ fun LoginScreen(
                                         keyboardType = KeyboardType.Password,
                                         imeAction = ImeAction.Done
                                     ),
-                                    keyboardActions = KeyboardActions(
-                                        onDone = {
-                                            focusManager.clearFocus()
-                                            viewModel.login(username, password, subdomain)
-                                        }
-                                    ),
+                                                    keyboardActions = KeyboardActions(
+                                                        onDone = {
+                                                            focusManager.clearFocus()
+                                                            haptics.click()
+                                                            viewModel.login(username, password, subdomain)
+                                                        }
+                                                    ),
                                     trailingIcon = {
-                                        TextButton(onClick = { passwordVisible = !passwordVisible }) {
+                                                    TextButton(onClick = { haptics.tick(); passwordVisible = !passwordVisible }) {
                                             Text(
                                                 if (passwordVisible) "Hide" else "Show",
                                                 style = MaterialTheme.typography.labelSmall
@@ -231,6 +238,7 @@ fun LoginScreen(
                                     keyboardActions = KeyboardActions(
                                         onDone = {
                                             focusManager.clearFocus()
+                                            haptics.click()
                                             val s = uiState as? LoginUiState.TwoFactorRequired
                                                 ?: return@KeyboardActions
                                             viewModel.verify2FA(s.twoFactorLogin, otpCode)
@@ -239,7 +247,7 @@ fun LoginScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 TextButton(
-                                    onClick = { viewModel.resetState(); otpCode = "" },
+                                    onClick = { haptics.tick(); viewModel.resetState(); otpCode = "" },
                                     modifier = Modifier.align(Alignment.Start)
                                 ) {
                                     Text("Back to login")
@@ -282,6 +290,7 @@ fun LoginScreen(
                         // Primary action button
                         Button(
                             onClick = {
+                                haptics.click()
                                 if (isTwoFactor) {
                                     val s = uiState as? LoginUiState.TwoFactorRequired ?: return@Button
                                     viewModel.verify2FA(s.twoFactorLogin, otpCode)

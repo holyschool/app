@@ -212,17 +212,6 @@ internal class Timetables(private val session: EdupageSession) {
             // dp0.orig is the original timetable card; top-level ids are the new/current values.
             val origCard = dp0?.get("orig").safeObj()
 
-            // Log when we find a substitution (dp0.changes non-empty or orig non-null)
-            val dp0Changes = dp0?.get("changes")?.takeIf { !it.isJsonNull }?.asJsonArray
-            if (origCard != null || (dp0Changes != null && dp0Changes.size() > 0)) {
-                System.err.println(
-                    "EduTT subst: period=$period subj=$subjectId " +
-                    "dp0.cancelled=${dp0?.field("cancelled").safeBoolean()} " +
-                    "dp0.changes=$dp0Changes " +
-                    "dp0.orig=$origCard"
-                )
-            }
-
             val origSubjectId = origCard?.field("subjectid").safeString()
             val origSubject = if (origSubjectId != null && origSubjectId != subjectId)
                 subjects.getSubject(origSubjectId)

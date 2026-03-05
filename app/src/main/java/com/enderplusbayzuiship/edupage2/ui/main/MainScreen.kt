@@ -1,10 +1,10 @@
 package com.enderplusbayzuiship.edupage2.ui.main
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -26,6 +26,7 @@ import com.enderplusbayzuiship.edupage2.ui.overview.OverviewScreen
 import com.enderplusbayzuiship.edupage2.ui.settings.SettingsScreen
 import com.enderplusbayzuiship.edupage2.ui.timetable.TimetableScreen
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
+import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
 private data class TabItem(
     val tab: Tab,
@@ -34,14 +35,15 @@ private data class TabItem(
 )
 
 private val tabs = listOf(
-    TabItem(Tab.Overview,  "Overview",  Icons.Default.Home),
-    TabItem(Tab.Timetable, "Timetable", Icons.Default.DateRange),
-    TabItem(Tab.Grades,    "Grades",    Icons.Default.Star),
-    TabItem(Tab.Settings,  "Settings",  Icons.Default.Settings),
+    TabItem(Tab.Overview,  "Overview",  Icons.Rounded.Home),
+    TabItem(Tab.Timetable, "Timetable", Icons.Rounded.DateRange),
+    TabItem(Tab.Grades,    "Grades",    Icons.Rounded.Star),
+    TabItem(Tab.Settings,  "Settings",  Icons.Rounded.Settings),
 )
 
 @Composable
 fun MainScreen(onLogout: () -> Unit) {
+    val haptics = rememberAppHaptics()
     val tabNavController = rememberNavController()
     val navBackStackEntry by tabNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -56,6 +58,7 @@ fun MainScreen(onLogout: () -> Unit) {
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
+                            haptics.tick()
                             tabNavController.navigate(item.tab.route) {
                                 popUpTo(tabNavController.graph.findStartDestination().id) {
                                     saveState = true
