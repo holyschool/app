@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -80,6 +81,9 @@ fun SettingsScreen(
     val notifShowBreaks      by viewModel.notifShowBreaks.collectAsState()
     val notifUpdateInterval  by viewModel.notifUpdateInterval.collectAsState()
     val notifEarlyStart      by viewModel.notifEarlyStartMinutes.collectAsState()
+    val notifGradesEnabled   by viewModel.notifGradesEnabled.collectAsState()
+    val notifMessagesEnabled by viewModel.notifMessagesEnabled.collectAsState()
+    val notifCheckInterval   by viewModel.notifCheckIntervalMinutes.collectAsState()
     val darkMode             by viewModel.darkMode.collectAsState()
     val useAmoled            by viewModel.useAmoled.collectAsState()
     val appLanguage          by viewModel.appLanguage.collectAsState()
@@ -187,6 +191,24 @@ fun SettingsScreen(
                 onUpdateIntervalChange = { haptics.tick(); viewModel.setNotifUpdateInterval(it) },
                 earlyStartMinutes = notifEarlyStart,
                 onEarlyStartMinutesChange = { haptics.tick(); viewModel.setNotifEarlyStartMinutes(it) },
+            )
+
+            // ── Language ─────────────────────────────────────────────────────
+            SectionDivider()
+
+            SectionHeader(
+                icon = Icons.Rounded.Notifications,
+                tint = MaterialTheme.colorScheme.secondary,
+                title = stringResource(R.string.settings_section_notif_grades_messages)
+            )
+
+            GradeMessageNotifSetting(
+                gradesEnabled = notifGradesEnabled,
+                onGradesToggle = { haptics.click(); viewModel.setNotifGradesEnabled(it) },
+                messagesEnabled = notifMessagesEnabled,
+                onMessagesToggle = { haptics.click(); viewModel.setNotifMessagesEnabled(it) },
+                checkIntervalMinutes = notifCheckInterval,
+                onIntervalChange = { haptics.tick(); viewModel.setNotifCheckIntervalMinutes(it) },
             )
 
             // ── Language ─────────────────────────────────────────────────────
@@ -572,6 +594,62 @@ private fun NotificationsSetting(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+// ── Grades & message notifications ───────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GradeMessageNotifSetting(
+    gradesEnabled: Boolean,
+    onGradesToggle: (Boolean) -> Unit,
+    messagesEnabled: Boolean,
+    onMessagesToggle: (Boolean) -> Unit,
+    checkIntervalMinutes: Int,
+    onIntervalChange: (Int) -> Unit,
+) {
+    SwitchRow(
+        title = stringResource(R.string.settings_notif_grades),
+        description = stringResource(R.string.settings_notif_grades_desc),
+        checked = gradesEnabled,
+        onCheckedChange = onGradesToggle,
+    )
+    SwitchRow(
+        title = stringResource(R.string.settings_notif_messages),
+        description = stringResource(R.string.settings_notif_messages_desc),
+        checked = messagesEnabled,
+        onCheckedChange = onMessagesToggle,
+    )
+
+    AnimatedVisibility(
+        visible = gradesEnabled || messagesEnabled,
+        enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+        exit  = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+    ) {
+        val intervalOptions = listOf(
+            15  to stringResource(R.string.settings_notif_interval_15m),
+            30  to stringResource(R.string.settings_notif_interval_30m),
+            60  to stringResource(R.string.settings_notif_interval_1h),
+            120 to stringResource(R.string.settings_notif_interval_2h),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_notif_check_interval),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            SettingsSegmentedRow(
+                options = intervalOptions,
+                selected = checkIntervalMinutes,
+                onSelect = onIntervalChange,
+            )
         }
     }
 }

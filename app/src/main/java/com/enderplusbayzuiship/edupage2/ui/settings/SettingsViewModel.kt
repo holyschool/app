@@ -57,6 +57,17 @@ class SettingsViewModel @Inject constructor(
     private val _notifEarlyStartMinutes = MutableStateFlow(appPreferences.notifEarlyStartMinutes)
     val notifEarlyStartMinutes: StateFlow<Int> = _notifEarlyStartMinutes.asStateFlow()
 
+    // ── Grades & Messages Notifications ──────────────────────────────────────
+
+    private val _notifGradesEnabled = MutableStateFlow(appPreferences.notifGradesEnabled)
+    val notifGradesEnabled: StateFlow<Boolean> = _notifGradesEnabled.asStateFlow()
+
+    private val _notifMessagesEnabled = MutableStateFlow(appPreferences.notifMessagesEnabled)
+    val notifMessagesEnabled: StateFlow<Boolean> = _notifMessagesEnabled.asStateFlow()
+
+    private val _notifCheckIntervalMinutes = MutableStateFlow(appPreferences.notifCheckIntervalMinutes)
+    val notifCheckIntervalMinutes: StateFlow<Int> = _notifCheckIntervalMinutes.asStateFlow()
+
     // ── Appearance ────────────────────────────────────────────────────────────
 
     private val _darkMode = MutableStateFlow(appPreferences.darkMode)
@@ -106,6 +117,37 @@ class SettingsViewModel @Inject constructor(
     fun setNotifEarlyStartMinutes(value: Int) {
         appPreferences.notifEarlyStartMinutes = value
         _notifEarlyStartMinutes.value = value
+    }
+
+    // ── Setters — Grades & Messages Notifications ─────────────────────────────
+
+    fun setNotifGradesEnabled(value: Boolean) {
+        appPreferences.notifGradesEnabled = value
+        _notifGradesEnabled.value = value
+        updateGradeMessageWorker(value, _notifMessagesEnabled.value)
+    }
+
+    fun setNotifMessagesEnabled(value: Boolean) {
+        appPreferences.notifMessagesEnabled = value
+        _notifMessagesEnabled.value = value
+        updateGradeMessageWorker(_notifGradesEnabled.value, value)
+    }
+
+    fun setNotifCheckIntervalMinutes(value: Int) {
+        appPreferences.notifCheckIntervalMinutes = value
+        _notifCheckIntervalMinutes.value = value
+        // Re-schedule with the new interval if any toggle is on
+        if (_notifGradesEnabled.value || _notifMessagesEnabled.value) {
+            notificationScheduler.scheduleGradeMessageCheck()
+        }
+    }
+
+    private fun updateGradeMessageWorker(gradesOn: Boolean, messagesOn: Boolean) {
+        if (gradesOn || messagesOn) {
+            notificationScheduler.scheduleGradeMessageCheck()
+        } else {
+            notificationScheduler.cancelGradeMessageCheck()
+        }
     }
 
     // ── Setters — Appearance ──────────────────────────────────────────────────

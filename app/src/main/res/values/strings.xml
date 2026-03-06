@@ -125,6 +125,10 @@
     <!-- Notification Channel -->
     <string name="notif_channel_name">Live timetable</string>
     <string name="notif_channel_description">Shows the current class and time remaining during the school day</string>
+    <string name="notif_channel_grades_name">New grades</string>
+    <string name="notif_channel_grades_desc">Notifies you when a new grade is posted</string>
+    <string name="notif_channel_messages_name">New messages</string>
+    <string name="notif_channel_messages_desc">Notifies you when you receive a new message</string>
 
     <!-- Notification Service Content -->
     <string name="notif_loading">Timetable loading\u2026</string>
@@ -156,4 +160,28 @@
     <string name="settings_dark_mode_dark">Dark</string>
     <string name="settings_amoled">AMOLED black</string>
     <string name="settings_amoled_desc">Use pure black backgrounds in dark mode to save power on OLED screens.</string>
+
+    <!-- Settings – Grades &amp; Messages Notifications -->
+    <string name="settings_section_notif_grades_messages">Grades &amp; Messages</string>
+    <string name="settings_notif_grades">New grade notifications</string>
+    <string name="settings_notif_grades_desc">Get notified when a new grade is posted.</string>
+    <string name="settings_notif_messages">New message notifications</string>
+    <string name="settings_notif_messages_desc">Get notified when you receive a message.</string>
+    <string name="settings_notif_check_interval">Check interval</string>
+    <string name="settings_notif_interval_15m">15 min</string>
+    <string name="settings_notif_interval_30m">30 min</string>
+    <string name="settings_notif_interval_1h">1 h</string>
+    <string name="settings_notif_interval_2h">2 h</string>
+
+    <!-- Grade notifications -->
+    <string name="notif_grade_title">New Grade</string>
+    <string name="notif_grade_single">You got a %1$s in %2$s</string>
+    <string name="notif_grade_multiple">%1$d new grades</string>
+
+    <!-- Message notifications -->
+    <string name="notif_message_title">Message from %1$s</string>
+    <string name="notif_message_title_multiple">New Messages</string>
+    <string name="notif_message_multiple">%1$d new messages</string>
+    <string name="notif_message_no_preview">Tap to read</string>
+    <string name="notif_message_unknown_sender">Unknown</string>
 </resources>

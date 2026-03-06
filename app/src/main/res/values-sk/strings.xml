@@ -123,6 +123,10 @@
     <!-- Notification Channel -->
     <string name="notif_channel_name">Živý rozvrh</string>
     <string name="notif_channel_description">Zobrazuje aktuálnu hodinu a zostávajúci čas počas školského dňa</string>
+    <string name="notif_channel_grades_name">Nové známky</string>
+    <string name="notif_channel_grades_desc">Upozorní ťa, keď je pridaná nová známka</string>
+    <string name="notif_channel_messages_name">Nové správy</string>
+    <string name="notif_channel_messages_desc">Upozorní ťa, keď dostaneš novú správu</string>
 
     <!-- Notification Service Content -->
     <string name="notif_loading">Načítavanie rozvrhu\u2026</string>
@@ -154,4 +158,28 @@
     <string name="settings_dark_mode_dark">Tmavý</string>
     <string name="settings_amoled">AMOLED čierna</string>
     <string name="settings_amoled_desc">Použiť čisto čierne pozadie v tmavom režime na šetrenie energie na OLED displejoch.</string>
+
+    <!-- Settings – Grades &amp; Messages Notifications -->
+    <string name="settings_section_notif_grades_messages">Známky a správy</string>
+    <string name="settings_notif_grades">Oznámenia o nových známkach</string>
+    <string name="settings_notif_grades_desc">Dostávať oznámenia, keď je pridaná nová známka.</string>
+    <string name="settings_notif_messages">Oznámenia o nových správach</string>
+    <string name="settings_notif_messages_desc">Dostávať oznámenia, keď dostaneš správu.</string>
+    <string name="settings_notif_check_interval">Interval kontroly</string>
+    <string name="settings_notif_interval_15m">15 min</string>
+    <string name="settings_notif_interval_30m">30 min</string>
+    <string name="settings_notif_interval_1h">1 hod</string>
+    <string name="settings_notif_interval_2h">2 hod</string>
+
+    <!-- Grade notifications -->
+    <string name="notif_grade_title">Nová známka</string>
+    <string name="notif_grade_single">Dostal si %1$s z %2$s</string>
+    <string name="notif_grade_multiple">%1$d nových známok</string>
+
+    <!-- Message notifications -->
+    <string name="notif_message_title">Správa od %1$s</string>
+    <string name="notif_message_title_multiple">Nové správy</string>
+    <string name="notif_message_multiple">%1$d nových správ</string>
+    <string name="notif_message_no_preview">Klepnutím prečítaš</string>
+    <string name="notif_message_unknown_sender">Neznámy</string>
 </resources>

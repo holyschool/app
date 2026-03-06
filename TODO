@@ -3,29 +3,23 @@ todo: "tab for timetable, grades, overwiew, etc."
 todo: "grade notifications"
 todo: "show buttons in overview tab"
 todo: "quick timetable in overview tab"
-todo: "grades tab"
-todo: "widgets for timetable, grades, etc."
-todo: "more settings (e.g. theme, notifications, etc.)"
 todo: "support for multiple accounts (e.g. students, parents, teachers)"
-todo: "remove weekends from timetable view"
-todo: "canceled classes make gray instead of red"
-todo: "auto skip to next day after end of day"
-todo: optimize data usage a little as it uses like 1mb for scrolling through timetable. not needed yet tho
-todo: update highlighted class
-todo: add swipe gestures
-todo: a lot more settings (e.g. vibrations, themes, etc.)
 todo: "canteen menu"
 todo: "timetable screen option for entire week perhaps"
 todo: "messages screen"
+
+#TODAY
+todo: add swipe gestures
 todo: "remove scrolling in timetable tab"
 todo: "update theme after changing it in settings"
 
 #LATER
 todo: ability to add local homework
+todo: optimize data usage a little as it uses like 1mb for scrolling through timetable.
+todo: "widgets for timetable, grades, etc."
 
 
 # FINISHED:
-
 ✅ "languages"
 ✅ "focus on current class (scroll to it on the timetable)"
 ✅ "higlight current class in timetable"

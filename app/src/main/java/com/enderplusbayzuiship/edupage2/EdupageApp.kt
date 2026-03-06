@@ -32,15 +32,36 @@ class EdupageApp : Application(), Configuration.Provider {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
+        val manager = getSystemService(NotificationManager::class.java)
+
+        // Live timetable — silent, no badge
+        val timetableChannel = NotificationChannel(
             TimetableNotificationService.CHANNEL_ID,
             getString(R.string.notif_channel_name),
-            NotificationManager.IMPORTANCE_LOW,  // silent, no heads-up
+            NotificationManager.IMPORTANCE_LOW,
         ).apply {
             description = getString(R.string.notif_channel_description)
             setShowBadge(false)
         }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+
+        // New grades — default importance (makes sound + badge)
+        val gradesChannel = NotificationChannel(
+            "grades_new",
+            getString(R.string.notif_channel_grades_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = getString(R.string.notif_channel_grades_desc)
+        }
+
+        // New messages — default importance
+        val messagesChannel = NotificationChannel(
+            "messages_new",
+            getString(R.string.notif_channel_messages_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = getString(R.string.notif_channel_messages_desc)
+        }
+
+        manager.createNotificationChannels(listOf(timetableChannel, gradesChannel, messagesChannel))
     }
 }

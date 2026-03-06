@@ -110,6 +110,25 @@ class AppPreferences @Inject constructor(
         // Grades — seen event IDs per term (comma-separated integers)
         private const val KEY_GRADES_SEEN_T1 = "grades_seen_ids_T1"
         private const val KEY_GRADES_SEEN_T2 = "grades_seen_ids_T2"
+
+        // Grade + message push notifications
+        private const val KEY_NOTIF_GRADES_ENABLED   = "notif_grades_enabled"
+        private const val KEY_NOTIF_MESSAGES_ENABLED = "notif_messages_enabled"
+        /**
+         * How often the background grade/message check fires (in minutes).
+         * WorkManager minimum is 15 minutes.
+         */
+        private const val KEY_NOTIF_CHECK_INTERVAL_MINS = "notif_check_interval_mins"
+        /**
+         * The highest timeline event ID seen so far.
+         * -1 means "first run — seed without notifying".
+         */
+        private const val KEY_LAST_TIMELINE_ID = "last_timeline_id"
+        /**
+         * Comma-separated set of grade eventIds that have already triggered a push notification.
+         * Separate from the "seen in UI" sets — this tracks what we've alerted about.
+         */
+        private const val KEY_NOTIFIED_GRADE_IDS = "notified_grade_ids"
     }
 
     private val prefs by lazy {
@@ -199,5 +218,47 @@ class AppPreferences @Inject constructor(
         val existing = getSeenGradeIds(termKey)
         val merged = existing + ids
         prefs.edit().putString(key, merged.joinToString(",")).apply()
+    }
+
+    // ── Grade + message push notifications ────────────────────────────────────
+
+    /** Whether to send a push notification when new grades appear. */
+    var notifGradesEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NOTIF_GRADES_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_NOTIF_GRADES_ENABLED, value).apply()
+
+    /** Whether to send a push notification when a new message arrives. */
+    var notifMessagesEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NOTIF_MESSAGES_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_NOTIF_MESSAGES_ENABLED, value).apply()
+
+    /**
+     * How often the background check worker fires, in minutes.
+     * Clamped to [15..120] on read; WorkManager enforces the 15-minute floor.
+     */
+    var notifCheckIntervalMinutes: Int
+        get() = prefs.getInt(KEY_NOTIF_CHECK_INTERVAL_MINS, 30).coerceIn(15, 120)
+        set(value) = prefs.edit().putInt(KEY_NOTIF_CHECK_INTERVAL_MINS, value.coerceIn(15, 120)).apply()
+
+    /**
+     * The highest timeline event ID we have already processed.
+     * -1 = first run (seed mode: record current max without notifying).
+     */
+    var lastTimelineId: Int
+        get() = prefs.getInt(KEY_LAST_TIMELINE_ID, -1)
+        set(value) = prefs.edit().putInt(KEY_LAST_TIMELINE_ID, value).apply()
+
+    /** Grade event IDs for which a push notification has already been fired. */
+    fun getNotifiedGradeIds(): Set<Int> {
+        val raw = prefs.getString(KEY_NOTIFIED_GRADE_IDS, "") ?: ""
+        return if (raw.isBlank()) emptySet()
+        else raw.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+    }
+
+    fun markGradeIdsNotified(ids: Collection<Int>) {
+        val merged = getNotifiedGradeIds() + ids
+        // Keep only the most recent 500 IDs to prevent unbounded growth
+        val trimmed = if (merged.size > 500) merged.sortedDescending().take(500).toSet() else merged
+        prefs.edit().putString(KEY_NOTIFIED_GRADE_IDS, trimmed.joinToString(",")).apply()
     }
 }
