@@ -12,6 +12,7 @@ import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,7 +63,7 @@ class GradesViewModel @Inject constructor(
     private var loadJob: Job? = null
 
     init {
-        loadGrades()
+        loadGradesAutoTerm()
     }
 
     fun setTerm(term: Term) {
@@ -72,6 +73,48 @@ class GradesViewModel @Inject constructor(
     }
 
     fun refresh() = loadGrades()
+
+    /**
+     * First load only: fetch T1 and T2 in parallel.
+     * If T2 has at least one grade, present T2 and update the selected term indicator.
+     * Otherwise present T1 as usual.
+     */
+    private fun loadGradesAutoTerm() {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.value = GradesUiState.Loading
+            try {
+                val year = edupage.getSchoolYear()
+                    ?: throw IllegalStateException(context.getString(R.string.grades_error_failed_to_load))
+
+                // Fetch both terms concurrently
+                val t1Deferred = async { edupage.getGradesForTerm(year, Term.FIRST) }
+                val t2Deferred = async { edupage.getGradesForTerm(year, Term.SECOND) }
+
+                val t1Raw = t1Deferred.await()
+                val t2Raw = t2Deferred.await()
+
+                // Auto-select Term 2 if it has any grades
+                val (activeTerm, activeRaw) = if (t2Raw.isNotEmpty()) {
+                    Term.SECOND to t2Raw
+                } else {
+                    Term.FIRST to t1Raw
+                }
+
+                _selectedTerm.value = activeTerm
+                val seenIds = prefs.getSeenGradeIds(if (activeTerm == Term.FIRST) "T1" else "T2")
+                val groups = groupAndSort(activeRaw, seenIds)
+                _uiState.value = GradesUiState.Success(
+                    subjects = groups,
+                    hasAnyNew = groups.any { it.hasNewGrades }
+                )
+            } catch (e: Exception) {
+                _uiState.value = GradesUiState.Error(
+                    e.message ?: context.getString(R.string.grades_error_failed_to_load)
+                )
+            }
+        }
+    }
 
     /**
      * Marks all grades in the given subject as seen (collapses the "new" state).
