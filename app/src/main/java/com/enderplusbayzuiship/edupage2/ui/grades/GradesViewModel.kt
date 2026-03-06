@@ -9,6 +9,7 @@ import com.edupage.api.model.grades.Term
 import com.enderplusbayzuiship.edupage2.R
 import com.edupage.api.model.grades.SLOVAK_GRADE_MAP
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.data.GradesCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -25,7 +26,7 @@ import kotlin.math.roundToInt
 /**
  * All grades for a single subject, pre-sorted newest-first.
  * [average] is null when every grade is verbal.
- * [hasNewGrades] is true when at least one grade in this subject hasn't been seen yet.
+ * [hasNewGrades] is true when at least one grade hasn't been seen yet.
  */
 data class GradeSubjectGroup(
     val subjectName: String,
@@ -42,6 +43,11 @@ sealed interface GradesUiState {
         val subjects: List<GradeSubjectGroup>,
         /** True if any subject has at least one unseen grade. */
         val hasAnyNew: Boolean,
+        /**
+         * True while a background network fetch is in progress.
+         * The UI shows a subtle indicator but keeps the cached content visible.
+         */
+        val isRefreshing: Boolean = false,
     ) : GradesUiState
 }
 
@@ -52,6 +58,7 @@ class GradesViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val edupage: Edupage,
     private val prefs: AppPreferences,
+    private val cache: GradesCache,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<GradesUiState>(GradesUiState.Loading)
@@ -69,32 +76,104 @@ class GradesViewModel @Inject constructor(
     fun setTerm(term: Term) {
         if (_selectedTerm.value == term) return
         _selectedTerm.value = term
-        loadGrades()
+        loadGrades(term)
     }
 
-    fun refresh() = loadGrades()
+    /** Manual pull-to-refresh / refresh button: bypass cache, fetch fresh. */
+    fun refresh() {
+        val term = _selectedTerm.value
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            // Show refreshing spinner on existing content if we already have data
+            val current = _uiState.value
+            if (current is GradesUiState.Success) {
+                _uiState.value = current.copy(isRefreshing = true)
+            } else {
+                _uiState.value = GradesUiState.Loading
+            }
+            fetchAndUpdate(term, backgroundUpdate = false)
+        }
+    }
+
+    // ── Read tracking ─────────────────────────────────────────────────────────
+
+    fun markSubjectRead(subjectName: String) {
+        val state = _uiState.value as? GradesUiState.Success ?: return
+        val group = state.subjects.firstOrNull { it.subjectName == subjectName } ?: return
+        val ids = group.grades.map { it.eventId }
+        prefs.markGradeIdsSeen(termKey(), ids)
+        val updated = state.subjects.map { g ->
+            if (g.subjectName == subjectName) g.copy(hasNewGrades = false) else g
+        }
+        _uiState.value = state.copy(subjects = updated, hasAnyNew = updated.any { it.hasNewGrades })
+    }
+
+    fun markAllRead() {
+        val state = _uiState.value as? GradesUiState.Success ?: return
+        val ids = state.subjects.flatMap { it.grades }.map { it.eventId }
+        prefs.markGradeIdsSeen(termKey(), ids)
+        val updated = state.subjects.map { it.copy(hasNewGrades = false) }
+        _uiState.value = state.copy(subjects = updated, hasAnyNew = false)
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    private fun termKey(term: Term = _selectedTerm.value) =
+        if (term == Term.FIRST) "T1" else "T2"
 
     /**
-     * First load only: fetch T1 and T2 in parallel.
-     * If T2 has at least one grade, present T2 and update the selected term indicator.
-     * Otherwise present T1 as usual.
+     * First load: probe T1 + T2 in parallel (from cache first, then network).
+     * Picks T2 if it has any grades, otherwise T1.
      */
     private fun loadGradesAutoTerm() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            _uiState.value = GradesUiState.Loading
+            val year = runCatching { edupage.getSchoolYear() }.getOrNull()
+
+            // ── Step 1: try to show cached content immediately ────────────────
+            if (year != null) {
+                val t1Cached = cache.load(Term.FIRST, year)
+                val t2Cached = cache.load(Term.SECOND, year)
+
+                val (cachedTerm, cachedRaw) = when {
+                    t2Cached != null && t2Cached.isNotEmpty() -> Term.SECOND to t2Cached
+                    t1Cached != null                          -> Term.FIRST  to t1Cached
+                    else                                      -> null to null
+                }
+
+                if (cachedRaw != null && cachedTerm != null) {
+                    _selectedTerm.value = cachedTerm
+                    val seenIds = prefs.getSeenGradeIds(termKey(cachedTerm))
+                    val groups = groupAndSort(cachedRaw, seenIds)
+                    // Show cached data with refreshing=true while network fetch runs
+                    _uiState.value = GradesUiState.Success(
+                        subjects     = groups,
+                        hasAnyNew    = groups.any { it.hasNewGrades },
+                        isRefreshing = true,
+                    )
+                } else {
+                    _uiState.value = GradesUiState.Loading
+                }
+            } else {
+                _uiState.value = GradesUiState.Loading
+            }
+
+            // ── Step 2: fetch both terms from network concurrently ────────────
             try {
-                val year = edupage.getSchoolYear()
+                val resolvedYear = year
+                    ?: edupage.getSchoolYear()
                     ?: throw IllegalStateException(context.getString(R.string.grades_error_failed_to_load))
 
-                // Fetch both terms concurrently
-                val t1Deferred = async { edupage.getGradesForTerm(year, Term.FIRST) }
-                val t2Deferred = async { edupage.getGradesForTerm(year, Term.SECOND) }
+                val t1Deferred = async { edupage.getGradesForTerm(resolvedYear, Term.FIRST) }
+                val t2Deferred = async { edupage.getGradesForTerm(resolvedYear, Term.SECOND) }
 
                 val t1Raw = t1Deferred.await()
                 val t2Raw = t2Deferred.await()
 
-                // Auto-select Term 2 if it has any grades
+                // Persist fresh data
+                cache.save(Term.FIRST,  resolvedYear, t1Raw)
+                cache.save(Term.SECOND, resolvedYear, t2Raw)
+
                 val (activeTerm, activeRaw) = if (t2Raw.isNotEmpty()) {
                     Term.SECOND to t2Raw
                 } else {
@@ -102,67 +181,81 @@ class GradesViewModel @Inject constructor(
                 }
 
                 _selectedTerm.value = activeTerm
-                val seenIds = prefs.getSeenGradeIds(if (activeTerm == Term.FIRST) "T1" else "T2")
+                val seenIds = prefs.getSeenGradeIds(termKey(activeTerm))
                 val groups = groupAndSort(activeRaw, seenIds)
                 _uiState.value = GradesUiState.Success(
-                    subjects = groups,
-                    hasAnyNew = groups.any { it.hasNewGrades }
+                    subjects     = groups,
+                    hasAnyNew    = groups.any { it.hasNewGrades },
+                    isRefreshing = false,
                 )
             } catch (e: Exception) {
-                _uiState.value = GradesUiState.Error(
-                    e.message ?: context.getString(R.string.grades_error_failed_to_load)
-                )
+                // If we already showed cached data, keep it — just stop the spinner
+                val current = _uiState.value
+                if (current is GradesUiState.Success) {
+                    _uiState.value = current.copy(isRefreshing = false)
+                } else {
+                    _uiState.value = GradesUiState.Error(
+                        e.message ?: context.getString(R.string.grades_error_failed_to_load)
+                    )
+                }
             }
         }
     }
 
     /**
-     * Marks all grades in the given subject as seen (collapses the "new" state).
-     * Does NOT auto-collapse the card — UI decides that.
+     * Load a specific [term]: show cache instantly, then fetch network in background.
      */
-    fun markSubjectRead(subjectName: String) {
-        val state = _uiState.value as? GradesUiState.Success ?: return
-        val group = state.subjects.firstOrNull { it.subjectName == subjectName } ?: return
-        val ids = group.grades.map { it.eventId }
-        prefs.markGradeIdsSeen(termKey(), ids)
-        // Rebuild state with updated new-grade flags
-        val updated = state.subjects.map { g ->
-            if (g.subjectName == subjectName) g.copy(hasNewGrades = false) else g
+    private fun loadGrades(term: Term) {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val year = runCatching { edupage.getSchoolYear() }.getOrNull()
+
+            // ── Step 1: show cached data immediately ──────────────────────────
+            if (year != null) {
+                val cached = cache.load(term, year)
+                if (cached != null) {
+                    val seenIds = prefs.getSeenGradeIds(termKey(term))
+                    val groups = groupAndSort(cached, seenIds)
+                    _uiState.value = GradesUiState.Success(
+                        subjects     = groups,
+                        hasAnyNew    = groups.any { it.hasNewGrades },
+                        isRefreshing = true,
+                    )
+                } else {
+                    _uiState.value = GradesUiState.Loading
+                }
+            } else {
+                _uiState.value = GradesUiState.Loading
+            }
+
+            // ── Step 2: fetch fresh ───────────────────────────────────────────
+            fetchAndUpdate(term, backgroundUpdate = true)
         }
-        _uiState.value = GradesUiState.Success(
-            subjects = updated,
-            hasAnyNew = updated.any { it.hasNewGrades }
-        )
     }
 
     /**
-     * Marks every loaded grade as seen.
+     * Fetch [term] from network, save to cache, update UI state.
+     * If [backgroundUpdate] is true and the fetch fails, keep existing Success state
+     * (just clear the spinner).
      */
-    fun markAllRead() {
-        val state = _uiState.value as? GradesUiState.Success ?: return
-        val ids = state.subjects.flatMap { it.grades }.map { it.eventId }
-        prefs.markGradeIdsSeen(termKey(), ids)
-        val updated = state.subjects.map { it.copy(hasNewGrades = false) }
-        _uiState.value = GradesUiState.Success(subjects = updated, hasAnyNew = false)
-    }
-
-    private fun termKey() = if (_selectedTerm.value == Term.FIRST) "T1" else "T2"
-
-    private fun loadGrades() {
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            _uiState.value = GradesUiState.Loading
-            try {
-                val year = edupage.getSchoolYear()
-                    ?: throw IllegalStateException(context.getString(R.string.grades_error_failed_to_load))
-                val raw = edupage.getGradesForTerm(year, _selectedTerm.value)
-                val seenIds = prefs.getSeenGradeIds(termKey())
-                val groups = groupAndSort(raw, seenIds)
-                _uiState.value = GradesUiState.Success(
-                    subjects = groups,
-                    hasAnyNew = groups.any { it.hasNewGrades }
-                )
-            } catch (e: Exception) {
+    private suspend fun fetchAndUpdate(term: Term, backgroundUpdate: Boolean) {
+        try {
+            val year = edupage.getSchoolYear()
+                ?: throw IllegalStateException(context.getString(R.string.grades_error_failed_to_load))
+            val raw = edupage.getGradesForTerm(year, term)
+            cache.save(term, year, raw)
+            val seenIds = prefs.getSeenGradeIds(termKey(term))
+            val groups = groupAndSort(raw, seenIds)
+            _uiState.value = GradesUiState.Success(
+                subjects     = groups,
+                hasAnyNew    = groups.any { it.hasNewGrades },
+                isRefreshing = false,
+            )
+        } catch (e: Exception) {
+            val current = _uiState.value
+            if (backgroundUpdate && current is GradesUiState.Success) {
+                _uiState.value = current.copy(isRefreshing = false)
+            } else {
                 _uiState.value = GradesUiState.Error(
                     e.message ?: context.getString(R.string.grades_error_failed_to_load)
                 )
@@ -191,17 +284,11 @@ class GradesViewModel @Inject constructor(
             }
     }
 
-    /**
-     * Computes a weighted average when [EduGrade.importance] is present,
-     * otherwise falls back to a simple mean of all numeric grades.
-     * Returns null if there are no numeric grades.
-     */
     private fun computeAverage(grades: List<EduGrade>): Double? {
         val numeric = grades.filter { !it.verbal }.mapNotNull { g ->
             val v = when (val n = g.gradeN) {
                 is Double -> n
-                is String -> n.toDoubleOrNull()
-                    ?: SLOVAK_GRADE_MAP[n.lowercase()]
+                is String -> n.toDoubleOrNull() ?: SLOVAK_GRADE_MAP[n.lowercase()]
                 else      -> null
             } ?: return@mapNotNull null
             Pair(v, g.importance)

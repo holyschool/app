@@ -37,6 +37,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -141,6 +142,16 @@ fun GradesScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
+
+            // ── Background refresh indicator ──────────────────────────────────
+            val isRefreshing = (uiState as? GradesUiState.Success)?.isRefreshing == true
+            AnimatedVisibility(visible = isRefreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+            }
 
             // ── Content ───────────────────────────────────────────────────────
             when (val state = uiState) {
