@@ -12,7 +12,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -27,18 +29,23 @@ import com.enderplusbayzuiship.edupage2.ui.settings.SettingsScreen
 import com.enderplusbayzuiship.edupage2.ui.timetable.TimetableScreen
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
+import com.enderplusbayzuiship.edupage2.R
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 
 private data class TabItem(
     val tab: Tab,
-    val label: String,
+    val labelRes: Int,
     val icon: ImageVector
 )
 
-private val tabs = listOf(
-    TabItem(Tab.Overview,  "Overview",  Icons.Rounded.Home),
-    TabItem(Tab.Timetable, "Timetable", Icons.Rounded.DateRange),
-    TabItem(Tab.Grades,    "Grades",    Icons.Rounded.Star),
-    TabItem(Tab.Settings,  "Settings",  Icons.Rounded.Settings),
+@Composable
+private fun getTabs() = listOf(
+    TabItem(Tab.Overview,  R.string.tab_overview,  Icons.Rounded.Home),
+    TabItem(Tab.Timetable, R.string.tab_timetable, Icons.Rounded.DateRange),
+    TabItem(Tab.Grades,    R.string.tab_grades,    Icons.Rounded.Star),
+    TabItem(Tab.Settings,  R.string.tab_settings,  Icons.Rounded.Settings),
 )
 
 @Composable
@@ -47,6 +54,7 @@ fun MainScreen(onLogout: () -> Unit) {
     val tabNavController = rememberNavController()
     val navBackStackEntry by tabNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val tabs = getTabs()
 
     Scaffold(
         bottomBar = {
@@ -55,6 +63,7 @@ fun MainScreen(onLogout: () -> Unit) {
                     val selected = currentDestination
                         ?.hierarchy
                         ?.any { it.route == item.tab.route } == true
+                    val label = stringResource(item.labelRes)
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
@@ -67,8 +76,8 @@ fun MainScreen(onLogout: () -> Unit) {
                                 restoreState = true
                             }
                         },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) }
+                        icon = { Icon(item.icon, contentDescription = label) },
+                        label = { Text(label) }
                     )
                 }
             }
@@ -78,6 +87,10 @@ fun MainScreen(onLogout: () -> Unit) {
             navController = tabNavController,
             startDestination = Tab.Overview.route,
             contentAlignment = androidx.compose.ui.Alignment.TopStart,
+            enterTransition  = { fadeIn(tween(80)) },
+            exitTransition   = { fadeOut(tween(80)) },
+            popEnterTransition  = { fadeIn(tween(80)) },
+            popExitTransition   = { fadeOut(tween(80)) },
         ) {
             composable(Tab.Overview.route)  { OverviewScreen(innerPadding) }
             composable(Tab.Timetable.route) { TimetableScreen(innerPadding) }
@@ -100,12 +113,14 @@ fun MainScreen(onLogout: () -> Unit) {
 private fun BottomNavPreview() {
     Edupage2Theme {
         NavigationBar {
+            val tabs = getTabs()
             tabs.forEachIndexed { index, item ->
+                val label = stringResource(item.labelRes)
                 NavigationBarItem(
                     selected = index == 0,
                     onClick = {},
-                    icon = { Icon(item.icon, contentDescription = item.label) },
-                    label = { Text(item.label) }
+                    icon = { Icon(item.icon, contentDescription = label) },
+                    label = { Text(label) }
                 )
             }
         }

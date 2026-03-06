@@ -65,11 +65,15 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.edupage.api.model.Classroom
 import com.edupage.api.model.Subject
 import com.edupage.api.model.people.EduTeacher
+import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
+import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
@@ -83,6 +87,8 @@ fun TimetableScreen(
     val selectedDate by viewModel.selectedDate.collectAsState()
     val currentTime by viewModel.currentTime.collectAsState()
     val breakVisibility by viewModel.breakVisibility.collectAsState()
+    val cancelledLessonStyle by viewModel.cancelledLessonStyle.collectAsState()
+    val showWeekends by viewModel.showWeekends.collectAsState()
     val haptics = rememberAppHaptics()
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
@@ -94,7 +100,7 @@ fun TimetableScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Timetable",
+                            text = stringResource(R.string.timetable_title),
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -102,7 +108,7 @@ fun TimetableScreen(
                 },
                 actions = {
                     FilledTonalIconButton(onClick = { haptics.click(); viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.timetable_refresh))
                     }
                     Spacer(Modifier.width(8.dp))
                 },
@@ -121,6 +127,7 @@ fun TimetableScreen(
         ) {
             DateNavigationBar(
                 date = selectedDate,
+                showWeekends = showWeekends,
                 onPreviousDay = { haptics.tick(); viewModel.setDate(selectedDate.minusDays(1)) },
                 onNextDay = { haptics.tick(); viewModel.setDate(selectedDate.plusDays(1)) },
                 onToday = { haptics.tick(); viewModel.setDate(LocalDate.now()) }
@@ -154,7 +161,7 @@ fun TimetableScreen(
                                 onClick = { haptics.click(); viewModel.refresh() },
                                 shape = RoundedCornerShape(16.dp)
                             ) {
-                                Text("Retry")
+                                Text(stringResource(R.string.timetable_retry))
                             }
                         }
                     }
@@ -174,7 +181,7 @@ fun TimetableScreen(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                 )
                                 Text(
-                                    text = "No lessons today",
+                                    text = stringResource(R.string.timetable_no_lessons),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -256,7 +263,8 @@ fun TimetableScreen(
                                 LessonCard(
                                     lesson = lesson,
                                     isCurrentLesson = isCurrentLesson,
-                                    currentTime = if (isCurrentLesson) currentTime else null
+                                    currentTime = if (isCurrentLesson) currentTime else null,
+                                    cancelledLessonStyle = cancelledLessonStyle
                                 )
                             }
                         }
@@ -271,11 +279,15 @@ fun TimetableScreen(
 @Composable
 private fun DateNavigationBar(
     date: LocalDate,
+    showWeekends: Boolean,
     onPreviousDay: () -> Unit,
     onNextDay: () -> Unit,
     onToday: () -> Unit
 ) {
     val today = LocalDate.now()
+    val todayIsWeekend = today.dayOfWeek == java.time.DayOfWeek.SATURDAY ||
+                         today.dayOfWeek == java.time.DayOfWeek.SUNDAY
+    val showTodayChip = date != today && !(todayIsWeekend && !showWeekends)
     val dayName = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
     val formatted = date.format(DateTimeFormatter.ofPattern("d MMM yyyy"))
 
@@ -287,7 +299,7 @@ private fun DateNavigationBar(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         FilledTonalIconButton(onClick = onPreviousDay) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous day")
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.timetable_previous_day))
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -307,10 +319,10 @@ private fun DateNavigationBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (date != today) {
+            if (showTodayChip) {
                 AssistChip(
                     onClick = onToday,
-                    label = { Text("Today", style = MaterialTheme.typography.labelMedium) },
+                    label = { Text(stringResource(R.string.timetable_today), style = MaterialTheme.typography.labelMedium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.DateRange,
@@ -321,7 +333,7 @@ private fun DateNavigationBar(
                 )
             }
             FilledTonalIconButton(onClick = onNextDay) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next day")
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.timetable_next_day))
             }
         }
     }
@@ -332,7 +344,8 @@ private fun DateNavigationBar(
 private fun LessonCard(
     lesson: Lesson,
     isCurrentLesson: Boolean = false,
-    currentTime: LocalTime? = null
+    currentTime: LocalTime? = null,
+    cancelledLessonStyle: CancelledLessonStyle = CancelledLessonStyle.RED,
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     val startStr = lesson.startTime?.format(timeFormatter) ?: "?"
@@ -340,11 +353,15 @@ private fun LessonCard(
 
     val containerColor = when {
         isCurrentLesson -> MaterialTheme.colorScheme.primaryContainer
-        lesson.isCancelled -> MaterialTheme.colorScheme.errorContainer
+        lesson.isCancelled && cancelledLessonStyle == CancelledLessonStyle.RED -> MaterialTheme.colorScheme.errorContainer
+        lesson.isCancelled -> MaterialTheme.colorScheme.surfaceContainerLow
         lesson.hasChange() -> MaterialTheme.colorScheme.tertiaryContainer
         lesson.isOnlineLesson() -> MaterialTheme.colorScheme.secondaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
+
+    val isGreyedOut = lesson.isCancelled && cancelledLessonStyle == CancelledLessonStyle.GREYED_OUT
+    val contentAlpha = if (isGreyedOut) 0.45f else 1f
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -371,19 +388,19 @@ private fun LessonCard(
                         text = "$it.",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
                     )
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = startStr,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
                 Text(
                     text = endStr,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
             }
 
@@ -395,7 +412,7 @@ private fun LessonCard(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // Subject
-                val subjectName = lesson.subject?.name ?: "Unknown subject"
+                val subjectName = lesson.subject?.name ?: stringResource(R.string.timetable_unknown_subject)
                 val origSubjectName = lesson.origSubject?.name
                 if (origSubjectName != null) {
                     Text(
@@ -406,13 +423,15 @@ private fun LessonCard(
                     Text(
                         text = subjectName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                     )
                 }
 
                 // Teachers
-                val teacherNames    = lesson.teachers?.joinToString(", ") { it.name ?: "?" } ?: ""
-                val origTeacherNames = lesson.origTeachers?.joinToString(", ") { it.name ?: "?" }
+                val unknownPlaceholder = stringResource(R.string.timetable_unknown_placeholder)
+                val teacherNames    = lesson.teachers?.joinToString(", ") { it.name ?: unknownPlaceholder } ?: ""
+                val origTeacherNames = lesson.origTeachers?.joinToString(", ") { it.name ?: unknownPlaceholder }
                 if (!origTeacherNames.isNullOrEmpty() && origTeacherNames != teacherNames) {
                     Text(
                         text = buildChangedText(old = origTeacherNames, new = teacherNames),
@@ -422,13 +441,13 @@ private fun LessonCard(
                     Text(
                         text = teacherNames,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                     )
                 }
 
                 // Classrooms
-                val classroomNames    = lesson.classrooms?.joinToString(", ") { it.name ?: "?" } ?: ""
-                val origClassroomNames = lesson.origClassrooms?.joinToString(", ") { it.name ?: "?" }
+                val classroomNames    = lesson.classrooms?.joinToString(", ") { it.name ?: unknownPlaceholder } ?: ""
+                val origClassroomNames = lesson.origClassrooms?.joinToString(", ") { it.name ?: unknownPlaceholder }
                 if (!origClassroomNames.isNullOrEmpty() && origClassroomNames != classroomNames) {
                     Text(
                         text = buildChangedText(old = origClassroomNames, new = classroomNames),
@@ -438,7 +457,7 @@ private fun LessonCard(
                     Text(
                         text = classroomNames,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                     )
                 }
 
@@ -447,7 +466,7 @@ private fun LessonCard(
                     Text(
                         text = lesson.curriculum!!,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                     )
                 }
             }
@@ -460,7 +479,7 @@ private fun LessonCard(
                 if (isCurrentLesson) {
                     Badge(containerColor = MaterialTheme.colorScheme.primary) {
                         Text(
-                            "Now",
+                            stringResource(R.string.timetable_badge_now),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimary
                         )
@@ -470,7 +489,7 @@ private fun LessonCard(
                     else null
                     if (minsLeft != null && minsLeft >= 0) {
                         TimeLeftPill(
-                            label = "${formatTimeLeft(minsLeft)} left",
+                            label = stringResource(R.string.timetable_time_left, formatTimeLeft(minsLeft)),
                             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                             contentColor = MaterialTheme.colorScheme.primary
                         )
@@ -479,7 +498,7 @@ private fun LessonCard(
                 if (lesson.isCancelled) {
                     Badge(containerColor = MaterialTheme.colorScheme.error) {
                         Text(
-                            "Cancelled",
+                            stringResource(R.string.timetable_badge_cancelled),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onError
                         )
@@ -488,7 +507,7 @@ private fun LessonCard(
                 if (lesson.hasChange() && !lesson.isCancelled) {
                     Badge(containerColor = MaterialTheme.colorScheme.tertiary) {
                         Text(
-                            "Changed",
+                            stringResource(R.string.timetable_badge_changed),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onTertiary
                         )
@@ -497,7 +516,7 @@ private fun LessonCard(
                 if (lesson.isOnlineLesson()) {
                     Badge(containerColor = MaterialTheme.colorScheme.secondary) {
                         Text(
-                            "Online",
+                            stringResource(R.string.timetable_badge_online),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondary
                         )
@@ -520,9 +539,9 @@ private fun BreakSeparator(
     currentTime: LocalTime? = null
 ) {
     val label = when {
-        breakMinutes < 60 -> "${breakMinutes}m break"
-        breakMinutes % 60 == 0L -> "${breakMinutes / 60}h break"
-        else -> "${breakMinutes / 60}h ${breakMinutes % 60}m break"
+        breakMinutes < 60 -> stringResource(R.string.timetable_break_minutes, breakMinutes)
+        breakMinutes % 60 == 0L -> stringResource(R.string.timetable_break_hours, breakMinutes / 60)
+        else -> stringResource(R.string.timetable_break_hours_minutes, breakMinutes / 60, breakMinutes % 60)
     }
     val minsLeft = if (isActive && currentTime != null && breakEndsAt != null)
         Duration.between(currentTime, breakEndsAt).toMinutes()
@@ -576,7 +595,7 @@ private fun BreakSeparator(
         }
         if (isActive && minsLeft != null && minsLeft >= 0) {
             TimeLeftPill(
-                label = "${formatTimeLeft(minsLeft)} left",
+                label = stringResource(R.string.timetable_time_left, formatTimeLeft(minsLeft)),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -753,6 +772,7 @@ private fun DateNavBarTodayPreview() {
     Edupage2Theme {
         DateNavigationBar(
             date = LocalDate.now(),
+            showWeekends = true,
             onPreviousDay = {}, onNextDay = {}, onToday = {}
         )
     }
@@ -764,6 +784,7 @@ private fun DateNavBarOtherPreview() {
     Edupage2Theme {
         DateNavigationBar(
             date = LocalDate.now().plusDays(2),
+            showWeekends = true,
             onPreviousDay = {}, onNextDay = {}, onToday = {}
         )
     }

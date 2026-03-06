@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.res.stringResource
+import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,7 +32,7 @@ fun OverviewScreen(bottomPadding: PaddingValues) {
             LargeTopAppBar(
                 title = {
                     Text(
-                        text = "Overview",
+                        text = stringResource(R.string.overview_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -51,7 +53,7 @@ fun OverviewScreen(bottomPadding: PaddingValues) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Coming soon",
+                text = stringResource(R.string.overview_coming_soon),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

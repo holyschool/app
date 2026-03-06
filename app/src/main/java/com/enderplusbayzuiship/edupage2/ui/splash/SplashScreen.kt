@@ -47,6 +47,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.res.stringResource
+import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 
 // ---------------------------------------------------------------------------
@@ -141,14 +143,14 @@ fun SplashScreen(
                 )
                 Spacer(modifier = Modifier.height(28.dp))
                 Text(
-                    text = "EduPage",
+                    text = stringResource(R.string.login_title),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Signing you in\u2026",
+                    text = stringResource(R.string.splash_signing_in),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -268,14 +270,14 @@ private fun SplashScreenPreview() {
                     )
                     Spacer(modifier = Modifier.height(28.dp))
                     Text(
-                        text = "EduPage",
+                        text = stringResource(R.string.login_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Signing you in\u2026",
+                        text = stringResource(R.string.splash_signing_in),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

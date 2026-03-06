@@ -14,11 +14,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+sealed class LoginError {
+    object EmptyFields : LoginError()
+    object BadCredentials : LoginError()
+    object Captcha : LoginError()
+    data class LoginFailed(val message: String?) : LoginError()
+    object EmptyCode : LoginError()
+    data class VerificationFailed(val message: String?) : LoginError()
+}
+
 sealed interface LoginUiState {
     object Idle : LoginUiState
     object Loading : LoginUiState
     object Success : LoginUiState
-    data class Error(val message: String) : LoginUiState
+    data class Error(val error: LoginError) : LoginUiState
     data class TwoFactorRequired(val twoFactorLogin: TwoFactorLogin) : LoginUiState
 }
 
@@ -33,7 +42,7 @@ class LoginViewModel @Inject constructor(
 
     fun login(username: String, password: String, subdomain: String) {
         if (username.isBlank() || password.isBlank() || subdomain.isBlank()) {
-            _uiState.value = LoginUiState.Error("Please fill in all fields")
+            _uiState.value = LoginUiState.Error(LoginError.EmptyFields)
             return
         }
         viewModelScope.launch {
@@ -47,18 +56,18 @@ class LoginViewModel @Inject constructor(
                     _uiState.value = LoginUiState.Success
                 }
             } catch (e: BadCredentialsException) {
-                _uiState.value = LoginUiState.Error("Wrong username or password")
+                _uiState.value = LoginUiState.Error(LoginError.BadCredentials)
             } catch (e: CaptchaException) {
-                _uiState.value = LoginUiState.Error("Captcha required — please try again later")
+                _uiState.value = LoginUiState.Error(LoginError.Captcha)
             } catch (e: Exception) {
-                _uiState.value = LoginUiState.Error("Login failed: ${e.message}")
+                _uiState.value = LoginUiState.Error(LoginError.LoginFailed(e.message))
             }
         }
     }
 
     fun verify2FA(twoFactorLogin: TwoFactorLogin, code: String) {
         if (code.isBlank()) {
-            _uiState.value = LoginUiState.Error("Please enter the verification code")
+            _uiState.value = LoginUiState.Error(LoginError.EmptyCode)
             return
         }
         viewModelScope.launch {
@@ -74,7 +83,7 @@ class LoginViewModel @Inject constructor(
                 credentialStore.updateSessionId(sessionId)
                 _uiState.value = LoginUiState.Success
             } catch (e: Exception) {
-                _uiState.value = LoginUiState.Error("Verification failed: ${e.message}")
+                _uiState.value = LoginUiState.Error(LoginError.VerificationFailed(e.message))
             }
         }
     }

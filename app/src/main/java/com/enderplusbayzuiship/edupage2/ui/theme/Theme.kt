@@ -8,6 +8,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val LightColorScheme = lightColorScheme(
@@ -72,20 +73,40 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerHighest= SurfaceContainerHighestDark,
 )
 
+/** Pure black used for every surface role in AMOLED mode. */
+private val AmoledBlack = Color(0xFF000000)
+
 @Composable
 fun Edupage2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+ (API 31)
     dynamicColor: Boolean = true,
+    /** When true AND darkTheme is true, all surface/background colours are pure black. */
+    amoled: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
+    val baseScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> DarkColorScheme
         else      -> LightColorScheme
+    }
+
+    val colorScheme = if (darkTheme && amoled) {
+        baseScheme.copy(
+            background             = AmoledBlack,
+            surface                = AmoledBlack,
+            surfaceVariant         = AmoledBlack,
+            surfaceContainerLowest = AmoledBlack,
+            surfaceContainerLow    = AmoledBlack,
+            surfaceContainer       = AmoledBlack,
+            surfaceContainerHigh   = AmoledBlack,
+            surfaceContainerHighest= AmoledBlack,
+        )
+    } else {
+        baseScheme
     }
 
     MaterialTheme(

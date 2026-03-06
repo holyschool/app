@@ -2,12 +2,17 @@ package com.enderplusbayzuiship.edupage2.ui.timetable
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
 import com.edupage.api.Edupage
 import com.edupage.api.model.timetable.Lesson
+import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
+import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
+import java.time.DayOfWeek
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +30,7 @@ sealed interface TimetableUiState {
 
 @HiltViewModel
 class TimetableViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val edupage: Edupage,
     private val credentialStore: CredentialStore,
     private val appPreferences: AppPreferences
@@ -42,6 +48,12 @@ class TimetableViewModel @Inject constructor(
     private val _breakVisibility = MutableStateFlow(appPreferences.breakVisibility)
     val breakVisibility: StateFlow<BreakVisibility> = _breakVisibility.asStateFlow()
 
+    private val _cancelledLessonStyle = MutableStateFlow(appPreferences.cancelledLessonStyle)
+    val cancelledLessonStyle: StateFlow<CancelledLessonStyle> = _cancelledLessonStyle.asStateFlow()
+
+    private val _showWeekends = MutableStateFlow(appPreferences.showWeekends)
+    val showWeekends: StateFlow<Boolean> = _showWeekends.asStateFlow()
+
     init {
         loadTimetable(_selectedDate.value)
         viewModelScope.launch {
@@ -50,6 +62,8 @@ class TimetableViewModel @Inject constructor(
                 _currentTime.value = LocalTime.now()
                 // Re-read the pref each tick so changes from Settings propagate here too
                 _breakVisibility.value = appPreferences.breakVisibility
+                _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
+                _showWeekends.value = appPreferences.showWeekends
                 // After all lessons end on today → auto-advance to next day
                 val state = _uiState.value
                 if (_selectedDate.value == LocalDate.now() &&
@@ -65,13 +79,35 @@ class TimetableViewModel @Inject constructor(
     }
 
     fun setDate(date: LocalDate) {
-        _selectedDate.value = date
-        loadTimetable(date)
+        val resolved = if (_showWeekends.value) date else skipWeekend(date, reference = _selectedDate.value)
+        _selectedDate.value = resolved
+        loadTimetable(resolved)
+    }
+
+    /**
+     * If [date] lands on a weekend and weekends are hidden, advance to the nearest weekday
+     * in the direction of travel (determined by comparing [date] to [reference]).
+     */
+    private fun skipWeekend(date: LocalDate, reference: LocalDate): LocalDate {
+        if (date.dayOfWeek != DayOfWeek.SATURDAY && date.dayOfWeek != DayOfWeek.SUNDAY) return date
+        return if (date > reference) {
+            // Going forward: find next Monday
+            var d = date
+            while (d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY) d = d.plusDays(1)
+            d
+        } else {
+            // Going backward: find previous Friday
+            var d = date
+            while (d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY) d = d.minusDays(1)
+            d
+        }
     }
 
     fun refresh() {
         loadTimetable(_selectedDate.value)
         _breakVisibility.value = appPreferences.breakVisibility
+        _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
+        _showWeekends.value = appPreferences.showWeekends
     }
 
     /** Clears saved credentials and resets the in-memory session. */
@@ -90,7 +126,7 @@ class TimetableViewModel @Inject constructor(
                 val lessons = timetable?.lessons ?: emptyList()
                 _uiState.value = TimetableUiState.Success(lessons)
             } catch (e: Exception) {
-                _uiState.value = TimetableUiState.Error(e.message ?: "Failed to load timetable")
+                _uiState.value = TimetableUiState.Error(e.message ?: context.getString(R.string.timetable_error_failed_to_load))
             }
         }
     }

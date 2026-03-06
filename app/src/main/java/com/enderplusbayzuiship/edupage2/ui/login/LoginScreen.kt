@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.tooling.preview.Preview
+import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
@@ -109,13 +111,16 @@ fun LoginScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "EduPage",
+                        text = stringResource(R.string.login_title),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = if (isTwoFactor) "Two-factor authentication" else "Sign in to continue",
+                        text = if (isTwoFactor)
+                            stringResource(R.string.login_subtitle_2fa)
+                        else
+                            stringResource(R.string.login_subtitle),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -145,10 +150,10 @@ fun LoginScreen(
                                 OutlinedTextField(
                                     value = subdomain,
                                     onValueChange = { subdomain = it.trim() },
-                                    label = { Text("School subdomain") },
-                                    placeholder = { Text("e.g. myschool") },
+                                    label = { Text(stringResource(R.string.login_school_subdomain)) },
+                                    placeholder = { Text(stringResource(R.string.login_school_placeholder)) },
                                     supportingText = {
-                                        Text("https://${subdomain.ifEmpty { "..." }}.edupage.org")
+                                        Text(stringResource(R.string.login_school_url_format, subdomain.ifEmpty { "..." }))
                                     },
                                     singleLine = true,
                                     shape = fieldShape,
@@ -166,7 +171,7 @@ fun LoginScreen(
                                 OutlinedTextField(
                                     value = username,
                                     onValueChange = { username = it },
-                                    label = { Text("Username") },
+                                    label = { Text(stringResource(R.string.login_username)) },
                                     singleLine = true,
                                     shape = fieldShape,
                                     keyboardOptions = KeyboardOptions(
@@ -183,7 +188,7 @@ fun LoginScreen(
                                 OutlinedTextField(
                                     value = password,
                                     onValueChange = { password = it },
-                                    label = { Text("Password") },
+                                    label = { Text(stringResource(R.string.login_password)) },
                                     singleLine = true,
                                     shape = fieldShape,
                                     visualTransformation = if (passwordVisible)
@@ -204,7 +209,10 @@ fun LoginScreen(
                                     trailingIcon = {
                                                     TextButton(onClick = { haptics.tick(); passwordVisible = !passwordVisible }) {
                                             Text(
-                                                if (passwordVisible) "Hide" else "Show",
+                                                if (passwordVisible)
+                                                    stringResource(R.string.login_password_hide)
+                                                else
+                                                    stringResource(R.string.login_password_show),
                                                 style = MaterialTheme.typography.labelSmall
                                             )
                                         }
@@ -221,14 +229,14 @@ fun LoginScreen(
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
-                                    text = "Enter the verification code sent to your device.",
+                                    text = stringResource(R.string.login_2fa_message),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 OutlinedTextField(
                                     value = otpCode,
                                     onValueChange = { otpCode = it.trim() },
-                                    label = { Text("Verification code") },
+                                    label = { Text(stringResource(R.string.login_verification_code)) },
                                     singleLine = true,
                                     shape = fieldShape,
                                     keyboardOptions = KeyboardOptions(
@@ -250,7 +258,7 @@ fun LoginScreen(
                                     onClick = { haptics.tick(); viewModel.resetState(); otpCode = "" },
                                     modifier = Modifier.align(Alignment.Start)
                                 ) {
-                                    Text("Back to login")
+                                    Text(stringResource(R.string.login_back_to_login))
                                 }
                             }
                         }
@@ -279,7 +287,15 @@ fun LoginScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Text(
-                                        text = (uiState as? LoginUiState.Error)?.message ?: "",
+                                        text = when (val error = (uiState as? LoginUiState.Error)?.error) {
+                                            is LoginError.EmptyFields -> stringResource(R.string.login_error_empty_fields)
+                                            is LoginError.BadCredentials -> stringResource(R.string.login_error_bad_credentials)
+                                            is LoginError.Captcha -> stringResource(R.string.login_error_captcha)
+                                            is LoginError.LoginFailed -> stringResource(R.string.login_error_failed, error.message ?: "")
+                                            is LoginError.EmptyCode -> stringResource(R.string.login_error_empty_code)
+                                            is LoginError.VerificationFailed -> stringResource(R.string.login_error_verification_failed, error.message ?: "")
+                                            null -> ""
+                                        },
                                         color = MaterialTheme.colorScheme.onErrorContainer,
                                         style = MaterialTheme.typography.bodySmall
                                     )
@@ -318,7 +334,10 @@ fun LoginScreen(
                                 )
                             } else {
                                 Text(
-                                    text = if (isTwoFactor) "Verify" else "Sign In",
+                                    text = if (isTwoFactor)
+                                        stringResource(R.string.login_button_verify)
+                                    else
+                                        stringResource(R.string.login_button_signin),
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold
                                 )
