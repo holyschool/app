@@ -15,10 +15,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-/**
- * Provides timetable substitution/change data.
- * Mirrors Python's Substitution class.
- */
 internal class Substitution(private val session: EdupageSession) {
 
     private val dbi = DbiHelper(session)

@@ -11,42 +11,21 @@ import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.Request
 
-/**
- * Returned when 2FA is required to complete login.
- */
 class TwoFactorLogin(
     private val session: EdupageSession,
     private val subdomain: String
 ) {
-    /**
-     * Complete 2FA with the provided OTP code.
-     */
+
     suspend fun verify(code: String) {
         Login(session).complete2FA(subdomain, code)
     }
 }
 
-/**
- * Handles EduPage authentication.
- * Mirrors Python's Login class.
- */
 internal class Login(private val session: EdupageSession) {
 
-    /**
-     * Login with explicit subdomain.
-     *
-     * Flow (mirrors Python):
-     * 1. GET /login/?cmd=MainLogin  → extract csrftoken from response body
-     * 2. POST /login/edubarLogin.php with csrfauth + username + password
-     * 3. Check final URL for bad=1 (bad credentials) or cap=1 (captcha)
-     * 4. If no 2FA: parse userhome() data directly from the POST response body
-     * 5. If 2FA: return TwoFactorLogin for the caller to complete
-     *
-     * Returns null if no 2FA needed, or a [TwoFactorLogin] object.
-     */
     suspend fun login(username: String, password: String, subdomain: String): TwoFactorLogin? {
         return withContext(Dispatchers.IO) {
-            // Step 1: GET login page to obtain CSRF token
+
             val loginPageUrl = "https://$subdomain.edupage.org/login/?cmd=MainLogin"
             val loginPageRequest = Request.Builder().url(loginPageUrl).get().build()
             val loginPageResponse = session.httpClient.newCall(loginPageRequest).execute()
@@ -59,7 +38,6 @@ internal class Login(private val session: EdupageSession) {
                 throw MissingDataException("Could not extract CSRF token from login page")
             }
 
-            // Step 2: POST credentials + CSRF token
             val loginUrl = "https://$subdomain.edupage.org/login/edubarLogin.php"
             val formBody = FormBody.Builder()
                 .add("csrfauth", csrfToken)
@@ -72,7 +50,6 @@ internal class Login(private val session: EdupageSession) {
             val body = loginResponse.body?.string()
                 ?: throw MissingDataException("Empty login response")
 
-            // Step 3: Check final URL for errors (Python checks response.url)
             when {
                 "bad=1" in finalUrl ->
                     throw BadCredentialsException()
@@ -84,7 +61,7 @@ internal class Login(private val session: EdupageSession) {
                     TwoFactorLogin(session, subdomain)
                 }
                 else -> {
-                    // Step 4: Parse userhome() data directly from POST response — no second GET needed
+
                     session.subdomain = subdomain
                     session.username = username
                     parseLoginData(body)
@@ -94,9 +71,6 @@ internal class Login(private val session: EdupageSession) {
         }
     }
 
-    /**
-     * Auto-login through portal.edupage.org (subdomain auto-detected).
-     */
     suspend fun loginAuto(username: String, password: String): TwoFactorLogin? {
         return withContext(Dispatchers.IO) {
             val portalUrl = "https://portal.edupage.org/index.php?jwid=jw2&module=Login"
@@ -108,7 +82,7 @@ internal class Login(private val session: EdupageSession) {
             val request = Request.Builder().url(portalUrl).post(formBody).build()
             val response = session.httpClient.newCall(request).execute()
             val body = response.body?.string() ?: throw MissingDataException("Empty login response")
-            // OkHttp follows redirects; networkResponse holds the last actual HTTP exchange
+
             val networkFinalUrl = response.networkResponse?.request?.url?.toString()
                 ?: response.request.url.toString()
 
@@ -133,10 +107,6 @@ internal class Login(private val session: EdupageSession) {
         }
     }
 
-    /**
-     * Restore session from an existing PHPSESSID cookie.
-     * Uses /user endpoint (mirrors Python's reload_data).
-     */
     suspend fun reloadData(subdomain: String, sessionId: String?, username: String) {
         withContext(Dispatchers.IO) {
             session.subdomain = subdomain
@@ -170,10 +140,6 @@ internal class Login(private val session: EdupageSession) {
         }
     }
 
-    /**
-     * Parse userhome() JSON and gsechash from page HTML/body.
-     * Mirrors Python's __parse_login_data.
-     */
     private fun parseLoginData(html: String) {
         val data = extractPageData(html)
             ?: throw MissingDataException(
@@ -187,7 +153,7 @@ internal class Login(private val session: EdupageSession) {
 
     private fun extractPageData(html: String): JsonObject? {
         return try {
-            // Python: data.split("userhome(", 1)[1].rsplit(");", 2)[0]
+
             val parts = html.split("userhome(", limit = 2)
             if (parts.size < 2) return null
             val afterMarker = parts[1]
@@ -203,7 +169,7 @@ internal class Login(private val session: EdupageSession) {
 
     private fun extractGsecHash(html: String): String? {
         return try {
-            // Python: data.split('ASC.gsechash="')[1].split('"')[0]
+
             html.split("ASC.gsechash=\"")[1].split("\"")[0]
         } catch (e: Exception) {
             null

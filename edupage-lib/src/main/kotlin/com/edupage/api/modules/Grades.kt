@@ -19,22 +19,16 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.logging.Logger
 
-/**
- * Provides grades fetching functionality.
- * Mirrors Python's Grades class.
- */
 internal class Grades(private val session: EdupageSession) {
 
     private val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     private val log = Logger.getLogger("EduGrades")
 
-    /** Returns null for Kotlin-null, JSON null, or non-numeric JSON elements. */
     private fun JsonElement?.safeDouble(): Double? {
         if (this == null || isJsonNull) return null
         return try { asDouble } catch (_: Exception) { null }
     }
 
-    /** Returns null for Kotlin-null or JSON null elements. */
     private fun JsonElement?.safeString(): String? {
         if (this == null || isJsonNull) return null
         return try { asString } catch (_: Exception) { null }
@@ -95,8 +89,6 @@ internal class Grades(private val session: EdupageSession) {
         val gradeDetails = gradeData.getAsJsonObject("vsetkyUdalosti")
             ?.getAsJsonObject("edupage") ?: return emptyList()
 
-        // Build subject lookup from the embedded "predmety" map in the grades page.
-        // Format: { "<subjectId>": { "p_meno": "Subject Name", "p_skratka": "Abbrev", ... }, ... }
         val subjectMap: Map<Int, String> = buildMap {
             gradeData.get("predmety")
                 ?.takeIf { !it.isJsonNull && it.isJsonObject }
@@ -110,8 +102,6 @@ internal class Grades(private val session: EdupageSession) {
                 }
         }
 
-        // Build teacher lookup from the embedded "ucitelia" map in the grades page.
-        // Format: { "<teacherId>": { "firstname": "...", "lastname": "...", ... }, ... }
         val teacherMap: Map<Int, EduTeacher> = buildMap {
             gradeData.getAsJsonObject("ucitelia")?.entrySet()?.forEach { (key, value) ->
                 val id = key.toIntOrNull() ?: return@forEach
@@ -138,7 +128,6 @@ internal class Grades(private val session: EdupageSession) {
                 val dateStr = grade.get("datum").safeString() ?: continue
                 val date = try { LocalDateTime.parse(dateStr, dateFmt) } catch (_: Exception) { continue }
 
-                // Subject ID: from grade entry "predmetid", fall back to details "PredmetID"; skip "vsetky"
                 val subjectIdStr = grade.get("predmetid").safeString()
                     ?.takeIf { it != "vsetky" }
                     ?: details.get("PredmetID").safeString()
@@ -147,7 +136,6 @@ internal class Grades(private val session: EdupageSession) {
                 val subjectId = subjectIdStr.toIntOrNull() ?: continue
                 val subjectName = subjectMap[subjectId]
 
-                // Teacher from grade entry "ucitelid"
                 val teacher: EduTeacher? = grade.get("ucitelid").safeString()?.toIntOrNull()
                     ?.let { teacherMap[it] }
 
@@ -177,17 +165,13 @@ internal class Grades(private val session: EdupageSession) {
                 val dataStr = dataElem.asString
                 if (dataStr.isBlank()) continue
 
-                // Parse grade value and optional comment.
-                // Format: "1 (comment text)" or "1" or "m" or "V" etc.
                 val splitIdx = dataStr.indexOf(" (")
                 val gradeStr = if (splitIdx >= 0) dataStr.substring(0, splitIdx) else dataStr
                 val comment = if (splitIdx >= 0 && dataStr.endsWith(")"))
                     dataStr.substring(splitIdx + 2, dataStr.length - 1) else null
 
-                // gradeN: numeric Double if parseable, otherwise keep as String
                 val gradeN: Any? = gradeStr.toDoubleOrNull() ?: gradeStr
 
-                // numericValue resolves letter grades (e.g. "m" → 5.0) for coloring / averaging
                 val numericValue = gradeStr.toDoubleOrNull()
                     ?: SLOVAK_GRADE_MAP[gradeStr.lowercase()]
                 val verbal = numericValue == null

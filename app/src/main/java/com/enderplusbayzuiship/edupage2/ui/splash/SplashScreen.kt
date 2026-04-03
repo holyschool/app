@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
@@ -38,7 +39,6 @@ import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.circle
-import androidx.graphics.shapes.pill
 import androidx.graphics.shapes.star
 import androidx.graphics.shapes.toPath
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -50,10 +50,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.res.stringResource
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
-
-// ---------------------------------------------------------------------------
-// Polygon shape library — a curated sequence of morphable shapes
-// ---------------------------------------------------------------------------
 
 private val ShapeCircle = RoundedPolygon.circle(numVertices = 8)
 
@@ -95,7 +91,6 @@ private val MorphShapes = listOf(
     ShapeHexagon,
 )
 
-/** Circular morph sequence: each shape → next, last → first. */
 private val Morphs: List<Morph> by lazy {
     buildList {
         for (i in MorphShapes.indices) {
@@ -104,10 +99,6 @@ private val Morphs: List<Morph> by lazy {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Composables
-// ---------------------------------------------------------------------------
 
 @Composable
 fun SplashScreen(
@@ -159,12 +150,6 @@ fun SplashScreen(
     }
 }
 
-/**
- * A shape-morphing indeterminate loading indicator inspired by M3 Expressive's LoadingIndicator.
- *
- * Cycles through [Morphs] using a low-damping spring for each morph step, with a continuous
- * slow global rotation layered on top.
- */
 @Composable
 fun MorphingLoadingIndicator(
     modifier: Modifier = Modifier,
@@ -176,7 +161,6 @@ fun MorphingLoadingIndicator(
     var rotationTarget by remember { mutableIntStateOf(90) }
 
     LaunchedEffect(Unit) {
-        // Slow continuous global rotation
         launch {
             globalRotation.animateTo(
                 targetValue = 360f,
@@ -186,7 +170,6 @@ fun MorphingLoadingIndicator(
                 )
             )
         }
-        // Spring-morphing loop — each step takes ~650 ms
         launch {
             val morphSpec = spring<Float>(dampingRatio = 0.6f, stiffness = 200f, visibilityThreshold = 0.1f)
             while (true) {
@@ -208,33 +191,30 @@ fun MorphingLoadingIndicator(
         modifier = modifier.drawWithCache {
             val path        = Path()
             val matrix      = Matrix()
-            val morphList   = Morphs          // snapshot on each draw pass
+            val morphList   = Morphs
             val sz          = Size(size.width, size.height)
-            val scale       = min(size.width, size.height) * 0.82f  // ~82% fill
+            val scale       = min(size.width, size.height) * 0.82f
 
             onDrawBehind {
                 val progress  = morphProgress.value
                 val morph     = morphList[currentMorph]
                 val angle     = progress * 90f + rotationTarget + globalRotation.value
 
-                // Build the morphed path at the current progress
                 val androidPath = morph.toPath(progress = progress.coerceIn(0f, 1f))
                 path.reset()
                 path.addPath(androidPath.asComposePath())
 
-                // Scale from normalized [-1..1] space to pixel size, centered
                 matrix.reset()
                 matrix.scale(scale / 2f, scale / 2f)
-                matrix.translate(1f, 1f)   // shift [-1,1] → [0,2] before scaling
+                matrix.translate(1f, 1f)
                 path.transform(matrix)
 
-                // Center in the available box
                 val bounds   = path.getBounds()
                 val offsetX  = (sz.width  - bounds.width)  / 2f - bounds.left
                 val offsetY  = (sz.height - bounds.height) / 2f - bounds.top
-                path.translate(androidx.compose.ui.geometry.Offset(offsetX, offsetY))
+                path.translate(Offset(offsetX, offsetY))
 
-                rotate(angle, pivot = androidx.compose.ui.geometry.Offset(sz.width / 2f, sz.height / 2f)) {
+                rotate(angle, pivot = Offset(sz.width / 2f, sz.height / 2f)) {
                     drawPath(path, color = color)
                 }
             }
@@ -242,16 +222,11 @@ fun MorphingLoadingIndicator(
     )
 }
 
-// ---------------------------------------------------------------------------
-// Previews
-// ---------------------------------------------------------------------------
-
 @Preview(name = "Splash – Light", showBackground = true, widthDp = 360, heightDp = 640)
 @Preview(name = "Splash – Dark", showBackground = true, widthDp = 360, heightDp = 640, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun SplashScreenPreview() {
     Edupage2Theme {
-        // SplashScreen body without the ViewModel (navigation callbacks are no-ops)
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.surface

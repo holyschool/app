@@ -1,26 +1,27 @@
 package com.enderplusbayzuiship.edupage2.ui.timetable
 
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import android.content.Context
 import com.edupage.api.Edupage
 import com.edupage.api.model.timetable.Lesson
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
-import java.time.DayOfWeek
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalTime
+import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.LocalTime
-import javax.inject.Inject
 
 sealed interface TimetableUiState {
     object Loading : TimetableUiState
@@ -35,6 +36,10 @@ class TimetableViewModel @Inject constructor(
     private val credentialStore: CredentialStore,
     private val appPreferences: AppPreferences
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "TimetableViewModel"
+    }
 
     private val _uiState = MutableStateFlow<TimetableUiState>(TimetableUiState.Loading)
     val uiState: StateFlow<TimetableUiState> = _uiState.asStateFlow()
@@ -55,25 +60,28 @@ class TimetableViewModel @Inject constructor(
     val showWeekends: StateFlow<Boolean> = _showWeekends.asStateFlow()
 
     init {
+        Log.i(TAG, "init: loading timetable for ${_selectedDate.value}")
+        viewModelScope.launch {
+            try {
+                val today = LocalDate.now()
+                val timetable = edupage.getMyTimetable(today)
+                val lessons = timetable?.lessons ?: emptyList()
+                if (lessons.isNotEmpty()) {
+                    val lastEnd = lessons.mapNotNull { it.endTime }.maxOrNull()
+                    if (lastEnd != null && LocalTime.now() > lastEnd) {
+                        _selectedDate.value = today.plusDays(1)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
         loadTimetable(_selectedDate.value)
         viewModelScope.launch {
             while (true) {
-                delay(30_000)
-                _currentTime.value = LocalTime.now()
-                // Re-read the pref each tick so changes from Settings propagate here too
-                _breakVisibility.value = appPreferences.breakVisibility
-                _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
-                _showWeekends.value = appPreferences.showWeekends
-                // After all lessons end on today → auto-advance to next day
-                val state = _uiState.value
-                if (_selectedDate.value == LocalDate.now() &&
-                    state is TimetableUiState.Success && state.lessons.isNotEmpty()
-                ) {
-                    val lastEnd = state.lessons.mapNotNull { it.endTime }.maxOrNull()
-                    if (lastEnd != null && LocalTime.now() > lastEnd) {
-                        setDate(LocalDate.now().plusDays(1))
-                    }
-                }
+                   delay(30_000)
+                    _currentTime.value = LocalTime.now()
+                    _breakVisibility.value = appPreferences.breakVisibility
+                    _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
+                    _showWeekends.value = appPreferences.showWeekends
             }
         }
     }
@@ -84,19 +92,13 @@ class TimetableViewModel @Inject constructor(
         loadTimetable(resolved)
     }
 
-    /**
-     * If [date] lands on a weekend and weekends are hidden, advance to the nearest weekday
-     * in the direction of travel (determined by comparing [date] to [reference]).
-     */
     private fun skipWeekend(date: LocalDate, reference: LocalDate): LocalDate {
         if (date.dayOfWeek != DayOfWeek.SATURDAY && date.dayOfWeek != DayOfWeek.SUNDAY) return date
         return if (date > reference) {
-            // Going forward: find next Monday
             var d = date
             while (d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY) d = d.plusDays(1)
             d
         } else {
-            // Going backward: find previous Friday
             var d = date
             while (d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY) d = d.minusDays(1)
             d
@@ -104,13 +106,13 @@ class TimetableViewModel @Inject constructor(
     }
 
     fun refresh() {
+        Log.i(TAG, "refresh: reloading timetable for ${_selectedDate.value}")
         loadTimetable(_selectedDate.value)
         _breakVisibility.value = appPreferences.breakVisibility
         _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
         _showWeekends.value = appPreferences.showWeekends
     }
 
-    /** Clears saved credentials and resets the in-memory session. */
     fun logout() {
         credentialStore.clear()
         edupage.session.isLoggedIn = false
@@ -124,8 +126,10 @@ class TimetableViewModel @Inject constructor(
             try {
                 val timetable = edupage.getMyTimetable(date)
                 val lessons = timetable?.lessons ?: emptyList()
+                Log.i(TAG, "loaded ${lessons.size} lessons for $date")
                 _uiState.value = TimetableUiState.Success(lessons)
             } catch (e: Exception) {
+                Log.e(TAG, "failed to load timetable for $date: ${e.message}", e)
                 _uiState.value = TimetableUiState.Error(e.message ?: context.getString(R.string.timetable_error_failed_to_load))
             }
         }

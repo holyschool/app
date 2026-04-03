@@ -3,9 +3,6 @@ package com.edupage.api.model
 import java.time.LocalDate
 import java.time.LocalTime
 
-/**
- * A change in the timetable (substitution, cancellation, room change, etc.).
- */
 data class TimetableChange(
     val date: LocalDate,
     val lessonIndex: Int?,

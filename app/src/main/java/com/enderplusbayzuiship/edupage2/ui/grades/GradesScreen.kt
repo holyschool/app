@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,9 +47,9 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -73,10 +74,9 @@ import com.edupage.api.model.grades.SLOVAK_GRADE_MAP
 import com.edupage.api.model.grades.Term
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
+import com.enderplusbayzuiship.edupage2.ui.util.ShimmerBox
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.format.DateTimeFormatter
-
-// ── Screen ────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,10 +84,11 @@ fun GradesScreen(
     bottomPadding: PaddingValues,
     viewModel: GradesViewModel = hiltViewModel()
 ) {
-    val uiState      by viewModel.uiState.collectAsState()
-    val selectedTerm by viewModel.selectedTerm.collectAsState()
-    val haptics      = rememberAppHaptics()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+    val uiState                by viewModel.uiState.collectAsState()
+    val selectedTerm           by viewModel.selectedTerm.collectAsState()
+    val pendingHighlight       by viewModel.pendingHighlightSubject.collectAsState()
+    val haptics                = rememberAppHaptics()
+    val scrollBehavior         = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
     val hasAnyNew = (uiState as? GradesUiState.Success)?.hasAnyNew == true
 
@@ -102,9 +103,8 @@ fun GradesScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
-                actions = {
-                    // Mark-all-read button — visible only when there are new grades
-                    if (hasAnyNew) {
+                    actions = {
+                        if (hasAnyNew) {
                         FilledTonalIconButton(onClick = {
                             haptics.click()
                             viewModel.markAllRead()
@@ -134,7 +134,6 @@ fun GradesScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // ── Term selector ─────────────────────────────────────────────────
             TermSelector(
                 selected = selectedTerm,
                 onSelect = { haptics.tick(); viewModel.setTerm(it) },
@@ -143,7 +142,6 @@ fun GradesScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            // ── Background refresh indicator ──────────────────────────────────
             val isRefreshing = (uiState as? GradesUiState.Success)?.isRefreshing == true
             AnimatedVisibility(visible = isRefreshing) {
                 LinearProgressIndicator(
@@ -153,16 +151,12 @@ fun GradesScreen(
                 )
             }
 
-            // ── Content ───────────────────────────────────────────────────────
             when (val state = uiState) {
                 is GradesUiState.Loading -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(48.dp),
-                            strokeWidth = 3.dp,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    }
+                    GradesSkeleton(
+                        bottomPadding = bottomPadding,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
 
                 is GradesUiState.Error -> {
@@ -198,15 +192,24 @@ fun GradesScreen(
                             )
                         }
                     } else {
-                        // Start expanded only for subjects that have new grades.
-                        // Re-keyed whenever the subject list identity changes (term switch / refresh).
                         val expandedMap = remember(state.subjects) {
                             mutableStateMapOf(
                                 *state.subjects.map { it.subjectName to it.hasNewGrades }.toTypedArray()
                             )
                         }
 
+                        val listState = rememberLazyListState()
+
+                        LaunchedEffect(pendingHighlight, state.subjects) {
+                            val target = pendingHighlight ?: return@LaunchedEffect
+                            expandedMap[target] = true
+                            val index = state.subjects.indexOfFirst { it.subjectName == target }
+                            if (index >= 0) listState.animateScrollToItem(index)
+                            viewModel.consumeHighlight()
+                        }
+
                         LazyColumn(
+                            state = listState,
                             contentPadding = PaddingValues(
                                 start = 16.dp, end = 16.dp,
                                 top = 8.dp,
@@ -223,7 +226,6 @@ fun GradesScreen(
                                         haptics.tick()
                                         val nowExpanded = !expanded
                                         expandedMap[group.subjectName] = nowExpanded
-                                        // When the user collapses a card, mark its grades as read
                                         if (!nowExpanded && group.hasNewGrades) {
                                             viewModel.markSubjectRead(group.subjectName)
                                         }
@@ -237,8 +239,6 @@ fun GradesScreen(
         }
     }
 }
-
-// ── Term selector ─────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -263,8 +263,6 @@ private fun TermSelector(
     }
 }
 
-// ── Subject card ──────────────────────────────────────────────────────────────
-
 @Composable
 private fun SubjectCard(
     group: GradeSubjectGroup,
@@ -279,7 +277,6 @@ private fun SubjectCard(
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
-        // ── Header ────────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -288,7 +285,6 @@ private fun SubjectCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Subject name + grade count
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -299,7 +295,6 @@ private fun SubjectCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    // New-grade dot badge
                     if (group.hasNewGrades) {
                         Spacer(Modifier.width(6.dp))
                         Box(
@@ -319,12 +314,10 @@ private fun SubjectCard(
 
             Spacer(Modifier.width(12.dp))
 
-            // Average chip
             AverageChip(average = group.average, allVerbal = group.allVerbal)
 
             Spacer(Modifier.width(8.dp))
 
-            // Expand/collapse arrow
             val arrowAngle by animateFloatAsState(
                 targetValue = if (expanded) 180f else 0f,
                 animationSpec = tween(200),
@@ -340,7 +333,6 @@ private fun SubjectCard(
             )
         }
 
-        // ── Expanded grade rows ───────────────────────────────────────────────
         AnimatedVisibility(
             visible = expanded,
             enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(tween(150)),
@@ -361,8 +353,6 @@ private fun SubjectCard(
         }
     }
 }
-
-// ── Average chip ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun AverageChip(average: Double?, allVerbal: Boolean) {
@@ -388,8 +378,6 @@ private fun AverageChip(average: Double?, allVerbal: Boolean) {
         )
     }
 }
-
-// ── Grade row ─────────────────────────────────────────────────────────────────
 
 @Composable
 private fun GradeRow(grade: EduGrade) {
@@ -417,7 +405,6 @@ private fun GradeRow(grade: EduGrade) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Grade value bubble
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = color.copy(alpha = 0.15f),
@@ -435,7 +422,6 @@ private fun GradeRow(grade: EduGrade) {
             }
         }
 
-        // Title, teacher, date
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = grade.title.ifBlank { "–" },
@@ -466,7 +452,6 @@ private fun GradeRow(grade: EduGrade) {
             }
         }
 
-        // Percent / points chip
         val gradePercent = grade.percent
         val gradeMaxPoints = grade.maxPoints
         val trailingText: String? = when {
@@ -503,16 +488,6 @@ private fun GradeRow(grade: EduGrade) {
     }
 }
 
-// ── Color helper ──────────────────────────────────────────────────────────────
-
-/**
- * Maps a Slovak/Czech numeric grade (1=best, 5=worst) to a theme color.
- * 1 → tertiary (green-ish)
- * ≤ 2 → primary (blue)
- * ≤ 3 → secondary (teal / neutral)
- * ≤ 4 → error dimmed (orange-ish)
- * > 4 → error (red)
- */
 @Composable
 private fun gradeColor(grade: Double): Color = when {
     grade <= 1.0 -> MaterialTheme.colorScheme.tertiary
@@ -522,7 +497,53 @@ private fun gradeColor(grade: Double): Color = when {
     else         -> MaterialTheme.colorScheme.error
 }
 
-// ── Previews ──────────────────────────────────────────────────────────────────
+@Composable
+private fun GradesSkeleton(
+    bottomPadding: PaddingValues,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .padding(
+                start = 16.dp, end = 16.dp,
+                top = 8.dp,
+                bottom = 16.dp + bottomPadding.calculateBottomPadding()
+            ),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        repeat(5) { SubjectCardSkeleton() }
+    }
+}
+
+@Composable
+private fun SubjectCardSkeleton() {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ShimmerBox(modifier = Modifier.fillMaxWidth(0.55f), height = 16.dp)
+                ShimmerBox(modifier = Modifier.fillMaxWidth(0.3f), height = 11.dp)
+            }
+            Spacer(Modifier.width(12.dp))
+            ShimmerBox(modifier = Modifier.width(40.dp), height = 24.dp, cornerRadius = 50.dp)
+        }
+    }
+}
 
 @Preview(name = "Grades – Light", showBackground = true)
 @Preview(name = "Grades – Dark", showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)

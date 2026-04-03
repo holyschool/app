@@ -13,16 +13,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/**
- * Handles sending messages.
- * Mirrors Python's Messages class.
- */
 internal class Messages(private val session: EdupageSession) {
 
-    /**
-     * Send a message to one or more recipients.
-     * @return The timeline ID of the new message.
-     */
     suspend fun sendMessage(recipients: List<EduAccount>, body: String): Int {
         if (!session.isLoggedIn) throw NotLoggedInException()
 
@@ -51,8 +43,9 @@ internal class Messages(private val session: EdupageSession) {
             val response = session.httpClient.newCall(request).execute()
             val responseStr = response.body?.string() ?: return@withContext -1
 
-            JsonParser.parseString(responseStr)
-                .asJsonObject
+            val parsed = JsonParser.parseString(responseStr)
+            if (!parsed.isJsonObject) return@withContext -1
+            parsed.asJsonObject
                 .getAsJsonObject("r")
                 ?.get("timelineid")
                 ?.asInt ?: -1

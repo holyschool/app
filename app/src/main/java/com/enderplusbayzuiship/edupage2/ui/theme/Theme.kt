@@ -73,15 +73,13 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerHighest= SurfaceContainerHighestDark,
 )
 
-/** Pure black used for every surface role in AMOLED mode. */
 private val AmoledBlack = Color(0xFF000000)
 
 @Composable
 fun Edupage2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+ (API 31)
     dynamicColor: Boolean = true,
-    /** When true AND darkTheme is true, all surface/background colours are pure black. */
+
     amoled: Boolean = false,
     content: @Composable () -> Unit
 ) {

@@ -14,10 +14,6 @@ data class SavedCredentials(
     val sessionId: String?
 )
 
-/**
- * Securely stores and retrieves login credentials using EncryptedSharedPreferences,
- * backed by the Android Keystore (AES-256-GCM). No plaintext ever touches disk.
- */
 @Singleton
 class CredentialStore @Inject constructor(
     @ApplicationContext private val context: Context

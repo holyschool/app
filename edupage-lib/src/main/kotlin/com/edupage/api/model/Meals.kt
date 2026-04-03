@@ -2,9 +2,6 @@ package com.edupage.api.model
 
 import java.time.LocalDate
 
-/**
- * Represents the lunch/meal options for a given day.
- */
 data class Meal(
     val mealId: String?,
     val name: String,

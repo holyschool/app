@@ -3,6 +3,7 @@
 
     <!-- Tab Navigation -->
     <string name="tab_overview">Prehľad</string>
+    <string name="tab_messages">Správy</string>
     <string name="tab_timetable">Rozvrh</string>
     <string name="tab_grades">Známky</string>
     <string name="tab_settings">Nastavenia</string>
@@ -71,9 +72,69 @@
     <string name="grades_refresh">Obnoviť</string>
     <string name="grades_mark_all_read">Označiť všetko ako prečítané</string>
 
+    <!-- Messages Screen -->
+    <string name="messages_title">Správy</string>
+    <string name="messages_error_failed_to_load">Nepodarilo sa načítať správy</string>
+    <string name="messages_retry">Znovu</string>
+    <string name="messages_no_messages">Žiadne správy</string>
+    <string name="messages_refresh">Obnoviť</string>
+    <string name="messages_unknown_sender">Neznámy</string>
+    <string name="messages_load_more">Načítať viac</string>
+    <string name="messages_compose">Napísať správu</string>
+    <string name="messages_send">Odoslať</string>
+    <string name="messages_recipient_hint">Príjemcovia</string>
+    <string name="messages_search_recipients">Hľadať osoby\u2026</string>
+    <string name="messages_message_body_hint">Napíšte správu\u2026</string>
+    <string name="messages_type_message">Správa</string>
+    <string name="messages_type_homework">Domáca úloha</string>
+    <string name="messages_type_test">Test</string>
+    <string name="messages_type_announcement">Oznámenie</string>
+    <string name="messages_type_grade">Známka</string>
+    <string name="messages_type_absence">Absencia</string>
+    <string name="messages_type_event">Udalosť</string>
+    <string name="messages_type_payment">Platba</string>
+    <string name="messages_type_album">Album</string>
+    <string name="messages_type_timetable">Rozvrh</string>
+    <string name="messages_type_signin">Prihlasovanie</string>
+    <string name="messages_type_behaviour">Správanie</string>
+    <string name="messages_type_notification">Oznámenie</string>
+    <string name="messages_filter_all">Všetko</string>
+    <string name="messages_filter">Filtrovať</string>
+    <string name="messages_detail_from">Od</string>
+    <string name="messages_detail_due">Termín</string>
+    <string name="messages_detail_date">Dátum</string>
+    <string name="messages_detail_close">Zavrieť</string>
+    <string name="messages_mark_all_read">Označiť všetko ako prečítané</string>
+    <string name="messages_sending">Odosielanie\u2026</string>
+    <string name="messages_send_error">Správu sa nepodarilo odoslať</string>
+    <string name="messages_no_recipients_selected">Vyberte aspoň jedného príjemcu</string>
+
     <!-- Overview Screen -->
     <string name="overview_title">Prehľaď</string>
     <string name="overview_coming_soon">Už čoskoro</string>
+    <string name="overview_today_schedule">Dnešný rozvrh</string>
+    <string name="overview_tomorrow_schedule">Zajtrajší rozvrh</string>
+    <string name="overview_schedule_for">Rozvrh pre %s</string>
+    <string name="overview_no_lessons">Žiadne hodiny</string>
+    <string name="overview_current_lesson">Teraz</string>
+    <string name="overview_next_lesson">Nasledujúca</string>
+    <string name="overview_recent_grades">Posledné známky</string>
+    <string name="overview_no_grades">Žiadne známky</string>
+    <string name="overview_quick_actions">Rýchle akcie</string>
+    <string name="overview_action_compose">Nová správa</string>
+    <string name="overview_action_timetable">Rozvrh</string>
+    <string name="overview_action_grades">Známky</string>
+    <string name="overview_refresh">Obnoviť</string>
+    <string name="overview_settings">Nastavenia</string>
+    <string name="overview_lessons_more">+%d ďalších hodín</string>
+    <string name="overview_error_timetable">Rozvrh sa nepodarilo načítať</string>
+    <string name="overview_show_less">Zobraziť menej</string>
+    <string name="overview_see_timetable">Celý rozvrh</string>
+    <string name="overview_see_grades">Všetky známky</string>
+    <string name="overview_see_messages">Všetky správy</string>
+    <string name="overview_grades_more">+%d ďalších známok</string>
+    <string name="overview_recent_messages">Posledné správy</string>
+    <string name="overview_no_messages">Žiadne správy</string>
 
     <!-- Settings Screen -->
     <string name="settings_title">Nastavenia</string>
@@ -182,4 +243,15 @@
     <string name="notif_message_multiple">%1$d nových správ</string>
     <string name="notif_message_no_preview">Klepnutím prečítaš</string>
     <string name="notif_message_unknown_sender">Neznámy</string>
+
+    <!-- About Screen -->
+    <string name="settings_section_about">O aplikácii</string>
+    <string name="about_title">O aplikácii</string>
+    <string name="about_app_name">Edupage2</string>
+    <string name="about_version">Verzia %s</string>
+    <string name="about_description">Neoficiálny Android klient pre EduPage, postavený pomocou Jetpack Compose.</string>
+    <string name="about_open_source_licenses">Licencie open source</string>
+    <string name="about_open_source_licenses_desc">Zobraziť licencie knižníc tretích strán použitých v tejto aplikácii.</string>
+    <string name="about_source_code">Zdrojový kód</string>
+    <string name="about_source_code_desc">Zobraziť zdrojový kód na GitHube.</string>
 </resources>

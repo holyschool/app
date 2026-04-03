@@ -1,6 +1,7 @@
 package com.enderplusbayzuiship.edupage2.data
 
 import android.content.Context
+import android.util.Log
 import com.edupage.api.model.grades.EduGrade
 import com.edupage.api.model.grades.Term
 import com.edupage.api.model.people.EduTeacher
@@ -14,22 +15,13 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// ── Serializable flat representation ─────────────────────────────────────────
-
-/**
- * Flat, Gson-serializable snapshot of an [EduGrade].
- * [gradeNDouble] and [gradeNString] encode the [Any?] gradeN field:
- *   - numeric grade  → gradeNDouble set, gradeNString null
- *   - string grade   → gradeNString set, gradeNDouble null
- *   - null           → both null
- */
 private data class CachedGrade(
     val eventId: Int,
     val title: String,
     val gradeNDouble: Double?,
     val gradeNString: String?,
     val comment: String?,
-    val dateIso: String,            // ISO local date-time: "yyyy-MM-dd HH:mm:ss"
+    val dateIso: String,
     val subjectId: Int,
     val subjectName: String?,
     val teacherId: Int?,
@@ -44,13 +36,11 @@ private data class CachedGrade(
 )
 
 private data class GradesCacheFile(
-    val term: String,               // "T1" or "T2"
+    val term: String,
     val year: Int,
     val fetchedAtMs: Long,
     val grades: List<CachedGrade>,
 )
-
-// ── Cache ─────────────────────────────────────────────────────────────────────
 
 @Singleton
 class GradesCache @Inject constructor(
@@ -59,6 +49,7 @@ class GradesCache @Inject constructor(
     companion object {
         private val DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         private fun fileName(termKey: String) = "grades_cache_$termKey.json"
+        private const val TAG = "GradesCache"
     }
 
     private val gson = Gson()
@@ -66,9 +57,9 @@ class GradesCache @Inject constructor(
     private fun file(termKey: String): File =
         File(context.filesDir, fileName(termKey))
 
-    /** Persist a fresh list of [EduGrade] for the given term + year. */
     fun save(term: Term, year: Int, grades: List<EduGrade>) {
         val termKey = term.termKey()
+        Log.i(TAG, "saving ${grades.size} grades for $termKey year=$year")
         val cached = grades.map { g ->
             CachedGrade(
                 eventId       = g.eventId,
@@ -99,34 +90,36 @@ class GradesCache @Inject constructor(
         file(termKey).writeText(gson.toJson(cacheFile))
     }
 
-    /**
-     * Load cached grades for [term] + [year], or null if no cache exists for that combination.
-     * No staleness check — callers decide when to refresh.
-     */
     fun load(term: Term, year: Int): List<EduGrade>? {
         val termKey = term.termKey()
         val f = file(termKey)
-        if (!f.exists()) return null
+        if (!f.exists()) {
+            Log.i(TAG, "cache miss: no file for $termKey")
+            return null
+        }
         return try {
             val type = object : TypeToken<GradesCacheFile>() {}.type
             val cf: GradesCacheFile = gson.fromJson(f.readText(), type)
-            if (cf.year != year) return null     // different school year — stale
-            cf.grades.mapNotNull { it.toEduGrade() }
-        } catch (_: Exception) {
+            if (cf.year != year) {
+                Log.i(TAG, "cache stale: cached year=${cf.year}, requested year=$year for $termKey")
+                return null
+            }
+            val grades = cf.grades.mapNotNull { it.toEduGrade() }
+            Log.i(TAG, "cache hit: loaded ${grades.size} grades for $termKey year=$year")
+            grades
+        } catch (e: Exception) {
+            Log.e(TAG, "failed to read cache for $termKey: ${e.message}", e)
             null
         }
     }
 
-    /** Returns true if a cache file exists for [term] (regardless of staleness). */
     fun hasCacheFor(term: Term): Boolean = file(term.termKey()).exists()
 
-    /** Delete all grade cache files (e.g. on logout). */
     fun clear() {
+        Log.i(TAG, "clearing all grade caches")
         file("T1").delete()
         file("T2").delete()
     }
-
-    // ── Conversion helpers ────────────────────────────────────────────────────
 
     private fun CachedGrade.toEduGrade(): EduGrade? {
         val date = try { LocalDateTime.parse(dateIso, DATE_FMT) } catch (_: Exception) { return null }

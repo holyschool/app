@@ -1,5 +1,6 @@
 package com.enderplusbayzuiship.edupage2.ui.splash
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
@@ -12,11 +13,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed interface SplashUiState {
-    /** Still attempting auto-login */
     object Loading : SplashUiState
-    /** Auto-login succeeded — navigate to timetable */
     object Success : SplashUiState
-    /** No saved credentials or all attempts failed — go to login with optional pre-fill */
     data class GoToLogin(val prefillUsername: String = "", val prefillSubdomain: String = "") : SplashUiState
 }
 
@@ -26,10 +24,15 @@ class SplashViewModel @Inject constructor(
     private val credentialStore: CredentialStore
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "SplashViewModel"
+    }
+
     private val _uiState = MutableStateFlow<SplashUiState>(SplashUiState.Loading)
     val uiState: StateFlow<SplashUiState> = _uiState.asStateFlow()
 
     init {
+        Log.i(TAG, "init: attempting auto-login")
         attemptAutoLogin()
     }
 
@@ -37,22 +40,21 @@ class SplashViewModel @Inject constructor(
         viewModelScope.launch {
             val saved = credentialStore.load()
             if (saved == null) {
+                Log.i(TAG, "no saved credentials, navigating to login")
                 _uiState.value = SplashUiState.GoToLogin()
                 return@launch
             }
 
-            // Step 1: try fast session restore if we have a PHPSESSID
             if (saved.sessionId != null) {
+                Log.i(TAG, "attempting session restore for ${saved.username}@${saved.subdomain}")
                 val sessionOk = runCatching {
                     Edupage.fromSessionId(saved.sessionId, saved.subdomain, saved.username)
                         .also { restoredEdupage ->
-                            // Copy the restored session state into the injected Edupage instance
                             edupage.session.data         = restoredEdupage.session.data
                             edupage.session.isLoggedIn   = restoredEdupage.session.isLoggedIn
                             edupage.session.gsecHash     = restoredEdupage.session.gsecHash
                             edupage.session.subdomain    = restoredEdupage.session.subdomain
                             edupage.session.username     = restoredEdupage.session.username
-                            // Restore the PHPSESSID cookie in our shared httpClient jar
                             edupage.session.cookieJar.setSessionId(
                                 "${saved.subdomain}.edupage.org",
                                 saved.sessionId
@@ -61,24 +63,26 @@ class SplashViewModel @Inject constructor(
                 }.isSuccess
 
                 if (sessionOk && edupage.isLoggedIn) {
+                    Log.i(TAG, "session restore success for ${saved.username}@${saved.subdomain}")
                     _uiState.value = SplashUiState.Success
                     return@launch
                 }
+                Log.w(TAG, "session restore failed, falling back to full login")
             }
 
-            // Step 2: fall back to full re-login with saved password
-            val loginOk = runCatching {
+            Log.i(TAG, "attempting full re-login for ${saved.username}@${saved.subdomain}")
+            runCatching {
                 edupage.login(saved.username, saved.password, saved.subdomain)
-            }.getOrNull()
+            }
 
             if (edupage.isLoggedIn) {
-                // Persist the fresh PHPSESSID
                 val newSessionId = edupage.session.cookieJar
                     .getSessionId("${saved.subdomain}.edupage.org")
                 credentialStore.updateSessionId(newSessionId)
+                Log.i(TAG, "full re-login success for ${saved.username}@${saved.subdomain}")
                 _uiState.value = SplashUiState.Success
             } else {
-                // Everything failed — send to login with fields pre-filled
+                Log.w(TAG, "all login attempts failed for ${saved.username}@${saved.subdomain}, going to login screen")
                 _uiState.value = SplashUiState.GoToLogin(
                     prefillUsername  = saved.username,
                     prefillSubdomain = saved.subdomain

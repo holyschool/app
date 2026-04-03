@@ -2,9 +2,6 @@ package com.edupage.api.model.people
 
 import java.time.LocalDateTime
 
-/**
- * Represents a student account.
- */
 class EduStudent(
     personId: Int,
     name: String,

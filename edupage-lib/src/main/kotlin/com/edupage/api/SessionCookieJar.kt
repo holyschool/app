@@ -4,10 +4,6 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 
-/**
- * In-memory CookieJar that persists cookies for the entire session,
- * mirroring Python's requests.Session() cookie handling.
- */
 class SessionCookieJar : CookieJar {
     private val cookieStore = mutableMapOf<String, MutableList<Cookie>>()
 

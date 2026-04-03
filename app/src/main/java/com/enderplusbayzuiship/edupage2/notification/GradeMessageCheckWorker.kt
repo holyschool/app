@@ -1,39 +1,30 @@
 package com.enderplusbayzuiship.edupage2.notification
 
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.edupage.api.Edupage
 import com.edupage.api.model.grades.Term
-import com.enderplusbayzuiship.edupage2.MainActivity
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.GradesCache
+import com.enderplusbayzuiship.edupage2.notification.NotificationErrorHandler.createAuthError
+import com.enderplusbayzuiship.edupage2.notification.NotificationErrorHandler.createBatteryOptimizationError
+import com.enderplusbayzuiship.edupage2.notification.NotificationErrorHandler.createNetworkError
+import com.enderplusbayzuiship.edupage2.notification.NotificationErrorHandler.createSessionExpiredError
+import com.enderplusbayzuiship.edupage2.notification.NotificationErrorHandler.createWorkerError
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.delay
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
-/**
- * Periodic background worker that checks for new grades and new messages,
- * posting a push notification if anything new is found.
- *
- * Optimisations:
- * - Single login per run; both checks share the same authenticated session.
- * - If both grade and message notifications are disabled, exits immediately
- *   with no network usage at all.
- * - Grades: fetches only the most recently active term (stored in prefs) to
- *   halve the network cost vs. fetching both terms.
- * - Messages: uses getNotifications() (1-month window) and compares against a
- *   single stored integer (lastTimelineId) — no file I/O for diffing.
- * - Notified grade IDs are capped at 500 entries to prevent prefs bloat.
- * - On first run (lastTimelineId == -1) we seed without notifying, so the user
- *   doesn't get a burst of old notifications on install.
- */
 @HiltWorker
 class GradeMessageCheckWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
@@ -49,47 +40,149 @@ class GradeMessageCheckWorker @AssistedInject constructor(
         const val CHANNEL_MESSAGES = "messages_new"
         private const val NOTIF_ID_GRADES   = 2001
         private const val NOTIF_ID_MESSAGES = 2002
+        private const val NOTIF_GROUP_GRADES = "group_grades"
+        private const val NOTIF_GROUP_MESSAGES = "group_messages"
+        private const val TAG = "GradeMessageCheckWorker"
+
+        private const val MAX_RETRY_ATTEMPTS = 3
+        private const val RETRY_DELAY_MS = 2000L
     }
 
     override suspend fun doWork(): Result {
-        val gradesOn   = appPreferences.notifGradesEnabled
+
+        if (!BatteryOptimizationHelper.isAppWhitelisted(applicationContext)) {
+            NotificationErrorHandler.handleError(
+                createBatteryOptimizationError("GradeMessageCheckWorker execution")
+            )
+            Log.w(TAG, "App is battery optimized, background processing may be unreliable")
+        }
+
+        val gradesOn = appPreferences.notifGradesEnabled
         val messagesOn = appPreferences.notifMessagesEnabled
 
-        // Nothing enabled — skip entirely, zero network usage
-        if (!gradesOn && !messagesOn) return Result.success()
+        if (!gradesOn && !messagesOn) {
+            Log.i(TAG, "Both notification types disabled, skipping worker")
+            return Result.success()
+        }
 
-        return try {
+        val minIntervalMs = (appPreferences.notifCheckIntervalMinutes * 60 * 1000).toLong() / 2
+        if (!appPreferences.shouldFetchNotifications(minIntervalMs)) {
+            Log.i(TAG, "Recent fetch detected, skipping to conserve battery and API calls")
+            return Result.success()
+        }
+
+        Log.i(TAG, "Worker started (grades=$gradesOn, messages=$messagesOn)")
+
+        return executeWithRetry { attemptNumber ->
+            Log.i(TAG, "Execution attempt $attemptNumber")
+
             ensureLoggedIn()
-            if (gradesOn)   checkGrades()
-            if (messagesOn) checkMessages()
+
+            if (gradesOn) {
+                checkGrades()
+            }
+
+            if (messagesOn) {
+                checkMessages()
+            }
+
+            appPreferences.lastNotificationFetchTimestamp = System.currentTimeMillis()
+
+            Log.i(TAG, "Worker completed successfully on attempt $attemptNumber")
             Result.success()
-        } catch (e: Exception) {
-            // Retry up to WorkManager's default backoff; don't spam retries
-            Result.retry()
         }
     }
 
-    // ── Grades check ──────────────────────────────────────────────────────────
+    private suspend fun executeWithRetry(operation: suspend (Int) -> Result): Result {
+        repeat(MAX_RETRY_ATTEMPTS) { attempt ->
+            try {
+                return operation(attempt + 1)
+            } catch (e: Exception) {
+                val isLastAttempt = attempt == MAX_RETRY_ATTEMPTS - 1
+
+                val error = when {
+                    e is UnknownHostException || e is SocketTimeoutException -> {
+                        createNetworkError("Attempt ${attempt + 1}", e, !isLastAttempt)
+                    }
+                    e.message?.contains("login", ignoreCase = true) == true -> {
+                        createAuthError("Attempt ${attempt + 1}", e)
+                    }
+                    e.message?.contains("session", ignoreCase = true) == true -> {
+                        createSessionExpiredError("Attempt ${attempt + 1}", e)
+                    }
+                    e is SSLException -> {
+                        createNetworkError("SSL error on attempt ${attempt + 1}", e, !isLastAttempt)
+                    }
+                    else -> {
+                        createWorkerError("GradeMessageCheckWorker", e, !isLastAttempt)
+                    }
+                }
+
+                NotificationErrorHandler.handleError(error) {
+                    if (!isLastAttempt) {
+                        Log.i(TAG, "Scheduling retry attempt ${attempt + 2} after ${RETRY_DELAY_MS}ms")
+                    }
+                }
+
+                if (isLastAttempt) {
+                    Log.e(TAG, "All retry attempts exhausted, failing worker")
+                    return Result.failure()
+                }
+
+                val delayMs = RETRY_DELAY_MS * (attempt + 1)
+                delay(delayMs)
+            }
+        }
+
+        return Result.failure()
+    }
 
     private suspend fun checkGrades() {
-        val year = edupage.getSchoolYear() ?: return
+        val year = edupage.getSchoolYear() ?: run {
+            Log.w(TAG, "could not determine school year, skipping grades check")
+            return
+        }
 
-        // Only fetch the active term to save data.
-        // We consider T2 active if we previously cached it with any entries.
         val activeTerm = if (gradesCache.hasCacheFor(Term.SECOND)) Term.SECOND else Term.FIRST
+        Log.i(TAG, "checking grades for $activeTerm")
 
         val fresh = try {
             edupage.getGradesForTerm(year, activeTerm)
-        } catch (_: Exception) { return }
+        } catch (e: Exception) {
+            val error = when {
+                e is UnknownHostException || e is SocketTimeoutException -> {
+                    createNetworkError("Grades fetch failed", e, false)
+                }
+                e.message?.contains("login", ignoreCase = true) == true -> {
+                    createAuthError("Grades fetch failed", e)
+                }
+                e.message?.contains("session", ignoreCase = true) == true -> {
+                    createSessionExpiredError("Grades fetch failed", e)
+                }
+                e is SSLException -> {
+                    createNetworkError("SSL error during grades fetch", e, false)
+                }
+                else -> {
+                    createWorkerError("checkGrades", e, false)
+                }
+            }
 
-        // Update the grades cache so the app shows fresh data next open
+            NotificationErrorHandler.handleError(error) {
+                Log.w(TAG, "Grades check failed, skipping notification")
+            }
+            return
+        }
+
         gradesCache.save(activeTerm, year, fresh)
 
         val notifiedIds = appPreferences.getNotifiedGradeIds()
         val newGrades = fresh.filter { it.eventId !in notifiedIds }
-        if (newGrades.isEmpty()) return
+        if (newGrades.isEmpty()) {
+            Log.i(TAG, "no new grades found")
+            return
+        }
 
-        // Mark them notified before posting — avoids double-fire on rapid successive runs
+        Log.i(TAG, "found ${newGrades.size} new grade(s), posting notification")
         appPreferences.markGradeIdsNotified(newGrades.map { it.eventId })
 
         val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -109,47 +202,97 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                     title    = appContext.getString(R.string.notif_grade_title),
                     text     = appContext.getString(R.string.notif_grade_single, gradeText, subject),
                     iconRes  = R.drawable.ic_notification,
+                    group    = NOTIF_GROUP_GRADES
                 )
             )
         } else {
+
+            newGrades.forEachIndexed { index, grade ->
+                val gradeText = when (val n = grade.gradeN) {
+                    is Double -> if (n == n.toLong().toDouble()) n.toLong().toString() else n.toString()
+                    is String -> n
+                    else      -> "?"
+                }
+                val subject = grade.subjectName ?: appContext.getString(R.string.grades_unknown_subject)
+
+                nm.notify(
+                    NOTIF_ID_GRADES + index + 1,
+                    buildNotification(
+                        channel = CHANNEL_GRADES,
+                        title   = appContext.getString(R.string.notif_grade_title),
+                        text    = appContext.getString(R.string.notif_grade_single, gradeText, subject),
+                        iconRes = R.drawable.ic_notification,
+                        group   = NOTIF_GROUP_GRADES
+                    )
+                )
+            }
+
             nm.notify(
                 NOTIF_ID_GRADES,
-                buildNotification(
+                buildSummaryNotification(
                     channel = CHANNEL_GRADES,
                     title   = appContext.getString(R.string.notif_grade_title),
                     text    = appContext.getString(R.string.notif_grade_multiple, newGrades.size),
                     iconRes = R.drawable.ic_notification,
+                    group   = NOTIF_GROUP_GRADES
                 )
             )
         }
     }
 
-    // ── Messages / timeline check ─────────────────────────────────────────────
-
     private suspend fun checkMessages() {
+        Log.i(TAG, "checking messages")
         val events = try {
             edupage.getNotifications()
-        } catch (_: Exception) { return }
+        } catch (e: Exception) {
+            val error = when {
+                e is UnknownHostException || e is SocketTimeoutException -> {
+                    createNetworkError("Messages fetch failed", e, false)
+                }
+                e.message?.contains("login", ignoreCase = true) == true -> {
+                    createAuthError("Messages fetch failed", e)
+                }
+                e.message?.contains("session", ignoreCase = true) == true -> {
+                    createSessionExpiredError("Messages fetch failed", e)
+                }
+                e is SSLException -> {
+                    createNetworkError("SSL error during messages fetch", e, false)
+                }
+                else -> {
+                    createWorkerError("checkMessages", e, false)
+                }
+            }
 
-        if (events.isEmpty()) return
+            NotificationErrorHandler.handleError(error) {
+                Log.w(TAG, "Messages check failed, skipping notification")
+            }
+            return
+        }
+
+        if (events.isEmpty()) {
+            Log.i(TAG, "no notification events found")
+            return
+        }
 
         val maxId = events.maxOf { it.timelineId }
         val lastId = appPreferences.lastTimelineId
 
-        // First run: seed the watermark without notifying (avoids notification flood on install)
         if (lastId == -1) {
+            Log.i(TAG, "first run, seeding message watermark at $maxId")
             appPreferences.lastTimelineId = maxId
             return
         }
 
-        // Filter to message-type events newer than our watermark
         val newMessages = events.filter { it.timelineId > lastId && it.type == "sprava" }
 
-        // Always advance the watermark regardless of type, so we don't re-process old events
         if (maxId > lastId) appPreferences.lastTimelineId = maxId
 
-        if (newMessages.isEmpty()) return
+        if (newMessages.isEmpty()) {
+            Log.i(TAG, "no new messages found")
+            return
+        }
 
+        Log.i(TAG, "found ${newMessages.size} new message(s), posting notification")
         val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (newMessages.size == 1) {
@@ -164,37 +307,54 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                     title   = appContext.getString(R.string.notif_message_title, sender),
                     text    = preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) },
                     iconRes = R.drawable.ic_notification,
+                    group   = NOTIF_GROUP_MESSAGES
                 )
             )
         } else {
+
+            newMessages.forEachIndexed { index, message ->
+                val sender = message.authorName ?: appContext.getString(R.string.notif_message_unknown_sender)
+                val rawText = message.text
+                val preview = rawText?.let { t -> if (t.length > 80) "${t.take(80)}…" else t } ?: ""
+
+                nm.notify(
+                    NOTIF_ID_MESSAGES + index + 1,
+                    buildNotification(
+                        channel = CHANNEL_MESSAGES,
+                        title   = appContext.getString(R.string.notif_message_title, sender),
+                        text    = preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) },
+                        iconRes = R.drawable.ic_notification,
+                        group   = NOTIF_GROUP_MESSAGES
+                    )
+                )
+            }
+
             nm.notify(
                 NOTIF_ID_MESSAGES,
-                buildNotification(
+                buildSummaryNotification(
                     channel = CHANNEL_MESSAGES,
                     title   = appContext.getString(R.string.notif_message_title_multiple),
                     text    = appContext.getString(R.string.notif_message_multiple, newMessages.size),
                     iconRes = R.drawable.ic_notification,
+                    group   = NOTIF_GROUP_MESSAGES
                 )
             )
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildNotification(
         channel: String,
         title: String,
         text: String,
         iconRes: Int,
+        group: String? = null,
     ): android.app.Notification {
-        val tapIntent = PendingIntent.getActivity(
-            appContext,
-            0,
-            Intent(appContext, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val tapIntent = when (channel) {
+            CHANNEL_GRADES -> DeepLinkHelper.createGradesIntent(appContext)
+            CHANNEL_MESSAGES -> DeepLinkHelper.createMessagesIntent(appContext)
+            else -> DeepLinkHelper.createOverviewIntent(appContext)
+        }
+
         return NotificationCompat.Builder(appContext, channel)
             .setSmallIcon(iconRes)
             .setContentTitle(title)
@@ -203,6 +363,37 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             .setAutoCancel(true)
             .setContentIntent(tapIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .apply {
+                if (group != null) {
+                    setGroup(group)
+                }
+            }
+            .build()
+    }
+
+    private fun buildSummaryNotification(
+        channel: String,
+        title: String,
+        text: String,
+        iconRes: Int,
+        group: String,
+    ): android.app.Notification {
+        val tapIntent = when (channel) {
+            CHANNEL_GRADES -> DeepLinkHelper.createGradesIntent(appContext)
+            CHANNEL_MESSAGES -> DeepLinkHelper.createMessagesIntent(appContext)
+            else -> DeepLinkHelper.createOverviewIntent(appContext)
+        }
+
+        return NotificationCompat.Builder(appContext, channel)
+            .setSmallIcon(iconRes)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(tapIntent)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setGroup(group)
+            .setGroupSummary(true)
             .build()
     }
 
@@ -215,12 +406,43 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                 edupage.session.isLoggedIn = restored.session.isLoggedIn
                 edupage.session.data       = restored.session.data
                 edupage.session.gsecHash   = restored.session.gsecHash
-                if (edupage.session.isLoggedIn) return
-            } catch (_: Exception) { /* fall through to full login */ }
+                if (edupage.session.isLoggedIn) {
+                    Log.i(TAG, "session restore succeeded")
+                    return
+                }
+            } catch (e: Exception) {
+                NotificationErrorHandler.handleError(
+                    createAuthError("Session restore failed", e)
+                ) {
+                    Log.w(TAG, "session restore failed, falling back to full login")
+                }
+            }
         }
-        edupage.login(creds.username, creds.password, creds.subdomain)
-        val newSessionId = edupage.session.cookieJar
-            .getSessionId("${creds.subdomain}.edupage.org")
-        credentialStore.updateSessionId(newSessionId)
+        Log.i(TAG, "performing full login for ${creds.username}@${creds.subdomain}")
+        try {
+            edupage.login(creds.username, creds.password, creds.subdomain)
+            val newSessionId = edupage.session.cookieJar
+                .getSessionId("${creds.subdomain}.edupage.org")
+            credentialStore.updateSessionId(newSessionId)
+        } catch (e: Exception) {
+            val error = when {
+                e is UnknownHostException || e is SocketTimeoutException -> {
+                    createNetworkError("Login failed", e, false)
+                }
+                e.message?.contains("login", ignoreCase = true) == true ||
+                e.message?.contains("credential", ignoreCase = true) == true -> {
+                    createAuthError("Login failed", e)
+                }
+                e is SSLException -> {
+                    createNetworkError("SSL error during login", e, false)
+                }
+                else -> {
+                    createWorkerError("ensureLoggedIn", e, false)
+                }
+            }
+
+            NotificationErrorHandler.handleError(error)
+            throw e
+        }
     }
 }

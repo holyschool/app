@@ -2,9 +2,6 @@ package com.edupage.api.model.people
 
 import java.time.LocalDateTime
 
-/**
- * Base class for all EduPage accounts.
- */
 open class EduAccount(
     val personId: Int,
     val name: String,

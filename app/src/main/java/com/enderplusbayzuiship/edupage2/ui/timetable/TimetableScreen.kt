@@ -27,7 +27,6 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
@@ -57,7 +56,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.edupage.api.model.timetable.Lesson
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
@@ -70,11 +68,13 @@ import androidx.compose.ui.res.stringResource
 import com.edupage.api.model.Classroom
 import com.edupage.api.model.Subject
 import com.edupage.api.model.people.EduTeacher
+import com.edupage.api.model.timetable.Lesson
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
+import com.enderplusbayzuiship.edupage2.ui.util.ShimmerBox
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -135,13 +135,10 @@ fun TimetableScreen(
 
             when (val state = uiState) {
                 is TimetableUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(48.dp),
-                            strokeWidth = 3.dp,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    }
+                    TimetableSkeleton(
+                        bottomPadding = bottomPadding,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
 
                 is TimetableUiState.Error -> {
@@ -190,11 +187,9 @@ fun TimetableScreen(
                     } else {
                         val listState = rememberLazyListState()
 
-                        // Auto-scroll to the active lesson or active break on first load today
                         LaunchedEffect(state.lessons, selectedDate) {
                             if (selectedDate != LocalDate.now()) return@LaunchedEffect
                             val lessons = state.lessons
-                            // Find active lesson index
                             val activeLessonIndex = lessons.indexOfFirst { lesson ->
                                 lesson.startTime != null && lesson.endTime != null &&
                                     !currentTime.isBefore(lesson.startTime) &&
@@ -203,7 +198,6 @@ fun TimetableScreen(
                             val targetIndex = if (activeLessonIndex >= 0) {
                                 activeLessonIndex
                             } else {
-                                // Find active break: we're between lessons[i-1].endTime and lessons[i].startTime
                                 lessons.indexOfFirst { lesson ->
                                     val lessonIdx = lessons.indexOf(lesson)
                                     if (lessonIdx == 0) return@indexOfFirst false
@@ -230,7 +224,6 @@ fun TimetableScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             itemsIndexed(state.lessons) { index, lesson ->
-                                // Break separator: filtered by breakVisibility setting
                                 if (index > 0) {
                                     val prev = state.lessons[index - 1]
                                     val prevEnd = prev.endTime
@@ -378,7 +371,6 @@ private fun LessonCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top
         ) {
-            // Period + time column
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.width(52.dp)
@@ -404,15 +396,13 @@ private fun LessonCard(
                 )
             }
 
-            // Subject + teacher + classroom (with diff rendering)
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                // Subject
-                val subjectName = lesson.subject?.name ?: stringResource(R.string.timetable_unknown_subject)
+                val subjectName = getDisplayName(lesson)
                 val origSubjectName = lesson.origSubject?.name
                 if (origSubjectName != null) {
                     Text(
@@ -428,7 +418,6 @@ private fun LessonCard(
                     )
                 }
 
-                // Teachers
                 val unknownPlaceholder = stringResource(R.string.timetable_unknown_placeholder)
                 val teacherNames    = lesson.teachers?.joinToString(", ") { it.name ?: unknownPlaceholder } ?: ""
                 val origTeacherNames = lesson.origTeachers?.joinToString(", ") { it.name ?: unknownPlaceholder }
@@ -445,7 +434,6 @@ private fun LessonCard(
                     )
                 }
 
-                // Classrooms
                 val classroomNames    = lesson.classrooms?.joinToString(", ") { it.name ?: unknownPlaceholder } ?: ""
                 val origClassroomNames = lesson.origClassrooms?.joinToString(", ") { it.name ?: unknownPlaceholder }
                 if (!origClassroomNames.isNullOrEmpty() && origClassroomNames != classroomNames) {
@@ -471,7 +459,6 @@ private fun LessonCard(
                 }
             }
 
-            // Status badges
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -527,10 +514,6 @@ private fun LessonCard(
     }
 }
 
-/**
- * Dotted separator shown for every gap between lessons.
- * Highlighted (bold, primary colour) only when the break is currently active.
- */
 @Composable
 private fun BreakSeparator(
     breakMinutes: Long,
@@ -603,7 +586,6 @@ private fun BreakSeparator(
     }
 }
 
-/** Formats a minute count into a short human-readable string, e.g. "35m" or "1h 5m". */
 private fun formatTimeLeft(minutes: Long): String = when {
     minutes < 1    -> "<1m"
     minutes < 60   -> "${minutes}m"
@@ -611,9 +593,6 @@ private fun formatTimeLeft(minutes: Long): String = when {
     else           -> "${minutes / 60}h ${minutes % 60}m"
 }
 
-/**
- * A small rounded pill showing a time-left label.
- */
 @Composable
 private fun TimeLeftPill(
     label: String,
@@ -634,11 +613,6 @@ private fun TimeLeftPill(
     }
 }
 
-/**
- * Builds an AnnotatedString showing "~~old~~ → **new**".
- * The old value is rendered with strikethrough in a muted colour;
- * the arrow separator is plain; the new value is bold.
- */
 @Composable
 private fun buildChangedText(old: String, new: String) = buildAnnotatedString {
     withStyle(
@@ -652,10 +626,6 @@ private fun buildChangedText(old: String, new: String) = buildAnnotatedString {
         SpanStyle(fontWeight = FontWeight.Bold)
     ) { append(new) }
 }
-
-// ---------------------------------------------------------------------------
-// Preview helpers
-// ---------------------------------------------------------------------------
 
 private fun previewTeacher(name: String) = EduTeacher(
     personId = 1, name = name, gender = null, inSchoolSince = null,
@@ -692,6 +662,63 @@ private fun previewLesson(
     origTeachers = origTeacherName?.let { listOf(previewTeacher(it)) },
     origClassrooms = origClassroomName?.let { listOf(Classroom(classroomId = 2, name = it, shortName = it)) },
 )
+
+@Composable
+private fun TimetableSkeleton(
+    bottomPadding: PaddingValues,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .padding(
+                start = 16.dp, end = 16.dp,
+                top = 12.dp,
+                bottom = 12.dp + bottomPadding.calculateBottomPadding()
+            ),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        repeat(5) {
+            LessonCardSkeleton()
+        }
+    }
+}
+
+@Composable
+private fun LessonCardSkeleton() {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.width(52.dp)
+            ) {
+                ShimmerBox(modifier = Modifier.width(28.dp), height = 22.dp, cornerRadius = 6.dp)
+                ShimmerBox(modifier = Modifier.width(36.dp), height = 11.dp)
+                ShimmerBox(modifier = Modifier.width(36.dp), height = 11.dp)
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ShimmerBox(modifier = Modifier.fillMaxWidth(0.6f), height = 16.dp)
+                ShimmerBox(modifier = Modifier.fillMaxWidth(0.4f), height = 12.dp)
+            }
+        }
+    }
+}
 
 @Preview(name = "LessonCard – Normal", showBackground = true, widthDp = 360)
 @Composable
@@ -808,5 +835,26 @@ private fun BreakSeparatorActivePreview() {
 private fun BreakSeparatorInactivePreview() {
     Edupage2Theme {
         BreakSeparator(breakMinutes = 10)
+    }
+}
+
+@Composable
+private fun getDisplayName(lesson: Lesson): String {
+    return when {
+
+        lesson.isEvent && !lesson.curriculum.isNullOrBlank() -> lesson.curriculum!!
+
+        else -> {
+            val subjectName = lesson.subject?.name
+            when {
+                subjectName != null && subjectName.isNotBlank() &&
+                !subjectName.equals("unknown", ignoreCase = true) &&
+                !subjectName.equals("undefined", ignoreCase = true) -> subjectName
+
+                !lesson.curriculum.isNullOrBlank() -> lesson.curriculum!!
+
+                else -> stringResource(R.string.timetable_unknown_subject)
+            }
+        }
     }
 }

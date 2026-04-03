@@ -2,6 +2,7 @@ package com.enderplusbayzuiship.edupage2.notification
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -11,6 +12,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.notification.NotificationErrorHandler.createBatteryOptimizationError
+import com.enderplusbayzuiship.edupage2.notification.NotificationErrorHandler.createSchedulerError
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
 import java.time.LocalDateTime
@@ -19,12 +22,6 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Manages the scheduling of [TimetableFetchWorker] (nightly at ~1 AM via WorkManager),
- * [ServiceStartWorker] (fires once at the first-lesson time each day),
- * [GradeMessageCheckWorker] (periodic, user-configurable interval),
- * and the direct starting/stopping of [TimetableNotificationService].
- */
 @Singleton
 class NotificationScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -36,105 +33,192 @@ class NotificationScheduler @Inject constructor(
         private const val GRADE_CHECK_WORK_NAME    = "grade_message_check"
         private const val FETCH_HOUR              = 1
         private const val FETCH_MINUTE            = 0
+        private const val TAG = "NotificationScheduler"
     }
 
-    // ── Nightly fetch ─────────────────────────────────────────────────────────
-
-    /**
-     * Enqueue a periodic ~24 h WorkManager job at ~1 AM.
-     * Safe to call multiple times — uses [ExistingPeriodicWorkPolicy.KEEP].
-     */
     fun scheduleNightlyFetch() {
+
+        if (!BatteryOptimizationHelper.isAppWhitelisted(context)) {
+            NotificationErrorHandler.handleError(
+                createBatteryOptimizationError("Nightly fetch scheduling")
+            ) {
+                Log.w(TAG, "App is battery optimized, nightly fetch may be unreliable")
+            }
+        }
+
         val initialDelay = secondsUntil(LocalTime.of(FETCH_HOUR, FETCH_MINUTE))
-        val request = PeriodicWorkRequestBuilder<TimetableFetchWorker>(24, TimeUnit.HOURS)
-            .setInitialDelay(initialDelay, TimeUnit.SECONDS)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
+        Log.i(TAG, "scheduling nightly fetch in ${initialDelay}s")
+
+        try {
+            val request = PeriodicWorkRequestBuilder<TimetableFetchWorker>(24, TimeUnit.HOURS)
+                .setInitialDelay(initialDelay, TimeUnit.SECONDS)
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                FETCH_WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                request,
             )
-            .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            FETCH_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
-        )
+            Log.i(TAG, "Nightly fetch scheduled successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("scheduleNightlyFetch", e, true)
+            ) {
+                Log.e(TAG, "Failed to schedule nightly fetch")
+            }
+        }
     }
 
     fun cancelNightlyFetch() {
-        WorkManager.getInstance(context).cancelUniqueWork(FETCH_WORK_NAME)
+        Log.i(TAG, "cancelling nightly fetch")
+        try {
+            WorkManager.getInstance(context).cancelUniqueWork(FETCH_WORK_NAME)
+            Log.i(TAG, "Nightly fetch cancelled successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("cancelNightlyFetch", e, true)
+            ) {
+                Log.e(TAG, "Failed to cancel nightly fetch")
+            }
+        }
     }
 
-    // ── Service start scheduling ───────────────────────────────────────────────
-
-    /**
-     * Schedule a one-shot [ServiceStartWorker] to fire [delaySeconds] from now.
-     * Replaces any previously scheduled start (REPLACE policy).
-     */
     fun scheduleServiceStartIn(delaySeconds: Long) {
         if (delaySeconds <= 0L) {
+            Log.i(TAG, "delay is 0, starting notification service immediately")
             startNotificationService()
             return
         }
-        val request = OneTimeWorkRequestBuilder<ServiceStartWorker>()
-            .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
-            .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            SERVICE_START_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
-            request,
-        )
+
+        if (!BatteryOptimizationHelper.isAppWhitelisted(context)) {
+            NotificationErrorHandler.handleError(
+                createBatteryOptimizationError("Service start scheduling")
+            ) {
+                Log.w(TAG, "App is battery optimized, service start may be unreliable")
+            }
+        }
+
+        Log.i(TAG, "scheduling service start in ${delaySeconds}s")
+        try {
+            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>()
+                .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                SERVICE_START_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request,
+            )
+            Log.i(TAG, "Service start scheduled successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("scheduleServiceStartIn", e, true)
+            ) {
+                Log.e(TAG, "Failed to schedule service start, trying immediate start as fallback")
+                startNotificationService()
+            }
+        }
     }
 
     fun cancelScheduledServiceStart() {
-        WorkManager.getInstance(context).cancelUniqueWork(SERVICE_START_WORK_NAME)
+        Log.i(TAG, "cancelling scheduled service start")
+        try {
+            WorkManager.getInstance(context).cancelUniqueWork(SERVICE_START_WORK_NAME)
+            Log.i(TAG, "Scheduled service start cancelled successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("cancelScheduledServiceStart", e, true)
+            ) {
+                Log.e(TAG, "Failed to cancel scheduled service start")
+            }
+        }
     }
 
-    // ── Direct service control ────────────────────────────────────────────────
-
     fun startNotificationService() {
-        val intent = Intent(context, TimetableNotificationService::class.java)
-        ContextCompat.startForegroundService(context, intent)
+        Log.i(TAG, "starting notification service")
+        try {
+            val intent = Intent(context, TimetableNotificationService::class.java)
+            ContextCompat.startForegroundService(context, intent)
+            Log.i(TAG, "Notification service started successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("startNotificationService", e, false)
+            ) {
+                Log.e(TAG, "Failed to start notification service")
+            }
+        }
     }
 
     fun stopNotificationService() {
-        val intent = Intent(context, TimetableNotificationService::class.java)
-        context.stopService(intent)
+        Log.i(TAG, "stopping notification service")
+        try {
+            val intent = Intent(context, TimetableNotificationService::class.java)
+            context.stopService(intent)
+            Log.i(TAG, "Notification service stopped successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("stopNotificationService", e, false)
+            ) {
+                Log.e(TAG, "Failed to stop notification service")
+            }
+        }
     }
 
-    // ── Grade & message check ─────────────────────────────────────────────────
-
-    /**
-     * Enqueue a periodic WorkManager job that checks for new grades and messages.
-     * The interval is read from [AppPreferences.notifCheckIntervalMinutes].
-     * Safe to call multiple times — uses [ExistingPeriodicWorkPolicy.UPDATE] so
-     * a changed interval takes effect immediately.
-     */
     fun scheduleGradeMessageCheck() {
+
+        if (!BatteryOptimizationHelper.isAppWhitelisted(context)) {
+            NotificationErrorHandler.handleError(
+                createBatteryOptimizationError("Grade/message check scheduling")
+            ) {
+                Log.w(TAG, "App is battery optimized, background checks may be unreliable")
+            }
+        }
+
         val intervalMinutes = appPreferences.notifCheckIntervalMinutes.toLong()
-        val request = PeriodicWorkRequestBuilder<GradeMessageCheckWorker>(
-            intervalMinutes, TimeUnit.MINUTES
-        )
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
+        Log.i(TAG, "scheduling grade/message check every ${intervalMinutes}min")
+
+        try {
+            val request = PeriodicWorkRequestBuilder<GradeMessageCheckWorker>(
+                intervalMinutes, TimeUnit.MINUTES
             )
-            .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            GRADE_CHECK_WORK_NAME,
-            ExistingPeriodicWorkPolicy.UPDATE,
-            request,
-        )
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                GRADE_CHECK_WORK_NAME,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request,
+            )
+            Log.i(TAG, "Grade/message check scheduled successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("scheduleGradeMessageCheck", e, true)
+            ) {
+                Log.e(TAG, "Failed to schedule grade/message check")
+            }
+        }
     }
 
     fun cancelGradeMessageCheck() {
-        WorkManager.getInstance(context).cancelUniqueWork(GRADE_CHECK_WORK_NAME)
+        Log.i(TAG, "cancelling grade/message check")
+        try {
+            WorkManager.getInstance(context).cancelUniqueWork(GRADE_CHECK_WORK_NAME)
+            Log.i(TAG, "Grade/message check cancelled successfully")
+        } catch (e: Exception) {
+            NotificationErrorHandler.handleError(
+                createSchedulerError("cancelGradeMessageCheck", e, true)
+            ) {
+                Log.e(TAG, "Failed to cancel grade/message check")
+            }
+        }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /** Seconds from now until the next occurrence of [target] time today or tomorrow. */
     fun secondsUntil(target: LocalTime): Long {
         val now = LocalDateTime.now()
         var next = now.toLocalDate().atTime(target)

@@ -10,10 +10,6 @@ import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * A stripped-down, serializable representation of a lesson for cache storage.
- * We only store what the notification needs.
- */
 data class CachedLesson(
     val startTimeHour: Int,
     val startTimeMinute: Int,
@@ -28,8 +24,8 @@ data class CachedLesson(
 }
 
 private data class TimetableCacheFile(
-    val date: String,           // ISO-8601 date (yyyy-MM-dd)
-    val fetchedAtMs: Long,      // System.currentTimeMillis() at write time
+    val date: String,
+    val fetchedAtMs: Long,
     val lessons: List<CachedLesson>,
 )
 
@@ -39,17 +35,13 @@ class TimetableCache @Inject constructor(
 ) {
     companion object {
         private const val FILE_NAME = "timetable_cache.json"
-        /** Cache is considered stale after this many hours (1 AM fetch = fresh until next 1 AM) */
+
         private const val STALE_AFTER_HOURS = 23L
     }
 
     private val gson = Gson()
     private val file: File get() = File(context.filesDir, FILE_NAME)
 
-    /**
-     * Persist today's lessons to disk.
-     * Only lessons that have valid start and end times are stored.
-     */
     fun save(date: LocalDate, lessons: List<com.edupage.api.model.timetable.Lesson>) {
         val cached = lessons
             .filter { it.startTime != null && it.endTime != null && !it.isCancelled }
@@ -72,12 +64,6 @@ class TimetableCache @Inject constructor(
         file.writeText(gson.toJson(cacheFile))
     }
 
-    /**
-     * Load today's cached lessons, or null if:
-     * - the cache file doesn't exist
-     * - the cache is for a different date
-     * - the cache is older than [STALE_AFTER_HOURS]
-     */
     fun load(date: LocalDate = LocalDate.now()): List<CachedLesson>? {
         if (!file.exists()) return null
         return try {
@@ -92,10 +78,8 @@ class TimetableCache @Inject constructor(
         }
     }
 
-    /** Returns true if we have a fresh cache entry for today. */
     fun isFreshForToday(): Boolean = load(LocalDate.now()) != null
 
-    /** Delete the cache file (e.g. on logout). */
     fun clear() {
         file.delete()
     }

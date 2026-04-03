@@ -12,15 +12,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 
-/**
- * Provides cloud file upload functionality.
- * Mirrors Python's Cloud class.
- */
 internal class Cloud(private val session: EdupageSession) {
 
-    /**
-     * Upload a file to EduPage cloud storage.
-     */
     suspend fun uploadFile(file: File): EduCloudFile {
         if (!session.isLoggedIn) throw NotLoggedInException()
 

@@ -4,16 +4,22 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.enderplusbayzuiship.edupage2.notification.TimetableNotificationService
 import com.enderplusbayzuiship.edupage2.util.LocaleHelper
 import com.enderplusbayzuiship.edupage2.R
 import dagger.hilt.android.HiltAndroidApp
+import java.io.IOException
 import javax.inject.Inject
 
 @HiltAndroidApp
 class EdupageApp : Application(), Configuration.Provider {
+
+    companion object {
+        private const val TAG = "EdupageApp"
+    }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
@@ -28,13 +34,24 @@ class EdupageApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        installNetworkExceptionHandler()
         createNotificationChannel()
+    }
+
+    private fun installNetworkExceptionHandler() {
+        val default = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
+            if (ex is IOException && thread.name.startsWith("OkHttp")) {
+                Log.w(TAG, "Swallowed OkHttp background IOException on thread ${thread.name}: ${ex.message}")
+            } else {
+                default?.uncaughtException(thread, ex)
+            }
+        }
     }
 
     private fun createNotificationChannel() {
         val manager = getSystemService(NotificationManager::class.java)
 
-        // Live timetable — silent, no badge
         val timetableChannel = NotificationChannel(
             TimetableNotificationService.CHANNEL_ID,
             getString(R.string.notif_channel_name),
@@ -44,7 +61,6 @@ class EdupageApp : Application(), Configuration.Provider {
             setShowBadge(false)
         }
 
-        // New grades — default importance (makes sound + badge)
         val gradesChannel = NotificationChannel(
             "grades_new",
             getString(R.string.notif_channel_grades_name),
@@ -53,7 +69,6 @@ class EdupageApp : Application(), Configuration.Provider {
             description = getString(R.string.notif_channel_grades_desc)
         }
 
-        // New messages — default importance
         val messagesChannel = NotificationChannel(
             "messages_new",
             getString(R.string.notif_channel_messages_name),
@@ -63,5 +78,6 @@ class EdupageApp : Application(), Configuration.Provider {
         }
 
         manager.createNotificationChannels(listOf(timetableChannel, gradesChannel, messagesChannel))
+        Log.i(TAG, "notification channels created")
     }
 }

@@ -14,10 +14,6 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-/**
- * Provides ringing time lookups.
- * Mirrors Python's RingingTimes class.
- */
 internal class Ringing(private val session: EdupageSession) {
 
     suspend fun getNextRingingTime(dateTime: LocalDateTime): RingingTime? {
@@ -28,7 +24,6 @@ internal class Ringing(private val session: EdupageSession) {
             val periods = dp.getAsJsonObject("periods") ?: return@withContext null
             val currentTime = dateTime.toLocalTime()
 
-            // Find ringing times from the period definitions
             val ringingTimes = mutableListOf<Pair<LocalTime, RingingType>>()
             for (key in periods.keySet()) {
                 val period = periods.getAsJsonObject(key) ?: continue

@@ -102,7 +102,6 @@ fun LoginScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Simple top spacing + title
                 Spacer(modifier = Modifier.height(64.dp))
                 Column(
                     modifier = Modifier
@@ -146,7 +145,6 @@ fun LoginScreen(
                             exit = fadeOut() + shrinkVertically()
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                // Subdomain field
                                 OutlinedTextField(
                                     value = subdomain,
                                     onValueChange = { subdomain = it.trim() },
@@ -167,7 +165,6 @@ fun LoginScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
-                                // Username field
                                 OutlinedTextField(
                                     value = username,
                                     onValueChange = { username = it },
@@ -184,7 +181,6 @@ fun LoginScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
-                                // Password field
                                 OutlinedTextField(
                                     value = password,
                                     onValueChange = { password = it },
@@ -263,7 +259,6 @@ fun LoginScreen(
                             }
                         }
 
-                        // Error card
                         AnimatedVisibility(
                             visible = uiState is LoginUiState.Error,
                             enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) + expandVertically(),
@@ -303,7 +298,6 @@ fun LoginScreen(
                             }
                         }
 
-                        // Primary action button
                         Button(
                             onClick = {
                                 haptics.click()
@@ -350,10 +344,6 @@ fun LoginScreen(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Previews
-// ---------------------------------------------------------------------------
-
 @Preview(name = "Login – Idle Light", showBackground = true)
 @Preview(name = "Login – Idle Dark", showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -367,7 +357,6 @@ private fun LoginScreenIdlePreview() {
 @Composable
 private fun LoginScreenErrorPreview() {
     Edupage2Theme {
-        // Render only the static shell; error card needs the live VM state so we show the idle form.
         LoginScreen(
             onLoginSuccess = {},
             prefillUsername = "john.doe",

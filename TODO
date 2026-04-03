@@ -1,29 +1,26 @@
-todo: "force valid internet connection -> if no connection, show error message and retry button"
-todo: "tab for timetable, grades, overwiew, etc."
-todo: "grade notifications"
-todo: "show buttons in overview tab"
-todo: "quick timetable in overview tab"
-todo: "support for multiple accounts (e.g. students, parents, teachers)"
-todo: "canteen menu"
-todo: "timetable screen option for entire week perhaps"
-todo: "messages screen"
-
 #TODAY
-todo: add swipe gestures
-todo: "remove scrolling in timetable tab"
-todo: "update theme after changing it in settings"
+* add swipe gestures
+* update theme after changing it in settings
+* make code not pc specific
+
+#TODO
+* show class in notification
+* force valid internet connection -> if no connection, show error message and retry button
+* show buttons in overview tab
+* quick timetable in overview tab
+* canteen menu
+* timetable screen option for entire week perhaps
+* messages screen
+* display events
+* show seconds
+* offline support
+* switching to system language dosent completly switch language
 
 #LATER
-todo: ability to add local homework
-todo: optimize data usage a little as it uses like 1mb for scrolling through timetable.
-todo: "widgets for timetable, grades, etc."
-
-
-# FINISHED:
-✅ "languages"
-✅ "focus on current class (scroll to it on the timetable)"
-✅ "higlight current class in timetable"
-✅ "fix the wierd padding from bar and the timetable view"
-✅ "show empty classes in timetable view as "volna hodina""
-✅ "substitution show"
-✅ slovak translations
+* ability to add local homework
+* optimize data usage a little as it uses like 1mb for scrolling through timetable.
+* widgets for timetable, grades, etc.
+* about page with contact info, etc.
+* percentage grades show X/Y points instead of X points
+* avrg of others for that grade
+* support for multiple accounts (e.g. students, parents, teachers)

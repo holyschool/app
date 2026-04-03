@@ -11,10 +11,6 @@ import okhttp3.Request
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-/**
- * Provides lunch/meal fetching.
- * Mirrors Python's Lunches class.
- */
 internal class Lunches(private val session: EdupageSession) {
 
     private val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -28,7 +24,6 @@ internal class Lunches(private val session: EdupageSession) {
             val response = session.httpClient.newCall(request).execute()
             val html = response.body?.string() ?: return@withContext null
 
-            // Extract JSON from the page
             val marker = "edupageData = "
             val start = html.indexOf(marker)
             if (start == -1) return@withContext Meals(date, emptyList())

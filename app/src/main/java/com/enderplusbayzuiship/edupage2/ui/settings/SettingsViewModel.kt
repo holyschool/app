@@ -32,8 +32,6 @@ class SettingsViewModel @Inject constructor(
     private val timetableCache: TimetableCache,
 ) : ViewModel() {
 
-    // ── Timetable ─────────────────────────────────────────────────────────────
-
     private val _breakVisibility = MutableStateFlow(appPreferences.breakVisibility)
     val breakVisibility: StateFlow<BreakVisibility> = _breakVisibility.asStateFlow()
 
@@ -42,8 +40,6 @@ class SettingsViewModel @Inject constructor(
 
     private val _cancelledLessonStyle = MutableStateFlow(appPreferences.cancelledLessonStyle)
     val cancelledLessonStyle: StateFlow<CancelledLessonStyle> = _cancelledLessonStyle.asStateFlow()
-
-    // ── Notifications ─────────────────────────────────────────────────────────
 
     private val _notificationsEnabled = MutableStateFlow(appPreferences.notificationsEnabled)
     val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
@@ -57,8 +53,6 @@ class SettingsViewModel @Inject constructor(
     private val _notifEarlyStartMinutes = MutableStateFlow(appPreferences.notifEarlyStartMinutes)
     val notifEarlyStartMinutes: StateFlow<Int> = _notifEarlyStartMinutes.asStateFlow()
 
-    // ── Grades & Messages Notifications ──────────────────────────────────────
-
     private val _notifGradesEnabled = MutableStateFlow(appPreferences.notifGradesEnabled)
     val notifGradesEnabled: StateFlow<Boolean> = _notifGradesEnabled.asStateFlow()
 
@@ -68,24 +62,17 @@ class SettingsViewModel @Inject constructor(
     private val _notifCheckIntervalMinutes = MutableStateFlow(appPreferences.notifCheckIntervalMinutes)
     val notifCheckIntervalMinutes: StateFlow<Int> = _notifCheckIntervalMinutes.asStateFlow()
 
-    // ── Appearance ────────────────────────────────────────────────────────────
-
     private val _darkMode = MutableStateFlow(appPreferences.darkMode)
     val darkMode: StateFlow<DarkModePreference> = _darkMode.asStateFlow()
 
     private val _useAmoled = MutableStateFlow(appPreferences.useAmoled)
     val useAmoled: StateFlow<Boolean> = _useAmoled.asStateFlow()
 
-    // ── Language ──────────────────────────────────────────────────────────────
-
     private val _appLanguage = MutableStateFlow(appPreferences.appLanguage)
     val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
 
-    /** Emits Unit whenever a change requires the Activity to be recreated (language, theme). */
     private val _recreateActivity = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val recreateActivity: SharedFlow<Unit> = _recreateActivity.asSharedFlow()
-
-    // ── Setters — Timetable ───────────────────────────────────────────────────
 
     fun setBreakVisibility(value: BreakVisibility) {
         appPreferences.breakVisibility = value
@@ -102,8 +89,6 @@ class SettingsViewModel @Inject constructor(
         _cancelledLessonStyle.value = value
     }
 
-    // ── Setters — Notifications ───────────────────────────────────────────────
-
     fun setNotifShowBreaks(value: Boolean) {
         appPreferences.notifShowBreaks = value
         _notifShowBreaks.value = value
@@ -118,8 +103,6 @@ class SettingsViewModel @Inject constructor(
         appPreferences.notifEarlyStartMinutes = value
         _notifEarlyStartMinutes.value = value
     }
-
-    // ── Setters — Grades & Messages Notifications ─────────────────────────────
 
     fun setNotifGradesEnabled(value: Boolean) {
         appPreferences.notifGradesEnabled = value
@@ -136,7 +119,6 @@ class SettingsViewModel @Inject constructor(
     fun setNotifCheckIntervalMinutes(value: Int) {
         appPreferences.notifCheckIntervalMinutes = value
         _notifCheckIntervalMinutes.value = value
-        // Re-schedule with the new interval if any toggle is on
         if (_notifGradesEnabled.value || _notifMessagesEnabled.value) {
             notificationScheduler.scheduleGradeMessageCheck()
         }
@@ -150,23 +132,17 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // ── Setters — Appearance ──────────────────────────────────────────────────
-
     fun setDarkMode(value: DarkModePreference) {
         if (value == _darkMode.value) return
         appPreferences.darkMode = value
         _darkMode.value = value
-        viewModelScope.launch { _recreateActivity.emit(Unit) }
     }
 
     fun setUseAmoled(value: Boolean) {
         if (value == _useAmoled.value) return
         appPreferences.useAmoled = value
         _useAmoled.value = value
-        viewModelScope.launch { _recreateActivity.emit(Unit) }
     }
-
-    // ── Setters — Language ────────────────────────────────────────────────────
 
     fun setAppLanguage(value: AppLanguage) {
         if (value == _appLanguage.value) return
@@ -175,24 +151,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { _recreateActivity.emit(Unit) }
     }
 
-    // ── Notifications master toggle ───────────────────────────────────────────
-
-    /**
-     * Toggle live timetable notifications on/off.
-     *
-     * When enabling:
-     * - Schedules the nightly 1 AM WorkManager fetch.
-     * - If the timetable cache is fresh for today, calculates the service start
-     *   time as (firstLesson.startTime - earlyStartMinutes) and schedules via
-     *   [NotificationScheduler.scheduleServiceStartIn]. If that time is already
-     *   past (we're mid-day), starts the service immediately.
-     * - If the cache is cold, starts the service immediately so it can fetch
-     *   on demand (the service handles a missing cache gracefully).
-     *
-     * When disabling:
-     * - Cancels the WorkManager jobs.
-     * - Stops the foreground service.
-     */
     fun setNotificationsEnabled(enabled: Boolean) {
         appPreferences.notificationsEnabled = enabled
         _notificationsEnabled.value = enabled
@@ -228,9 +186,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // ── Account ───────────────────────────────────────────────────────────────
-
-    /** Clears saved credentials and resets the in-memory session. */
     fun logout() {
         if (appPreferences.notificationsEnabled) {
             notificationScheduler.cancelNightlyFetch()

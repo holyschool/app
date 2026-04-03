@@ -10,21 +10,8 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-/**
- * Allows sending arbitrary custom requests to EduPage.
- * Mirrors Python's CustomRequest class.
- */
 internal class CustomRequest(private val session: EdupageSession) {
 
-    /**
-     * Send a custom HTTP request to an EduPage endpoint.
-     *
-     * @param url     Full URL to request.
-     * @param method  "GET" or "POST".
-     * @param data    Body data for POST requests.
-     * @param headers Additional headers.
-     * @return The raw response string.
-     */
     suspend fun customRequest(
         url: String,
         method: String,

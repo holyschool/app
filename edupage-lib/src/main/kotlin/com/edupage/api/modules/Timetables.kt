@@ -27,7 +27,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-// Safe accessors: return null for JsonNull or missing keys instead of throwing.
 private fun JsonElement?.safeString(): String? =
     if (this == null || this.isJsonNull) null else try { this.asString } catch (_: Exception) { null }
 private fun JsonElement?.safeBoolean(): Boolean? =
@@ -38,10 +37,6 @@ private fun JsonElement?.safeObj(): JsonObject? =
     if (this == null || this.isJsonNull) null else try { this.asJsonObject } catch (_: Exception) { null }
 private fun JsonObject?.field(key: String): JsonElement? = this?.get(key)
 
-/**
- * Provides timetable fetching functionality.
- * Mirrors Python's Timetables class.
- */
 internal class Timetables(private val session: EdupageSession) {
 
     private val dbi = DbiHelper(session)
@@ -51,9 +46,6 @@ internal class Timetables(private val session: EdupageSession) {
         return session.getSchoolYear() ?: throw MissingDataException("No school year in dp data")
     }
 
-    /**
-     * Fetches timetable data from EduPage's currenttt endpoint for a given target.
-     */
     private suspend fun getTimetableData(targetId: Int, table: String, date: LocalDate): List<JsonObject> {
         return withContext(Dispatchers.IO) {
             val url = "https://${session.subdomain}.edupage.org/timetable/server/currenttt.js?__func=curentttGetData"
@@ -87,12 +79,9 @@ internal class Timetables(private val session: EdupageSession) {
         }
     }
 
-    /**
-     * Fetches the logged-in user's own timetable via the gcall/dashboard endpoint.
-     */
     private suspend fun getDatePlan(date: LocalDate): List<JsonObject> {
         return withContext(Dispatchers.IO) {
-            // Step 1: get CSRF token (gpid + gsh)
+
             val csrfUrl = "https://${session.subdomain}.edupage.org/dashboard/eb.php?mode=ttday"
             val csrfResponse = session.httpClient.newCall(
                 Request.Builder().url(csrfUrl).get().build()
@@ -123,11 +112,9 @@ internal class Timetables(private val session: EdupageSession) {
             val gcallResponse = session.httpClient.newCall(gcallRequest).execute()
             val gcallText = gcallResponse.body?.string() ?: throw MissingDataException("No gcall response")
 
-            // Response format: userid",[{...data...},[...
-            // Python: text.split(userId + '",')[1].rsplit(",[", 1)[0]
             val responseStart = "$userId\","
             val afterUserId = gcallText.substringAfter(responseStart)
-            // rsplit ",[" — take everything before the LAST occurrence of ",["
+
             val lastSep = afterUserId.lastIndexOf(",[")
             val jsonStr = if (lastSep >= 0) afterUserId.substring(0, lastSep) else afterUserId
 
@@ -147,14 +134,13 @@ internal class Timetables(private val session: EdupageSession) {
     private suspend fun parseTimetable(plan: List<JsonObject>): Timetable {
         val lessons = mutableListOf<Lesson>()
 
-        // Instantiate helpers once for the whole timetable parse, not per-lesson
         val subjects = Subjects(session)
         val classes = Classes(session)
         val people = People(session)
         val classrooms = Classrooms(session)
 
         for (lessonJson in plan) {
-            // Skip header entries (empty header or addlesson type)
+
             val headerArray = lessonJson.get("header")?.takeIf { !it.isJsonNull }?.asJsonArray
             if (headerArray != null) {
                 val isEmpty = headerArray.size() == 0
@@ -191,8 +177,11 @@ internal class Timetables(private val session: EdupageSession) {
             val classroomIds = lessonJson.get("classroomids")?.takeIf { !it.isJsonNull }?.asJsonArray
             val lessonClassrooms = classroomIds?.mapNotNull { classrooms.getClassroom(it.asString) }
 
-            val isEvent = lessonJson.field("type").safeString().let { it == "event" || it == "out" } ||
-                    lessonJson.field("main").safeBoolean() == true
+            val isEvent = lessonJson.field("type").safeString().let { type ->
+                type == "event" || type == "out" || type == "vacation" ||
+                type == "break" || type == "holiday" || type == "absent" || type == ""
+            } || lessonJson.field("main").safeBoolean() == true ||
+                subjectId.isNullOrEmpty()
 
             val onlineLessonLink = lessonJson.field("ol_url").safeString()
 
@@ -201,15 +190,31 @@ internal class Timetables(private val session: EdupageSession) {
 
             val curriculum = dp0?.field("note_wd").safeString()
                 ?: flags?.get("event").safeObj()?.field("name").safeString()
+                ?: lessonJson.field("name").safeString()
+                ?: lessonJson.field("text").safeString()
+                ?: lessonJson.field("note").safeString()
+                ?: lessonJson.field("curriculum").safeString()
+                ?: dp0?.field("note").safeString()
+                ?: flags?.field("note").safeString()
 
-            // isCancelled: prefer dp0.cancelled, fall back to legacy signals
+            if (isEvent || subjectId.isNullOrEmpty()) {
+                println("DEBUG Timetable Event:")
+                println("  type: ${lessonJson.field("type").safeString()}")
+                println("  isEvent: $isEvent")
+                println("  subjectId: $subjectId")
+                println("  subject: ${subject?.name}")
+                println("  curriculum: $curriculum")
+                println("  startTime: $startTime")
+                println("  endTime: $endTime")
+                if (flags != null) println("  flags: $flags")
+                println("  ---")
+            }
+
             val isCancelled = dp0?.field("cancelled").safeBoolean() == true ||
                     lessonJson.field("removed").safeBoolean() == true ||
                     lessonJson.field("type").safeString() == "absent" ||
                     lessonJson.field("type").safeString() == ""
 
-            // --- orig fields from dp0.orig (non-null only when a substitution changed something) ---
-            // dp0.orig is the original timetable card; top-level ids are the new/current values.
             val origCard = dp0?.get("orig").safeObj()
 
             val origSubjectId = origCard?.field("subjectid").safeString()
@@ -260,18 +265,12 @@ internal class Timetables(private val session: EdupageSession) {
         return Timetable(lessons)
     }
 
-    /**
-     * Get timetable for the currently logged-in user.
-     */
     suspend fun getMyTimetable(date: LocalDate): Timetable? {
         if (!session.isLoggedIn) throw NotLoggedInException()
         val plan = getDatePlan(date)
         return parseTimetable(plan)
     }
 
-    /**
-     * Get timetable for any teacher, student, class, or classroom.
-     */
     suspend fun getTimetable(target: Any, date: LocalDate): Timetable? {
         if (!session.isLoggedIn) throw NotLoggedInException()
 

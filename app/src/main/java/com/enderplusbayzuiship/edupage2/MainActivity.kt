@@ -2,9 +2,11 @@ package com.enderplusbayzuiship.edupage2
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.DarkModePreference
 import com.enderplusbayzuiship.edupage2.navigation.AppNavGraph
+import com.enderplusbayzuiship.edupage2.notification.DeepLinkHelper
 import com.enderplusbayzuiship.edupage2.ui.settings.SettingsViewModel
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 import com.enderplusbayzuiship.edupage2.util.LocaleHelper
@@ -34,10 +37,16 @@ class MainActivity : ComponentActivity() {
 
     private val settingsViewModel: SettingsViewModel by viewModels()
 
+    private var pendingDeepLink: DeepLinkHelper.DeepLinkInfo? = null
+
+    companion object {
+        private const val TAG = "MainActivity"
+
+        var pendingDeepLinkInfo: DeepLinkHelper.DeepLinkInfo? = null
+    }
+
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-            // Permission granted or denied — the service will check the permission
-            // itself before posting, so no further action is needed here.
         }
 
     override fun attachBaseContext(newBase: Context) {
@@ -50,15 +59,15 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { !composReady }
 
         super.onCreate(savedInstanceState)
+
+        handleDeepLink(intent)
+
         enableEdgeToEdge()
 
-        // Recreate the Activity when theme or language changes.
         lifecycleScope.launch {
             settingsViewModel.recreateActivity.collect { recreate() }
         }
 
-        // Request POST_NOTIFICATIONS at runtime on Android 13+ (API 33+).
-        // We ask once on first launch; the user can always change it in system settings.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     this, Manifest.permission.POST_NOTIFICATIONS
@@ -82,6 +91,23 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 AppNavGraph(navController = navController)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        if (intent == null) return
+
+        val deepLinkInfo = DeepLinkHelper.parseDeepLinkIntent(intent)
+        if (deepLinkInfo != null) {
+            Log.i(TAG, "Deep link received: target=${deepLinkInfo.target}, type=${deepLinkInfo.notificationType}")
+            pendingDeepLink = deepLinkInfo
+            pendingDeepLinkInfo = deepLinkInfo
         }
     }
 }

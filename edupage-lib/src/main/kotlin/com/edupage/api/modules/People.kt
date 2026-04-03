@@ -6,14 +6,13 @@ import com.edupage.api.exceptions.MissingDataException
 import com.edupage.api.model.EduClass
 import com.edupage.api.model.Classroom
 import com.edupage.api.model.Subject
-import com.edupage.api.model.people.*
+import com.edupage.api.model.people.Gender
+import com.edupage.api.model.people.EduStudent
+import com.edupage.api.model.people.EduTeacher
+import com.edupage.api.model.people.EduStudentSkeleton
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-/**
- * Provides people-related lookups (students, teachers).
- * Mirrors Python's People class.
- */
 internal class People(private val session: EdupageSession) {
 
     private val dbi = DbiHelper(session)
@@ -108,9 +107,6 @@ internal class People(private val session: EdupageSession) {
     }
 }
 
-/**
- * Provides class-related lookups.
- */
 internal class Classes(private val session: EdupageSession) {
     private val dbi = DbiHelper(session)
 
@@ -142,9 +138,6 @@ internal class Classes(private val session: EdupageSession) {
     }
 }
 
-/**
- * Provides classroom-related lookups.
- */
 internal class Classrooms(private val session: EdupageSession) {
     private val dbi = DbiHelper(session)
 
@@ -174,9 +167,6 @@ internal class Classrooms(private val session: EdupageSession) {
     }
 }
 
-/**
- * Provides subject-related lookups.
- */
 internal class Subjects(private val session: EdupageSession) {
     private val dbi = DbiHelper(session)
 

@@ -9,10 +9,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/**
- * Helper for fetching lookup data from EduPage's DBI (Data Base Interface) endpoint.
- * Mirrors Python's DbiHelper class.
- */
 internal class DbiHelper(private val session: EdupageSession) {
 
     private var cachedDbi: JsonObject? = null
@@ -20,7 +16,7 @@ internal class DbiHelper(private val session: EdupageSession) {
     private suspend fun fetchDbi(): JsonObject {
         cachedDbi?.let { return it }
         return withContext(Dispatchers.IO) {
-            // Python: self.edupage.data.get("dbi") — top-level key in userhome() JSON
+
             val result = session.data?.getAsJsonObject("dbi")
                 ?: throw IllegalStateException("No 'dbi' key in session data")
             cachedDbi = result
@@ -33,7 +29,13 @@ internal class DbiHelper(private val session: EdupageSession) {
     suspend fun fetchTeacherName(teacherId: Int): String? {
         val dbi = getDbiData()
         val teachers = dbi.getAsJsonObject("teachers") ?: return null
-        val teacher = teachers.getAsJsonObject(teacherId.toString()) ?: return null
+
+        val teacher = teachers.getAsJsonObject(teacherId.toString())
+            ?: teachers.getAsJsonObject((-teacherId).toString())
+            ?: run {
+                System.err.println("DBI: fetchTeacherName($teacherId) miss; keys=${teachers.keySet().take(5)}")
+                return null
+            }
         val firstname = teacher.get("firstname")?.asString ?: ""
         val lastname = teacher.get("lastname")?.asString ?: ""
         return "$firstname $lastname".trim().ifEmpty { null }
@@ -42,7 +44,9 @@ internal class DbiHelper(private val session: EdupageSession) {
     suspend fun fetchStudentName(studentId: Int): String? {
         val dbi = getDbiData()
         val students = dbi.getAsJsonObject("students") ?: return null
-        val student = students.getAsJsonObject(studentId.toString()) ?: return null
+        val student = students.getAsJsonObject(studentId.toString())
+            ?: students.getAsJsonObject((-studentId).toString())
+            ?: return null
         val firstname = student.get("firstname")?.asString ?: ""
         val lastname = student.get("lastname")?.asString ?: ""
         return "$firstname $lastname".trim().ifEmpty { null }
@@ -101,10 +105,6 @@ internal class DbiHelper(private val session: EdupageSession) {
         return dbi.getAsJsonObject("subjects")
     }
 
-    /**
-     * Fetches the full DBI data directly from EduPage's DBI endpoint
-     * (used for [getAllStudents] where we need all students from the school).
-     */
     suspend fun fetchAllStudentsFromServer(schoolYear: Int): List<com.google.gson.JsonObject> {
         return withContext(Dispatchers.IO) {
             val url = "https://${session.subdomain}.edupage.org/rpr/server/maindbi.js?__func=mainDBIAccessor"
