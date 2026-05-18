@@ -28,7 +28,7 @@ internal class Timeline(private val session: EdupageSession) {
         if (!session.isLoggedIn) throw NotLoggedInException()
         return withContext(Dispatchers.IO) {
             val url = "https://${session.subdomain}.edupage.org/timeline/" +
-                    "?module=todo&filterTab=&akcia=getData&filterTab=messages"
+                    "?module=todo&akcia=getData&filterTab=messages"
             val formBody = FormBody.Builder()
                 .add("datefrom", dateFrom.format(dateFmt))
                 .build()

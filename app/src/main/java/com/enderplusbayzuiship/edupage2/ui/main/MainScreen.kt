@@ -11,7 +11,12 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -20,11 +25,14 @@ import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,7 +44,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.enderplusbayzuiship.edupage2.MainActivity
 import com.enderplusbayzuiship.edupage2.R
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,6 +58,7 @@ import com.enderplusbayzuiship.edupage2.ui.messages.MessagesScreen
 import com.enderplusbayzuiship.edupage2.ui.overview.OverviewScreen
 import com.enderplusbayzuiship.edupage2.ui.overview.OverviewViewModel
 import com.enderplusbayzuiship.edupage2.ui.settings.SettingsScreen
+import com.enderplusbayzuiship.edupage2.ui.settings.developer.DeveloperOptionsScreen
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 import com.enderplusbayzuiship.edupage2.ui.timetable.TimetableScreen
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
@@ -82,6 +93,8 @@ fun MainScreen(onLogout: () -> Unit) {
             }
     }
 
+    var deepLinkDetail by remember { mutableStateOf<DeepLinkHelper.DeepLinkInfo?>(null) }
+
     LaunchedEffect(Unit) {
         val deepLinkInfo = MainActivity.pendingDeepLinkInfo
         if (deepLinkInfo != null) {
@@ -95,14 +108,18 @@ fun MainScreen(onLogout: () -> Unit) {
 
             if (targetPage != null) {
                 pagerState.scrollToPage(targetPage)
-
                 MainActivity.pendingDeepLinkInfo = null
+            }
+
+            if (!deepLinkInfo.detailTitle.isNullOrBlank()) {
+                deepLinkDetail = deepLinkInfo
             }
         }
     }
 
     var showAbout    by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showDeveloperOptions by remember { mutableStateOf(false) }
 
     val goToSettings: () -> Unit = { showSettings = true }
 
@@ -111,10 +128,52 @@ fun MainScreen(onLogout: () -> Unit) {
         scope.launch { pagerState.scrollToPage(3) }
     }
 
-    val backEnabled = showAbout || showSettings || pagerState.currentPage != 0
+    val backEnabled = showAbout || showSettings || showDeveloperOptions || pagerState.currentPage != 0
+    deepLinkDetail?.let { detail ->
+        AlertDialog(
+            onDismissRequest = { deepLinkDetail = null },
+            title = {
+                Text(
+                    text = detail.detailTitle.orEmpty(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    detail.notificationType?.let { type ->
+                        Text(
+                            text = when (type) {
+                                DeepLinkHelper.NOTIFICATION_TYPE_GRADE -> "Grade"
+                                DeepLinkHelper.NOTIFICATION_TYPE_MESSAGE -> "Message"
+                                DeepLinkHelper.NOTIFICATION_TYPE_TIMETABLE -> "Timetable Change"
+                                else -> ""
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    detail.detailText?.let { body ->
+                        Text(
+                            text = body,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { deepLinkDetail = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     BackHandler(enabled = backEnabled) {
         when {
             showAbout    -> showAbout = false
+            showDeveloperOptions -> showDeveloperOptions = false
             showSettings -> showSettings = false
             else         -> scope.launch { pagerState.scrollToPage(0) }
         }
@@ -180,6 +239,30 @@ fun MainScreen(onLogout: () -> Unit) {
                         bottomPadding = innerPadding,
                         onLogout = onLogout,
                         onAbout = { showAbout = true },
+                        onDeveloperOptions = { showDeveloperOptions = true }
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+
+            AnimatedContent(
+                targetState = showDeveloperOptions,
+                transitionSpec = {
+                    if (targetState) {
+                        (slideInHorizontally(tween(PUSH_DURATION)) { it } + fadeIn(tween(PUSH_DURATION))) togetherWith
+                                (scaleOut(tween(PUSH_DURATION), targetScale = 0.93f) + fadeOut(tween(PUSH_DURATION)))
+                    } else {
+                        (scaleIn(tween(PUSH_DURATION), initialScale = 0.93f) + fadeIn(tween(PUSH_DURATION))) togetherWith
+                                (slideOutHorizontally(tween(PUSH_DURATION)) { it } + fadeOut(tween(PUSH_DURATION)))
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "developer_options_push"
+            ) { devVisible ->
+                if (devVisible) {
+                    DeveloperOptionsScreen(
+                        onBack = { showDeveloperOptions = false }
                     )
                 } else {
                     Box(Modifier.fillMaxSize())

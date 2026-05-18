@@ -9,6 +9,8 @@ object DeepLinkHelper {
 
     const val EXTRA_DEEP_LINK_TARGET = "deep_link_target"
     const val EXTRA_NOTIFICATION_TYPE = "notification_type"
+    const val EXTRA_NOTIF_DETAIL_TITLE = "notif_detail_title"
+    const val EXTRA_NOTIF_DETAIL_TEXT = "notif_detail_text"
 
     const val TARGET_GRADES = "grades"
     const val TARGET_MESSAGES = "messages"
@@ -19,56 +21,40 @@ object DeepLinkHelper {
     const val NOTIFICATION_TYPE_MESSAGE = "message"
     const val NOTIFICATION_TYPE_TIMETABLE = "timetable"
 
-    fun createGradesIntent(context: Context): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_DEEP_LINK_TARGET, TARGET_GRADES)
-            putExtra(EXTRA_NOTIFICATION_TYPE, NOTIFICATION_TYPE_GRADE)
-        }
-        return PendingIntent.getActivity(
-            context,
-            generateRequestCode(NOTIFICATION_TYPE_GRADE),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+    fun createGradesIntent(context: Context, detailTitle: String? = null, detailText: String? = null): PendingIntent {
+        return buildPendingIntent(context, TARGET_GRADES, NOTIFICATION_TYPE_GRADE, generateRequestCode(NOTIFICATION_TYPE_GRADE), detailTitle, detailText)
     }
 
-    fun createMessagesIntent(context: Context): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_DEEP_LINK_TARGET, TARGET_MESSAGES)
-            putExtra(EXTRA_NOTIFICATION_TYPE, NOTIFICATION_TYPE_MESSAGE)
-        }
-        return PendingIntent.getActivity(
-            context,
-            generateRequestCode(NOTIFICATION_TYPE_MESSAGE),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+    fun createMessagesIntent(context: Context, detailTitle: String? = null, detailText: String? = null): PendingIntent {
+        return buildPendingIntent(context, TARGET_MESSAGES, NOTIFICATION_TYPE_MESSAGE, generateRequestCode(NOTIFICATION_TYPE_MESSAGE), detailTitle, detailText)
     }
 
-    fun createTimetableIntent(context: Context): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_DEEP_LINK_TARGET, TARGET_TIMETABLE)
-            putExtra(EXTRA_NOTIFICATION_TYPE, NOTIFICATION_TYPE_TIMETABLE)
-        }
-        return PendingIntent.getActivity(
-            context,
-            generateRequestCode(NOTIFICATION_TYPE_TIMETABLE),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+    fun createTimetableIntent(context: Context, detailTitle: String? = null, detailText: String? = null): PendingIntent {
+        return buildPendingIntent(context, TARGET_TIMETABLE, NOTIFICATION_TYPE_TIMETABLE, generateRequestCode(NOTIFICATION_TYPE_TIMETABLE), detailTitle, detailText)
     }
 
     fun createOverviewIntent(context: Context): PendingIntent {
+        return buildPendingIntent(context, TARGET_OVERVIEW, null, generateRequestCode("overview"), null, null)
+    }
+
+    private fun buildPendingIntent(
+        context: Context,
+        target: String,
+        notificationType: String?,
+        requestCode: Int,
+        detailTitle: String?,
+        detailText: String?
+    ): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_DEEP_LINK_TARGET, TARGET_OVERVIEW)
+            putExtra(EXTRA_DEEP_LINK_TARGET, target)
+            if (notificationType != null) putExtra(EXTRA_NOTIFICATION_TYPE, notificationType)
+            if (detailTitle != null) putExtra(EXTRA_NOTIF_DETAIL_TITLE, detailTitle)
+            if (detailText != null) putExtra(EXTRA_NOTIF_DETAIL_TEXT, detailText)
         }
         return PendingIntent.getActivity(
             context,
-            generateRequestCode("overview"),
+            requestCode,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -77,10 +63,14 @@ object DeepLinkHelper {
     fun parseDeepLinkIntent(intent: Intent): DeepLinkInfo? {
         val target = intent.getStringExtra(EXTRA_DEEP_LINK_TARGET) ?: return null
         val notificationType = intent.getStringExtra(EXTRA_NOTIFICATION_TYPE)
+        val detailTitle = intent.getStringExtra(EXTRA_NOTIF_DETAIL_TITLE)
+        val detailText = intent.getStringExtra(EXTRA_NOTIF_DETAIL_TEXT)
 
         return DeepLinkInfo(
             target = target,
-            notificationType = notificationType
+            notificationType = notificationType,
+            detailTitle = detailTitle,
+            detailText = detailText
         )
     }
 
@@ -96,6 +86,8 @@ object DeepLinkHelper {
 
     data class DeepLinkInfo(
         val target: String,
-        val notificationType: String?
+        val notificationType: String?,
+        val detailTitle: String? = null,
+        val detailText: String? = null
     )
 }

@@ -2,7 +2,6 @@ package com.edupage.api
 
 import com.google.gson.JsonObject
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
 class EdupageSession(timeoutSeconds: Long = 15L) {

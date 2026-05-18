@@ -11,6 +11,7 @@ import com.edupage.api.model.grades.Term
 import com.edupage.api.model.timetable.Lesson
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.GradesCache
+import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -61,6 +62,7 @@ class OverviewViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val edupage: Edupage,
     private val gradesCache: GradesCache,
+    private val timetableCache: TimetableCache,
     private val timelineCache: TimelineCache,
     private val prefs: AppPreferences,
 ) : ViewModel() {
@@ -109,8 +111,26 @@ class OverviewViewModel @Inject constructor(
         _timetableState.value = TimetableOverviewState.Loading
         try {
             val today = LocalDate.now()
+            val cached = timetableCache.loadWithStale(today)
+            val cachedLessons = cached?.first.orEmpty()
+            if (cachedLessons.isNotEmpty()) {
+                val lastEnd = cachedLessons.mapNotNull { it.endTime }.maxOrNull()
+                val todayDone = lastEnd != null && LocalTime.now() > lastEnd
+                val showEmpty = cachedLessons.isEmpty()
+
+                if (!todayDone && !showEmpty) {
+                    _timetableState.value = TimetableOverviewState.Success(
+                        date = today,
+                        lessons = cachedLessons,
+                        isNextDay = false,
+                    )
+                    if (cached?.second == false) return
+                }
+            }
+
             val timetable = edupage.getMyTimetable(today)
             val lessons = timetable?.lessons ?: emptyList()
+            timetableCache.save(today, lessons)
 
             val lastEnd = lessons.mapNotNull { it.endTime }.maxOrNull()
             val todayDone = lastEnd != null && LocalTime.now() > lastEnd
@@ -135,7 +155,10 @@ class OverviewViewModel @Inject constructor(
             Log.i(TAG, "timetable loaded: ${(_timetableState.value as? TimetableOverviewState.Success)?.lessons?.size} lessons")
         } catch (e: Exception) {
             Log.e(TAG, "timetable load failed: ${e.message}", e)
-            _timetableState.value = TimetableOverviewState.Error
+            val current = _timetableState.value
+            if (current !is TimetableOverviewState.Success) {
+                _timetableState.value = TimetableOverviewState.Error
+            }
         }
     }
 

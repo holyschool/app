@@ -79,8 +79,12 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             composReady = true
-            val darkModePref by settingsViewModel.darkMode.collectAsState()
-            val useAmoled    by settingsViewModel.useAmoled.collectAsState()
+            val darkModePref by appPreferences.darkModeFlow.collectAsState(
+                initial = appPreferences.darkMode
+            )
+            val useAmoled    by appPreferences.useAmoledFlow.collectAsState(
+                initial = appPreferences.useAmoled
+            )
             val systemDark = isSystemInDarkTheme()
             val darkTheme = when (darkModePref) {
                 DarkModePreference.DARK   -> true

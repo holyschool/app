@@ -9,7 +9,6 @@ import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.DarkModePreference
-import com.enderplusbayzuiship.edupage2.data.NotificationUpdateInterval
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import com.enderplusbayzuiship.edupage2.notification.NotificationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalTime
 import javax.inject.Inject
 
 @HiltViewModel
@@ -44,20 +42,14 @@ class SettingsViewModel @Inject constructor(
     private val _notificationsEnabled = MutableStateFlow(appPreferences.notificationsEnabled)
     val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
 
-    private val _notifShowBreaks = MutableStateFlow(appPreferences.notifShowBreaks)
-    val notifShowBreaks: StateFlow<Boolean> = _notifShowBreaks.asStateFlow()
-
-    private val _notifUpdateInterval = MutableStateFlow(appPreferences.notifUpdateInterval)
-    val notifUpdateInterval: StateFlow<NotificationUpdateInterval> = _notifUpdateInterval.asStateFlow()
-
-    private val _notifEarlyStartMinutes = MutableStateFlow(appPreferences.notifEarlyStartMinutes)
-    val notifEarlyStartMinutes: StateFlow<Int> = _notifEarlyStartMinutes.asStateFlow()
-
     private val _notifGradesEnabled = MutableStateFlow(appPreferences.notifGradesEnabled)
     val notifGradesEnabled: StateFlow<Boolean> = _notifGradesEnabled.asStateFlow()
 
     private val _notifMessagesEnabled = MutableStateFlow(appPreferences.notifMessagesEnabled)
     val notifMessagesEnabled: StateFlow<Boolean> = _notifMessagesEnabled.asStateFlow()
+
+    private val _notifSubstitutionsEnabled = MutableStateFlow(appPreferences.notifSubstitutionsEnabled)
+    val notifSubstitutionsEnabled: StateFlow<Boolean> = _notifSubstitutionsEnabled.asStateFlow()
 
     private val _notifCheckIntervalMinutes = MutableStateFlow(appPreferences.notifCheckIntervalMinutes)
     val notifCheckIntervalMinutes: StateFlow<Int> = _notifCheckIntervalMinutes.asStateFlow()
@@ -89,43 +81,48 @@ class SettingsViewModel @Inject constructor(
         _cancelledLessonStyle.value = value
     }
 
-    fun setNotifShowBreaks(value: Boolean) {
-        appPreferences.notifShowBreaks = value
-        _notifShowBreaks.value = value
-    }
-
-    fun setNotifUpdateInterval(value: NotificationUpdateInterval) {
-        appPreferences.notifUpdateInterval = value
-        _notifUpdateInterval.value = value
-    }
-
-    fun setNotifEarlyStartMinutes(value: Int) {
-        appPreferences.notifEarlyStartMinutes = value
-        _notifEarlyStartMinutes.value = value
-    }
-
     fun setNotifGradesEnabled(value: Boolean) {
         appPreferences.notifGradesEnabled = value
         _notifGradesEnabled.value = value
-        updateGradeMessageWorker(value, _notifMessagesEnabled.value)
+        updateWorker()
     }
 
     fun setNotifMessagesEnabled(value: Boolean) {
         appPreferences.notifMessagesEnabled = value
         _notifMessagesEnabled.value = value
-        updateGradeMessageWorker(_notifGradesEnabled.value, value)
+        updateWorker()
+    }
+
+    fun setNotifSubstitutionsEnabled(value: Boolean) {
+        appPreferences.notifSubstitutionsEnabled = value
+        _notifSubstitutionsEnabled.value = value
+        updateWorker()
     }
 
     fun setNotifCheckIntervalMinutes(value: Int) {
         appPreferences.notifCheckIntervalMinutes = value
         _notifCheckIntervalMinutes.value = value
-        if (_notifGradesEnabled.value || _notifMessagesEnabled.value) {
-            notificationScheduler.scheduleGradeMessageCheck()
+        appPreferences.lastNotificationFetchTimestamp = 0L
+        updateWorker()
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        appPreferences.notificationsEnabled = enabled
+        _notificationsEnabled.value = enabled
+        updateWorker()
+        if (!enabled) {
+            appPreferences.lastNotificationFetchTimestamp = 0L
+            appPreferences.lastTimelineId = -1
         }
     }
 
-    private fun updateGradeMessageWorker(gradesOn: Boolean, messagesOn: Boolean) {
-        if (gradesOn || messagesOn) {
+    private fun updateWorker() {
+        val enabled = appPreferences.notificationsEnabled
+        val anyTypeEnabled = appPreferences.notifGradesEnabled || 
+                           appPreferences.notifMessagesEnabled || 
+                           appPreferences.notifSubstitutionsEnabled
+        
+        if (enabled && anyTypeEnabled) {
             notificationScheduler.scheduleGradeMessageCheck()
         } else {
             notificationScheduler.cancelGradeMessageCheck()
@@ -151,47 +148,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { _recreateActivity.emit(Unit) }
     }
 
-    fun setNotificationsEnabled(enabled: Boolean) {
-        appPreferences.notificationsEnabled = enabled
-        _notificationsEnabled.value = enabled
-
-        if (enabled) {
-            notificationScheduler.scheduleNightlyFetch()
-
-            val cachedLessons = timetableCache.load()
-            val firstLesson = cachedLessons
-                ?.filter { !it.isCancelled }
-                ?.minByOrNull { it.startTime }
-
-            if (firstLesson != null) {
-                val earlyMinutes = appPreferences.notifEarlyStartMinutes.toLong()
-                val serviceStartTime = firstLesson.startTime.minusMinutes(earlyMinutes)
-                val now = LocalTime.now()
-                if (now.isBefore(serviceStartTime)) {
-                    val delaySeconds = notificationScheduler.secondsUntil(serviceStartTime)
-                    notificationScheduler.scheduleServiceStartIn(delaySeconds)
-                } else {
-                    notificationScheduler.startNotificationService()
-                }
-            } else {
-                val now = LocalTime.now()
-                if (now.isAfter(LocalTime.of(6, 0)) && now.isBefore(LocalTime.of(22, 0))) {
-                    notificationScheduler.startNotificationService()
-                }
-            }
-        } else {
-            notificationScheduler.cancelNightlyFetch()
-            notificationScheduler.cancelScheduledServiceStart()
-            notificationScheduler.stopNotificationService()
-        }
-    }
-
     fun logout() {
-        if (appPreferences.notificationsEnabled) {
-            notificationScheduler.cancelNightlyFetch()
-            notificationScheduler.cancelScheduledServiceStart()
-            notificationScheduler.stopNotificationService()
-        }
+        notificationScheduler.cancelGradeMessageCheck()
         viewModelScope.launch {
             timetableCache.clear()
         }

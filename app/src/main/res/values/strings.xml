@@ -157,21 +157,49 @@
     <string name="settings_language_czech">Czech</string>
     <string name="settings_language_slovak">Slovak</string>
 
+    <!-- Settings – Appearance -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_dark_mode">Dark mode</string>
+    <string name="settings_dark_mode_system">System</string>
+    <string name="settings_dark_mode_light">Light</string>
+    <string name="settings_dark_mode_dark">Dark</string>
+    <string name="settings_amoled">AMOLED black</string>
+    <string name="settings_amoled_desc">Use pure black backgrounds in dark mode to save power on OLED screens.</string>
+
     <!-- Settings – Notifications -->
     <string name="settings_section_notifications">Notifications</string>
-    <string name="settings_notif_label">Live class notifications</string>
-    <string name="settings_notif_desc_on">Showing a notification with time remaining during the school day.</string>
-    <string name="settings_notif_desc_off">A persistent notification will show the current class and time remaining.</string>
-    <string name="settings_notif_show_breaks">Show break countdowns</string>
-    <string name="settings_notif_show_breaks_desc">Display \"Break ends in Xm\" between classes.</string>
-    <string name="settings_notif_update_interval">Update every</string>
-    <string name="settings_notif_interval_30s">30 sec</string>
-    <string name="settings_notif_interval_1m">1 min</string>
-    <string name="settings_notif_interval_2m">2 min</string>
-    <string name="settings_notif_early_start">Start notification before first class</string>
-    <string name="settings_notif_early_start_on_start">On start</string>
-    <string name="settings_notif_early_start_xm">%dm</string>
-    <string name="settings_notif_early_start_desc">How early to show the notification before the first class begins.</string>
+    <string name="settings_notif_label">Notifications</string>
+    <string name="settings_notif_desc_on">Manage background checks and alerts.</string>
+    <string name="settings_notif_desc_off">Notifications are currently disabled.</string>
+    <string name="settings_notif_check_interval">Check interval</string>
+    <string name="settings_notif_interval_10m">10 min</string>
+    <string name="settings_notif_interval_15m">15 min</string>
+    <string name="settings_notif_interval_30m">30 min</string>
+    <string name="settings_notif_interval_1h">1 h</string>
+    <string name="settings_notif_interval_2h">2 h</string>
+
+    <!-- Settings – Grades, Messages &amp; Substitutions -->
+    <string name="settings_section_notif_types">Notification Types</string>
+    <string name="settings_notif_grades">New grades</string>
+    <string name="settings_notif_grades_desc">Get notified when a new grade is posted.</string>
+    <string name="settings_notif_messages">New messages</string>
+    <string name="settings_notif_messages_desc">Get notified when you receive a message.</string>
+    <string name="settings_notif_substitutions">Timetable changes</string>
+    <string name="settings_notif_substitutions_desc">Get notified about substitutions and cancellations.</string>
+
+    <!-- Settings – Developer -->
+    <string name="settings_section_developer">Developer</string>
+    <string name="settings_developer_options">Developer options</string>
+
+    <!-- Developer Options Screen -->
+    <string name="dev_options_title">Developer Options</string>
+    <string name="dev_test_notif_grade">Test Grade Notif</string>
+    <string name="dev_test_notif_message">Test Message Notif</string>
+    <string name="dev_trigger_worker">Trigger Check Worker</string>
+    <string name="dev_reset_watermarks">Reset Watermarks</string>
+    <string name="dev_debug_info">Debug Info</string>
+    <string name="dev_last_fetch">Last fetch: %s</string>
+    <string name="dev_last_timeline_id">Last timeline ID: %d</string>
 
     <!-- Splash Screen -->
     <string name="splash_signing_in">Signing you in\u2026</string>
@@ -182,14 +210,6 @@
     <string name="timetable_time_left_minutes">%dm</string>
     <string name="timetable_time_left_hours">%dh</string>
     <string name="timetable_time_left_hours_minutes">%dh %dm</string>
-
-    <!-- Notification Channel -->
-    <string name="notif_channel_name">Live timetable</string>
-    <string name="notif_channel_description">Shows the current class and time remaining during the school day</string>
-    <string name="notif_channel_grades_name">New grades</string>
-    <string name="notif_channel_grades_desc">Notifies you when a new grade is posted</string>
-    <string name="notif_channel_messages_name">New messages</string>
-    <string name="notif_channel_messages_desc">Notifies you when you receive a new message</string>
 
     <!-- Notification Service Content -->
     <string name="notif_loading">Timetable loading\u2026</string>
@@ -213,27 +233,6 @@
     <string name="settings_cancelled_lesson_style_desc_red">Cancelled lessons are highlighted in red.</string>
     <string name="settings_cancelled_lesson_style_desc_grey">Cancelled lessons are shown greyed out.</string>
 
-    <!-- Settings – Appearance -->
-    <string name="settings_section_appearance">Appearance</string>
-    <string name="settings_dark_mode">Dark mode</string>
-    <string name="settings_dark_mode_system">System</string>
-    <string name="settings_dark_mode_light">Light</string>
-    <string name="settings_dark_mode_dark">Dark</string>
-    <string name="settings_amoled">AMOLED black</string>
-    <string name="settings_amoled_desc">Use pure black backgrounds in dark mode to save power on OLED screens.</string>
-
-    <!-- Settings – Grades &amp; Messages Notifications -->
-    <string name="settings_section_notif_grades_messages">Grades &amp; Messages</string>
-    <string name="settings_notif_grades">New grade notifications</string>
-    <string name="settings_notif_grades_desc">Get notified when a new grade is posted.</string>
-    <string name="settings_notif_messages">New message notifications</string>
-    <string name="settings_notif_messages_desc">Get notified when you receive a message.</string>
-    <string name="settings_notif_check_interval">Check interval</string>
-    <string name="settings_notif_interval_15m">15 min</string>
-    <string name="settings_notif_interval_30m">30 min</string>
-    <string name="settings_notif_interval_1h">1 h</string>
-    <string name="settings_notif_interval_2h">2 h</string>
-
     <!-- Grade notifications -->
     <string name="notif_grade_title">New Grade</string>
     <string name="notif_grade_single">You got a %1$s in %2$s</string>
@@ -245,6 +244,19 @@
     <string name="notif_message_multiple">%1$d new messages</string>
     <string name="notif_message_no_preview">Tap to read</string>
     <string name="notif_message_unknown_sender">Unknown</string>
+
+    <!-- Substitution notifications -->
+    <string name="notif_substitution_title">Timetable Change</string>
+    <string name="notif_substitution_new">New substitution or cancellation</string>
+    <string name="notif_substitution_multiple">%1$d new timetable changes</string>
+
+    <!-- Notification Channels -->
+    <string name="notif_channel_grades_name">New grades</string>
+    <string name="notif_channel_grades_desc">Notifies you when a new grade is posted</string>
+    <string name="notif_channel_messages_name">New messages</string>
+    <string name="notif_channel_messages_desc">Notifies you when you receive a new message</string>
+    <string name="notif_channel_substitutions_name">Timetable changes</string>
+    <string name="notif_channel_substitutions_desc">Notifies you about substitutions and cancellations</string>
 
     <!-- About Screen -->
     <string name="settings_section_about">About</string>

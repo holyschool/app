@@ -7,9 +7,8 @@ import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
-import com.enderplusbayzuiship.edupage2.notification.TimetableNotificationService
+import com.enderplusbayzuiship.edupage2.notification.GradeMessageCheckWorker
 import com.enderplusbayzuiship.edupage2.util.LocaleHelper
-import com.enderplusbayzuiship.edupage2.R
 import dagger.hilt.android.HiltAndroidApp
 import java.io.IOException
 import javax.inject.Inject
@@ -23,20 +22,20 @@ class EdupageApp : Application(), Configuration.Provider {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            .build()
-
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(LocaleHelper.wrap(base))
     }
 
     override fun onCreate() {
         super.onCreate()
+        createNotificationChannels()
         installNetworkExceptionHandler()
-        createNotificationChannel()
     }
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 
     private fun installNetworkExceptionHandler() {
         val default = Thread.getDefaultUncaughtExceptionHandler()
@@ -49,35 +48,36 @@ class EdupageApp : Application(), Configuration.Provider {
         }
     }
 
-    private fun createNotificationChannel() {
+    private fun createNotificationChannels() {
         val manager = getSystemService(NotificationManager::class.java)
 
-        val timetableChannel = NotificationChannel(
-            TimetableNotificationService.CHANNEL_ID,
-            getString(R.string.notif_channel_name),
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = getString(R.string.notif_channel_description)
-            setShowBadge(false)
-        }
-
+        // Grades
         val gradesChannel = NotificationChannel(
-            "grades_new",
+            GradeMessageCheckWorker.CHANNEL_GRADES,
             getString(R.string.notif_channel_grades_name),
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = getString(R.string.notif_channel_grades_desc)
         }
 
+        // Messages
         val messagesChannel = NotificationChannel(
-            "messages_new",
+            GradeMessageCheckWorker.CHANNEL_MESSAGES,
             getString(R.string.notif_channel_messages_name),
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = getString(R.string.notif_channel_messages_desc)
         }
 
-        manager.createNotificationChannels(listOf(timetableChannel, gradesChannel, messagesChannel))
-        Log.i(TAG, "notification channels created")
+        // Substitutions
+        val subsChannel = NotificationChannel(
+            GradeMessageCheckWorker.CHANNEL_SUBSTITUTIONS,
+            getString(R.string.notif_channel_substitutions_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = getString(R.string.notif_channel_substitutions_desc)
+        }
+
+        manager.createNotificationChannels(listOf(gradesChannel, messagesChannel, subsChannel))
     }
 }

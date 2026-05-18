@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -81,6 +82,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -406,6 +412,11 @@ private fun FilterRow(
     }
 }
 
+private sealed interface MessageListItem {
+    data class Event(val event: TimelineEvent, val isUnread: Boolean) : MessageListItem
+    data object NewDivider : MessageListItem
+}
+
 @Composable
 private fun MessagesList(
     state: MessagesUiState.Success,
@@ -432,6 +443,19 @@ private fun MessagesList(
             }
     }
 
+    val listItems = remember(state.items, state.seenIds) {
+        val seenIds = state.seenIds
+        val firstReadIdx = state.items.indexOfFirst { it.timelineId in seenIds }
+        val items = mutableListOf<MessageListItem>()
+        state.items.forEachIndexed { index, event ->
+            if (firstReadIdx > 0 && index == firstReadIdx) {
+                items.add(MessageListItem.NewDivider)
+            }
+            items.add(MessageListItem.Event(event, event.timelineId !in seenIds))
+        }
+        items.toList()
+    }
+
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(
@@ -441,9 +465,18 @@ private fun MessagesList(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(state.items, key = { it.timelineId }) { event ->
-            val isUnread = event.timelineId !in state.seenIds
-            MessageItem(event = event, isUnread = isUnread, onClick = { onItemClick(event) })
+        items(listItems, key = { when (it) {
+            is MessageListItem.Event -> "evt_${it.event.timelineId}"
+            is MessageListItem.NewDivider -> "new_divider"
+        } }) { item ->
+            when (item) {
+                is MessageListItem.Event -> MessageItem(
+                    event = item.event,
+                    isUnread = item.isUnread,
+                    onClick = { onItemClick(item.event) }
+                )
+                is MessageListItem.NewDivider -> NewMessagesDivider()
+            }
         }
 
         if (state.isLoadingMore) {
@@ -474,6 +507,9 @@ private fun MessageItem(event: TimelineEvent, isUnread: Boolean, onClick: () -> 
     }
 
     val displayText = event.text?.unescapeHtml()
+    val title = displayText?.takeIf { it.isNotBlank() }
+        ?: event.title?.unescapeHtml()?.takeIf { it.isNotBlank() }
+        ?: typeLabel
 
     ElevatedCard(
         modifier = Modifier
@@ -510,35 +546,24 @@ private fun MessageItem(event: TimelineEvent, isUnread: Boolean, onClick: () -> 
 
             Column(modifier = Modifier.weight(1f)) {
 
-                val title = displayText?.takeIf { it.isNotBlank() }
-                if (title != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (isUnread) {
-                            Spacer(Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                            )
-                        }
-                    }
-                } else if (isUnread) {
-
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (isUnread) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(3.dp))
@@ -569,6 +594,80 @@ private fun MessageItem(event: TimelineEvent, isUnread: Boolean, onClick: () -> 
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun NewMessagesDivider() {
+    val primary = MaterialTheme.colorScheme.primary
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(primary),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "New",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = primary,
+            )
+        }
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(16.dp),
+        ) {
+            val w = size.width
+            val h = size.height
+            val segments = 8
+            val segW = w / segments
+
+            val path = Path().apply {
+                moveTo(0f, h / 2f)
+                for (i in 0 until segments) {
+                    val x0 = i * segW
+                    val x2 = (i + 1) * segW
+                    val cp1x = x0 + segW * 0.25f
+                    val cp2x = x0 + segW * 0.75f
+                    val y = h / 2f + if (i % 2 == 0) -h * 0.4f else h * 0.4f
+                    cubicTo(cp1x, h / 2f, cp2x, y, x2, h / 2f)
+                }
+            }
+
+            drawPath(
+                path = path,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        primary.copy(alpha = 0.15f),
+                        primary.copy(alpha = 0.6f),
+                        primary.copy(alpha = 0.15f),
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(w, 0f),
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 2.5f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
+            )
         }
     }
 }
@@ -676,10 +775,12 @@ private fun DetailSheetContent(
             Spacer(Modifier.height(10.dp))
         }
 
-        if (!displayText.isNullOrBlank()) {
+        val body = displayText?.takeIf { it.isNotBlank() }
+            ?: event.title?.unescapeHtml()?.takeIf { it.isNotBlank() }
+        if (body != null) {
             Spacer(Modifier.height(6.dp))
             Text(
-                text = displayText,
+                text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )

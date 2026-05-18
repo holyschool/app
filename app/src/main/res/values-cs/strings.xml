@@ -157,22 +157,6 @@
     <string name="settings_language_czech">Čeština</string>
     <string name="settings_language_slovak">Slovenčina</string>
 
-    <!-- Settings – Notifications -->
-    <string name="settings_section_notifications">Oznámení</string>
-    <string name="settings_notif_label">Živá oznámení o hodinách</string>
-    <string name="settings_notif_desc_on">Zobrazuje oznámení se zbývajícím časem během školního dne.</string>
-    <string name="settings_notif_desc_off">Trvalé oznámení bude zobrazovat aktuální hodinu a zbývající čas.</string>
-    <string name="settings_notif_show_breaks">Zobrazit odpočítávání přestávek</string>
-    <string name="settings_notif_show_breaks_desc">Zobrazit \"Přestávka končí za Xm\" mezi hodinami.</string>
-    <string name="settings_notif_update_interval">Aktualizovat každých</string>
-    <string name="settings_notif_interval_30s">30 s</string>
-    <string name="settings_notif_interval_1m">1 min</string>
-    <string name="settings_notif_interval_2m">2 min</string>
-    <string name="settings_notif_early_start">Spustit oznámení před první hodinou</string>
-    <string name="settings_notif_early_start_on_start">Při spuštění</string>
-    <string name="settings_notif_early_start_xm">%d min</string>
-    <string name="settings_notif_early_start_desc">Jak brzy zobrazit oznámení před začátkem první hodiny.</string>
-
     <!-- Splash Screen -->
     <string name="splash_signing_in">Přihlašuji vás\u2026</string>
 
@@ -182,24 +166,6 @@
     <string name="timetable_time_left_minutes">%d min</string>
     <string name="timetable_time_left_hours">%d hod</string>
     <string name="timetable_time_left_hours_minutes">%d hod %d min</string>
-
-    <!-- Notification Channel -->
-    <string name="notif_channel_name">Živý rozvrh</string>
-    <string name="notif_channel_description">Zobrazuje aktuální hodinu a zbývající čas během školního dne</string>
-    <string name="notif_channel_grades_name">Nové známky</string>
-    <string name="notif_channel_grades_desc">Upozorní vás, když je přidána nová známka</string>
-    <string name="notif_channel_messages_name">Nové zprávy</string>
-    <string name="notif_channel_messages_desc">Upozorní vás, když obdržíte novou zprávu</string>
-
-    <!-- Notification Service Content -->
-    <string name="notif_loading">Načítání rozvrhu\u2026</string>
-    <string name="notif_subject_fallback">Hodina</string>
-    <string name="notif_class_ends_in">%1$s končí za %2$d min</string>
-    <string name="notif_next">Dále: %s</string>
-    <string name="notif_break_ends_in">Přestávka končí za %d min</string>
-    <string name="notif_starts_in">%1$s začíná za %2$d min</string>
-    <string name="notif_subject_in">%1$s za %2$d min</string>
-    <string name="notif_day_ended">Školní den skončil</string>
 
     <!-- Timetable Error -->
     <string name="timetable_error_failed_to_load">Nepodařilo se načíst rozvrh</string>
@@ -221,30 +187,6 @@
     <string name="settings_dark_mode_dark">Tmavý</string>
     <string name="settings_amoled">AMOLED černá</string>
     <string name="settings_amoled_desc">Používat čistě černé pozadí v tmavém režimu pro úsporu energie na OLED displejích.</string>
-
-    <!-- Settings – Grades &amp; Messages Notifications -->
-    <string name="settings_section_notif_grades_messages">Známky a zprávy</string>
-    <string name="settings_notif_grades">Oznámení o nových známkách</string>
-    <string name="settings_notif_grades_desc">Dostávat oznámení, když je přidána nová známka.</string>
-    <string name="settings_notif_messages">Oznámení o nových zprávách</string>
-    <string name="settings_notif_messages_desc">Dostávat oznámení, když obdržíte zprávu.</string>
-    <string name="settings_notif_check_interval">Interval kontroly</string>
-    <string name="settings_notif_interval_15m">15 min</string>
-    <string name="settings_notif_interval_30m">30 min</string>
-    <string name="settings_notif_interval_1h">1 hod</string>
-    <string name="settings_notif_interval_2h">2 hod</string>
-
-    <!-- Grade notifications -->
-    <string name="notif_grade_title">Nová známka</string>
-    <string name="notif_grade_single">Dostali jste %1$s z %2$s</string>
-    <string name="notif_grade_multiple">%1$d nových známek</string>
-
-    <!-- Message notifications -->
-    <string name="notif_message_title">Zpráva od %1$s</string>
-    <string name="notif_message_title_multiple">Nové zprávy</string>
-    <string name="notif_message_multiple">%1$d nových zpráv</string>
-    <string name="notif_message_no_preview">Klepnutím přečtete</string>
-    <string name="notif_message_unknown_sender">Neznámý</string>
 
     <!-- About Screen -->
     <string name="settings_section_about">O aplikaci</string>

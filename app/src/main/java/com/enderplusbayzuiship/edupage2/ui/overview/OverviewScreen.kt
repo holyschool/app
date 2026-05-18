@@ -104,6 +104,10 @@ fun OverviewScreen(
     val haptics        = rememberAppHaptics()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
+    val isInitialLoading = timetableState is TimetableOverviewState.Loading &&
+        gradesState is GradesOverviewState.Loading &&
+        messagesState is MessagesOverviewState.Loading
+
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -133,41 +137,48 @@ fun OverviewScreen(
             )
         },
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-
-            TimetableCard(
-                state = timetableState,
-                currentTime = currentTime,
-                onGoToTimetable = onGoToTimetable,
-                haptics = haptics,
+        if (isInitialLoading) {
+            OverviewSkeleton(
+                bottomPadding = bottomPadding,
+                modifier = Modifier.padding(paddingValues),
             )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
 
-            GradesCard(
-                state = gradesState,
-                onGoToGrades = onGoToGrades,
-                haptics = haptics,
-            )
+                TimetableCard(
+                    state = timetableState,
+                    currentTime = currentTime,
+                    onGoToTimetable = onGoToTimetable,
+                    haptics = haptics,
+                )
 
-            MessagesCard(
-                state = messagesState,
-                onGoToMessages = onGoToMessages,
-                haptics = haptics,
-            )
+                GradesCard(
+                    state = gradesState,
+                    onGoToGrades = onGoToGrades,
+                    haptics = haptics,
+                )
 
-            QuickActionsCard(
-                onCompose   = onGoToMessages,
-                onTimetable = onGoToTimetable,
-                onGrades    = onGoToGrades,
-                haptics     = haptics,
-            )
+                MessagesCard(
+                    state = messagesState,
+                    onGoToMessages = onGoToMessages,
+                    haptics = haptics,
+                )
+
+                QuickActionsCard(
+                    onCompose   = onGoToMessages,
+                    onTimetable = onGoToTimetable,
+                    onGrades    = onGoToGrades,
+                    haptics     = haptics,
+                )
+            }
         }
     }
 }
@@ -204,7 +215,9 @@ private fun TimetableCardLoading() {
             title = stringResource(R.string.overview_today_schedule),
             icon  = Icons.Default.DateRange,
         )
-        repeat(3) { ShimmerRow() }
+        Spacer(Modifier.height(2.dp))
+        CurrentLessonBannerSkeleton()
+        repeat(3) { CompactLessonRowSkeleton() }
     }
 }
 
@@ -577,7 +590,7 @@ private fun GradesCard(
             Spacer(Modifier.height(10.dp))
 
             when (state) {
-                is GradesOverviewState.Loading -> repeat(3) { ShimmerRow() }
+                is GradesOverviewState.Loading -> repeat(3) { GradeRowSkeleton() }
                 is GradesOverviewState.Unavailable -> {
                     Text(
                         text  = stringResource(R.string.overview_no_grades),
@@ -782,7 +795,7 @@ private fun MessagesCard(
             Spacer(Modifier.height(10.dp))
 
             when (state) {
-                is MessagesOverviewState.Loading -> repeat(3) { ShimmerRow() }
+                is MessagesOverviewState.Loading -> repeat(3) { MessageRowSkeleton() }
                 is MessagesOverviewState.Unavailable -> {
                     Text(
                         text  = stringResource(R.string.overview_no_messages),
@@ -1020,43 +1033,6 @@ private fun CardSectionHeader(title: String, icon: ImageVector) {
             fontWeight = FontWeight.Bold,
             color      = MaterialTheme.colorScheme.onSurface,
         )
-    }
-}
-
-@Composable
-private fun ShimmerRow() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Surface(
-            modifier = Modifier.size(width = 28.dp, height = 14.dp),
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-        ) {}
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(0.55f).height(12.dp),
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-            ) {}
-            Surface(
-                modifier = Modifier.fillMaxWidth(0.35f).height(10.dp),
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-            ) {}
-        }
-        Surface(
-            modifier = Modifier.size(width = 42.dp, height = 12.dp),
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-        ) {}
     }
 }
 

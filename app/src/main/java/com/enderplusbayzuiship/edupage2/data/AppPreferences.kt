@@ -1,6 +1,10 @@
 package com.enderplusbayzuiship.edupage2.data
 
 import android.content.Context
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -12,17 +16,6 @@ enum class BreakVisibility(val key: String) {
 
     companion object {
         val DEFAULT = ALL
-        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
-    }
-}
-
-enum class NotificationUpdateInterval(val key: String, val seconds: Long) {
-    THIRTY_SECONDS("30s", 30L),
-    ONE_MINUTE("1m", 60L),
-    TWO_MINUTES("2m", 120L);
-
-    companion object {
-        val DEFAULT = ONE_MINUTE
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
 }
@@ -73,9 +66,6 @@ class AppPreferences @Inject constructor(
         const val LONG_BREAK_THRESHOLD_MINUTES = 30L
 
         private const val KEY_NOTIFICATIONS_ENABLED  = "notifications_enabled"
-        private const val KEY_NOTIF_SHOW_BREAKS       = "notif_show_breaks"
-        private const val KEY_NOTIF_UPDATE_INTERVAL   = "notif_update_interval"
-        private const val KEY_NOTIF_EARLY_START_MINS  = "notif_early_start_mins"
 
         private const val KEY_DARK_MODE   = "dark_mode"
         private const val KEY_USE_AMOLED  = "use_amoled"
@@ -87,6 +77,7 @@ class AppPreferences @Inject constructor(
 
         private const val KEY_NOTIF_GRADES_ENABLED   = "notif_grades_enabled"
         private const val KEY_NOTIF_MESSAGES_ENABLED = "notif_messages_enabled"
+        private const val KEY_NOTIF_SUBSTITUTIONS_ENABLED = "notif_substitutions_enabled"
 
         private const val KEY_NOTIF_CHECK_INTERVAL_MINS = "notif_check_interval_mins"
 
@@ -119,18 +110,6 @@ class AppPreferences @Inject constructor(
         get() = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, value).apply()
 
-    var notifShowBreaks: Boolean
-        get() = prefs.getBoolean(KEY_NOTIF_SHOW_BREAKS, true)
-        set(value) = prefs.edit().putBoolean(KEY_NOTIF_SHOW_BREAKS, value).apply()
-
-    var notifUpdateInterval: NotificationUpdateInterval
-        get() = NotificationUpdateInterval.fromKey(prefs.getString(KEY_NOTIF_UPDATE_INTERVAL, null))
-        set(value) = prefs.edit().putString(KEY_NOTIF_UPDATE_INTERVAL, value.key).apply()
-
-    var notifEarlyStartMinutes: Int
-        get() = prefs.getInt(KEY_NOTIF_EARLY_START_MINS, 5)
-        set(value) = prefs.edit().putInt(KEY_NOTIF_EARLY_START_MINS, value).apply()
-
     var darkMode: DarkModePreference
         get() = DarkModePreference.fromKey(prefs.getString(KEY_DARK_MODE, null))
         set(value) = prefs.edit().putString(KEY_DARK_MODE, value.key).apply()
@@ -138,6 +117,16 @@ class AppPreferences @Inject constructor(
     var useAmoled: Boolean
         get() = prefs.getBoolean(KEY_USE_AMOLED, false)
         set(value) = prefs.edit().putBoolean(KEY_USE_AMOLED, value).apply()
+
+    val darkModeFlow: Flow<DarkModePreference> = prefFlow(
+        key = KEY_DARK_MODE,
+        current = { darkMode },
+    )
+
+    val useAmoledFlow: Flow<Boolean> = prefFlow(
+        key = KEY_USE_AMOLED,
+        current = { useAmoled },
+    )
 
     var appLanguage: AppLanguage
         get() = AppLanguage.fromKey(prefs.getString(KEY_APP_LANGUAGE, null))
@@ -165,8 +154,12 @@ class AppPreferences @Inject constructor(
         get() = prefs.getBoolean(KEY_NOTIF_MESSAGES_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_NOTIF_MESSAGES_ENABLED, value).apply()
 
+    var notifSubstitutionsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NOTIF_SUBSTITUTIONS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_NOTIF_SUBSTITUTIONS_ENABLED, value).apply()
+
     var notifCheckIntervalMinutes: Int
-        get() = prefs.getInt(KEY_NOTIF_CHECK_INTERVAL_MINS, 30).coerceIn(15, 120)
+        get() = prefs.getInt(KEY_NOTIF_CHECK_INTERVAL_MINS, 15).coerceIn(15, 120)
         set(value) = prefs.edit().putInt(KEY_NOTIF_CHECK_INTERVAL_MINS, value.coerceIn(15, 120)).apply()
 
     var lastTimelineId: Int
@@ -195,6 +188,14 @@ class AppPreferences @Inject constructor(
         prefs.edit().putString(KEY_NOTIFIED_GRADE_IDS, trimmed.joinToString(",")).apply()
     }
 
+    fun clearNotifiedIds() {
+        prefs.edit()
+            .remove(KEY_NOTIFIED_GRADE_IDS)
+            .remove(KEY_LAST_TIMELINE_ID)
+            .remove(KEY_SEEN_TIMELINE_IDS)
+            .apply()
+    }
+
     fun getSeenTimelineIds(): Set<Int> {
         val raw = prefs.getString(KEY_SEEN_TIMELINE_IDS, "") ?: ""
         return if (raw.isBlank()) emptySet()
@@ -206,4 +207,18 @@ class AppPreferences @Inject constructor(
         val trimmed = if (merged.size > 1000) merged.sortedDescending().take(1000).toSet() else merged
         prefs.edit().putString(KEY_SEEN_TIMELINE_IDS, trimmed.joinToString(",")).apply()
     }
+
+    private fun <T> prefFlow(
+        key: String,
+        current: () -> T,
+    ): Flow<T> = callbackFlow {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == key) {
+                trySend(current())
+            }
+        }
+        trySend(current())
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
 }

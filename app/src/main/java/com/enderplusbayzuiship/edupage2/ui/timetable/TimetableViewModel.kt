@@ -11,6 +11,7 @@ import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
+import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.DayOfWeek
@@ -34,7 +35,8 @@ class TimetableViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val edupage: Edupage,
     private val credentialStore: CredentialStore,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    private val timetableCache: TimetableCache,
 ) : ViewModel() {
 
     companion object {
@@ -123,14 +125,28 @@ class TimetableViewModel @Inject constructor(
     private fun loadTimetable(date: LocalDate) {
         viewModelScope.launch {
             _uiState.value = TimetableUiState.Loading
+            val cached = timetableCache.loadWithStale(date)
+            if (cached != null) {
+                val (lessons, isStale) = cached
+                if (lessons.isNotEmpty()) {
+                    _uiState.value = TimetableUiState.Success(lessons)
+                    if (!isStale) return@launch
+                }
+            }
             try {
                 val timetable = edupage.getMyTimetable(date)
                 val lessons = timetable?.lessons ?: emptyList()
                 Log.i(TAG, "loaded ${lessons.size} lessons for $date")
+                timetableCache.save(date, lessons)
                 _uiState.value = TimetableUiState.Success(lessons)
             } catch (e: Exception) {
                 Log.e(TAG, "failed to load timetable for $date: ${e.message}", e)
-                _uiState.value = TimetableUiState.Error(e.message ?: context.getString(R.string.timetable_error_failed_to_load))
+                val current = _uiState.value
+                if (current is TimetableUiState.Success) {
+                    Log.w(TAG, "background refresh failed, keeping cached data: ${e.message}")
+                } else {
+                    _uiState.value = TimetableUiState.Error(e.message ?: context.getString(R.string.timetable_error_failed_to_load))
+                }
             }
         }
     }
