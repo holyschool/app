@@ -10,7 +10,9 @@ import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.DarkModePreference
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
+import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import com.enderplusbayzuiship.edupage2.notification.NotificationScheduler
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,7 @@ class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val notificationScheduler: NotificationScheduler,
     private val timetableCache: TimetableCache,
+    private val backendRegistrationManager: BackendRegistrationManager,
 ) : ViewModel() {
 
     private val _breakVisibility = MutableStateFlow(appPreferences.breakVisibility)
@@ -62,6 +65,15 @@ class SettingsViewModel @Inject constructor(
 
     private val _appLanguage = MutableStateFlow(appPreferences.appLanguage)
     val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
+
+    private val _backendBaseUrl = MutableStateFlow(appPreferences.backendBaseUrl)
+    val backendBaseUrl: StateFlow<String> = _backendBaseUrl.asStateFlow()
+
+    private val _backendApiKey = MutableStateFlow(appPreferences.backendApiKey)
+    val backendApiKey: StateFlow<String> = _backendApiKey.asStateFlow()
+
+    private val _backendRegisterStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val backendRegisterStatus: SharedFlow<Boolean> = _backendRegisterStatus.asSharedFlow()
 
     private val _recreateActivity = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val recreateActivity: SharedFlow<Unit> = _recreateActivity.asSharedFlow()
@@ -146,6 +158,25 @@ class SettingsViewModel @Inject constructor(
         appPreferences.appLanguage = value
         _appLanguage.value = value
         viewModelScope.launch { _recreateActivity.emit(Unit) }
+    }
+
+    fun setBackendBaseUrl(value: String) {
+        appPreferences.backendBaseUrl = value
+        _backendBaseUrl.value = value
+    }
+
+    fun setBackendApiKey(value: String) {
+        appPreferences.backendApiKey = value
+        _backendApiKey.value = value
+    }
+
+    fun registerDevice() {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            viewModelScope.launch {
+                val ok = backendRegistrationManager.registerIfPossible(token)
+                _backendRegisterStatus.emit(ok)
+            }
+        }
     }
 
     fun logout() {

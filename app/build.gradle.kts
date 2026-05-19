@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.oss.licenses)
+    alias(libs.plugins.google.services)
 }
 
 java {
@@ -85,6 +86,9 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
 
     implementation(libs.play.services.oss.licenses)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 

@@ -88,6 +88,9 @@ class AppPreferences @Inject constructor(
         private const val KEY_NOTIFIED_GRADE_IDS = "notified_grade_ids"
 
         private const val KEY_SEEN_TIMELINE_IDS = "seen_timeline_ids"
+        private const val KEY_BACKEND_BASE_URL = "backend_base_url"
+        private const val KEY_BACKEND_API_KEY = "backend_api_key"
+        private const val KEY_APP_VERSION_NAME = "app_version_name"
     }
 
     private val prefs by lazy {
@@ -207,6 +210,18 @@ class AppPreferences @Inject constructor(
         val trimmed = if (merged.size > 1000) merged.sortedDescending().take(1000).toSet() else merged
         prefs.edit().putString(KEY_SEEN_TIMELINE_IDS, trimmed.joinToString(",")).apply()
     }
+
+    var backendBaseUrl: String
+        get() = prefs.getString(KEY_BACKEND_BASE_URL, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_BACKEND_BASE_URL, value).apply()
+
+    var backendApiKey: String
+        get() = prefs.getString(KEY_BACKEND_API_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_BACKEND_API_KEY, value).apply()
+
+    var appVersionName: String
+        get() = prefs.getString(KEY_APP_VERSION_NAME, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_APP_VERSION_NAME, value).apply()
 
     private fun <T> prefFlow(
         key: String,

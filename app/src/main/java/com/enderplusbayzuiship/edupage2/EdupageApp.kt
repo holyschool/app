@@ -7,11 +7,17 @@ import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import com.enderplusbayzuiship.edupage2.notification.GradeMessageCheckWorker
 import com.enderplusbayzuiship.edupage2.util.LocaleHelper
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.HiltAndroidApp
 import java.io.IOException
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @HiltAndroidApp
 class EdupageApp : Application(), Configuration.Provider {
@@ -21,6 +27,8 @@ class EdupageApp : Application(), Configuration.Provider {
     }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
+    @Inject lateinit var appPreferences: AppPreferences
+    @Inject lateinit var backendRegistrationManager: BackendRegistrationManager
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(LocaleHelper.wrap(base))
@@ -30,6 +38,15 @@ class EdupageApp : Application(), Configuration.Provider {
         super.onCreate()
         createNotificationChannels()
         installNetworkExceptionHandler()
+        appPreferences.appVersionName = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrNull().orEmpty()
+
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            CoroutineScope(Dispatchers.IO).launch {
+                backendRegistrationManager.registerIfPossible(token)
+            }
+        }
     }
 
     override val workManagerConfiguration: Configuration

@@ -10,6 +10,8 @@ import com.edupage.api.modules.TwoFactorLogin
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
+import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +42,7 @@ class LoginViewModel @Inject constructor(
     private val credentialStore: CredentialStore,
     private val appPreferences: AppPreferences,
     private val timelineCache: TimelineCache,
+    private val backendRegistrationManager: BackendRegistrationManager,
 ) : ViewModel() {
 
     companion object {
@@ -66,6 +69,7 @@ class LoginViewModel @Inject constructor(
                 } else {
                     Log.i(TAG, "login success for $username@$subdomain")
                     saveCredentials(username, password, subdomain)
+                    registerBackendDevice()
                     seedSeenIdsIfFirstLogin()
                     _uiState.value = LoginUiState.Success
                 }
@@ -99,6 +103,7 @@ class LoginViewModel @Inject constructor(
                     .getSessionId("$subdomain.edupage.org")
                 credentialStore.updateSessionId(sessionId)
                 Log.i(TAG, "2FA verification success for $username@$subdomain")
+                registerBackendDevice()
                 seedSeenIdsIfFirstLogin()
                 _uiState.value = LoginUiState.Success
             } catch (e: Exception) {
@@ -137,5 +142,13 @@ class LoginViewModel @Inject constructor(
         val sessionId = edupage.session.cookieJar
             .getSessionId("$subdomain.edupage.org")
         credentialStore.save(username, password, subdomain, sessionId)
+    }
+
+    private fun registerBackendDevice() {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            viewModelScope.launch {
+                backendRegistrationManager.registerIfPossible(token)
+            }
+        }
     }
 }

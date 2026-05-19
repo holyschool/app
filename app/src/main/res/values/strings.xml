@@ -191,6 +191,16 @@
     <string name="settings_section_developer">Developer</string>
     <string name="settings_developer_options">Developer options</string>
 
+    <!-- Settings – Backend Notifications -->
+    <string name="settings_section_backend">Backend</string>
+    <string name="settings_backend_title">Push backend</string>
+    <string name="settings_backend_url">Backend URL</string>
+    <string name="settings_backend_key">Backend API key</string>
+    <string name="settings_backend_save">Save backend</string>
+    <string name="settings_backend_register">Register device</string>
+    <string name="settings_backend_register_success">Device registered</string>
+    <string name="settings_backend_register_failed">Registration failed</string>
+
     <!-- Developer Options Screen -->
     <string name="dev_options_title">Developer Options</string>
     <string name="dev_test_notif_grade">Test Grade Notif</string>

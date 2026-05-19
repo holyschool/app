@@ -1,0 +1,19 @@
+{
+  "name": "edupage-notify-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Edupage instant notifications bridge",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.6.0",
+    "node-fetch": "^3.3.2"
+  }
+}
