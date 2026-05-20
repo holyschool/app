@@ -189,6 +189,15 @@ db.exec(`
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS message_read_state (
+    user_id INTEGER NOT NULL,
+    timeline_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY(user_id, timeline_id),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_message_read_user ON message_read_state(user_id);
+
   CREATE TABLE IF NOT EXISTS devices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -234,6 +243,25 @@ const queries = {
     VALUES (@user_id, @grade_event_id, @created_at)
   `),
   listGradeState: db.prepare("SELECT grade_event_id FROM grade_state WHERE user_id = ?"),
+  insertMessageRead: db.prepare(`
+    INSERT OR IGNORE INTO message_read_state (user_id, timeline_id, created_at)
+    VALUES (@user_id, @timeline_id, @created_at)
+  `),
+  listMessageRead: db.prepare(`
+    SELECT timeline_id FROM message_read_state
+    WHERE user_id = ?
+    ORDER BY timeline_id DESC
+    LIMIT ?
+  `),
+  trimMessageRead: db.prepare(`
+    DELETE FROM message_read_state
+    WHERE user_id = ? AND timeline_id NOT IN (
+      SELECT timeline_id FROM message_read_state
+      WHERE user_id = ?
+      ORDER BY timeline_id DESC
+      LIMIT ?
+    )
+  `),
   deleteDevice: db.prepare("UPDATE devices SET enabled = 0, updated_at = ? WHERE id = ?"),
   disableUser: db.prepare("UPDATE users SET enabled = 0, updated_at = ? WHERE id = ?"),
 };
@@ -596,6 +624,8 @@ async function pollUser(user) {
 async function start() {
   console.log("Edupage notify backend starting...");
 
+  const maxReadIds = 2000;
+
   const app = express();
   app.use(express.json({ limit: "200kb" }));
 
@@ -672,6 +702,76 @@ async function start() {
     if (!target) return res.status(404).json({ error: "Device not found" });
     queries.deleteDevice.run(now(), target.id);
     res.json({ ok: true });
+  });
+
+  app.post("/api/messages/read", (req, res) => {
+    const { userId, subdomain, username, password, limit } = req.body || {};
+    const user = userId
+      ? queries.getUserById.get(userId)
+      : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!userId && password && user.password !== String(password)) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    const effectiveLimit = Number.isFinite(Number(limit))
+      ? Math.max(1, Math.min(maxReadIds, Number(limit)))
+      : 1000;
+    const rows = queries.listMessageRead.all(user.id, effectiveLimit);
+    const ids = rows.map((row) => row.timeline_id);
+    res.json({ ids });
+  });
+
+  app.post("/api/messages/mark-read", (req, res) => {
+    const { userId, subdomain, username, password, ids } = req.body || {};
+    const user = userId
+      ? queries.getUserById.get(userId)
+      : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!userId && password && user.password !== String(password)) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    const parsedIds = Array.isArray(ids)
+      ? ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+      : [];
+    if (!parsedIds.length) return res.status(400).json({ error: "Missing ids" });
+
+    const insert = queries.insertMessageRead;
+    const nowTs = now();
+    for (const id of parsedIds) {
+      insert.run({ user_id: user.id, timeline_id: id, created_at: nowTs });
+    }
+    queries.trimMessageRead.run(user.id, user.id, maxReadIds);
+    res.json({ ok: true, count: parsedIds.length });
+  });
+
+  app.post("/api/messages/sync", (req, res) => {
+    const { userId, subdomain, username, password, ids, limit } = req.body || {};
+    const user = userId
+      ? queries.getUserById.get(userId)
+      : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!userId && password && user.password !== String(password)) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const parsedIds = Array.isArray(ids)
+      ? ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+      : [];
+    if (parsedIds.length) {
+      const insert = queries.insertMessageRead;
+      const nowTs = now();
+      for (const id of parsedIds) {
+        insert.run({ user_id: user.id, timeline_id: id, created_at: nowTs });
+      }
+      queries.trimMessageRead.run(user.id, user.id, maxReadIds);
+    }
+
+    const effectiveLimit = Number.isFinite(Number(limit))
+      ? Math.max(1, Math.min(maxReadIds, Number(limit)))
+      : 1000;
+    const rows = queries.listMessageRead.all(user.id, effectiveLimit);
+    const readIds = rows.map((row) => row.timeline_id);
+    res.json({ ids: readIds, ok: true });
   });
 
   app.post("/api/disable-user", (req, res) => {

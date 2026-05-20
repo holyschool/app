@@ -75,6 +75,9 @@ class SettingsViewModel @Inject constructor(
     private val _backendRegisterStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val backendRegisterStatus: SharedFlow<Boolean> = _backendRegisterStatus.asSharedFlow()
 
+    private val _backendSyncStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val backendSyncStatus: SharedFlow<Boolean> = _backendSyncStatus.asSharedFlow()
+
     private val _recreateActivity = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val recreateActivity: SharedFlow<Unit> = _recreateActivity.asSharedFlow()
 
@@ -176,6 +179,17 @@ class SettingsViewModel @Inject constructor(
                 val ok = backendRegistrationManager.registerIfPossible(token)
                 _backendRegisterStatus.emit(ok)
             }
+        }
+    }
+
+    fun syncReadNow() {
+        viewModelScope.launch {
+            val localSeen = appPreferences.getSeenTimelineIds()
+            val result = backendRegistrationManager.syncReadState(localSeen)
+            if (result.ok && result.ids.isNotEmpty()) {
+                appPreferences.markTimelineIdsSeen(result.ids)
+            }
+            _backendSyncStatus.emit(result.ok)
         }
     }
 

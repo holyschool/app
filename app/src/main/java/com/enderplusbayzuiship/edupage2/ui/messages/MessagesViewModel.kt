@@ -10,6 +10,7 @@ import com.edupage.api.model.people.EduAccount
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
+import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -59,6 +60,7 @@ class MessagesViewModel @Inject constructor(
     private val edupage: Edupage,
     private val prefs: AppPreferences,
     private val cache: TimelineCache,
+    private val backendRegistrationManager: BackendRegistrationManager,
 ) : ViewModel() {
 
     companion object {
@@ -135,6 +137,19 @@ class MessagesViewModel @Inject constructor(
         val ids = allEvents.map { it.timelineId }
         prefs.markTimelineIdsSeen(ids)
         _uiState.value = current.copy(seenIds = prefs.getSeenTimelineIds())
+        viewModelScope.launch {
+            backendRegistrationManager.markMessagesRead(ids)
+        }
+    }
+
+    fun markMessageSeen(timelineId: Int) {
+        if (timelineId <= 0) return
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        prefs.markTimelineIdsSeen(listOf(timelineId))
+        _uiState.value = current.copy(seenIds = prefs.getSeenTimelineIds())
+        viewModelScope.launch {
+            backendRegistrationManager.markMessagesRead(listOf(timelineId))
+        }
     }
 
     fun loadRecipients() {
@@ -196,6 +211,7 @@ class MessagesViewModel @Inject constructor(
                 allEvents = events.sortedByDescending { it.timestamp }
                 val displayed = allEvents.filtered()
                 Log.i(TAG, "cache hit: ${events.size} events, stale=$isStale")
+                syncReadState()
                 _uiState.value = MessagesUiState.Success(
                     items        = displayed,
                     isRefreshing = isStale,
@@ -212,6 +228,7 @@ class MessagesViewModel @Inject constructor(
 
     private suspend fun fetchAndUpdate(backgroundUpdate: Boolean) {
         try {
+            syncReadState()
             val events = edupage.getNotifications()
                 .sortedByDescending { it.timestamp }
             allEvents = events
@@ -234,6 +251,18 @@ class MessagesViewModel @Inject constructor(
                 _uiState.value = MessagesUiState.Error(
                     e.message ?: context.getString(R.string.messages_error_failed_to_load)
                 )
+            }
+        }
+    }
+
+    private suspend fun syncReadState() {
+        val localSeen = prefs.getSeenTimelineIds()
+        val result = backendRegistrationManager.syncReadState(localSeen)
+        if (result.ok && result.ids.isNotEmpty()) {
+            prefs.markTimelineIdsSeen(result.ids)
+            val current = _uiState.value as? MessagesUiState.Success
+            if (current != null) {
+                _uiState.value = current.copy(seenIds = prefs.getSeenTimelineIds())
             }
         }
     }

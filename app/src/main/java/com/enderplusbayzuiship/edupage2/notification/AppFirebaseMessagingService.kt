@@ -29,5 +29,6 @@ class AppFirebaseMessagingService : FirebaseMessagingService() {
             title = message.notification?.title,
             body = message.notification?.body,
         )
+
     }
 }

@@ -105,6 +105,19 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.backendSyncStatus.collect { ok ->
+            val msg = if (ok) {
+                context.getString(R.string.settings_backend_sync_success)
+            } else {
+                context.getString(R.string.settings_backend_sync_failed)
+            }
+            android.widget.Toast
+                .makeText(context, msg, android.widget.Toast.LENGTH_SHORT)
+                .show()
+        }
+    }
+
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -349,6 +362,11 @@ fun SettingsScreen(
                     SettingsActionRow(
                         title = stringResource(R.string.settings_backend_register),
                         onClick = { viewModel.registerDevice() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsActionRow(
+                        title = stringResource(R.string.settings_backend_sync),
+                        onClick = { viewModel.syncReadNow() }
                     )
                 }
             }

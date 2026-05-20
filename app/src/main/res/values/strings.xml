@@ -200,6 +200,9 @@
     <string name="settings_backend_register">Register device</string>
     <string name="settings_backend_register_success">Device registered</string>
     <string name="settings_backend_register_failed">Registration failed</string>
+    <string name="settings_backend_sync">Sync read status</string>
+    <string name="settings_backend_sync_success">Sync complete</string>
+    <string name="settings_backend_sync_failed">Sync failed</string>
 
     <!-- Developer Options Screen -->
     <string name="dev_options_title">Developer Options</string>
@@ -254,6 +257,7 @@
     <string name="notif_message_multiple">%1$d new messages</string>
     <string name="notif_message_no_preview">Tap to read</string>
     <string name="notif_message_unknown_sender">Unknown</string>
+    <string name="notif_mark_read">Mark as read</string>
 
     <!-- Substitution notifications -->
     <string name="notif_substitution_title">Timetable Change</string>

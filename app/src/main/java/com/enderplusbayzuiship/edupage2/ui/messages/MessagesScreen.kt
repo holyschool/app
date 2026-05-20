@@ -337,6 +337,7 @@ fun MessagesScreen(
                             onLoadMore = { viewModel.loadMore() },
                             onItemClick = { event ->
                                 haptics.tick()
+                                viewModel.markMessageSeen(event.timelineId)
                                 val type = event.type?.lowercase()
                                 if (type == "znamka" || type == "znamkydoc" || type == "h_znamky" || type == "settings") {
                                     val subject = extractSubjectFromGradeText(event.text)

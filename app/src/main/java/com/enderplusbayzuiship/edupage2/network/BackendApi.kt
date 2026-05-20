@@ -32,4 +32,52 @@ class BackendApi @Inject constructor(
             return ApiResult(response.isSuccessful, response.code, body)
         }
     }
+
+    fun fetchReadMessages(
+        baseUrl: String,
+        apiKey: String,
+        payload: String,
+    ): ApiResult {
+        val request = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/api/messages/read")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .post(payload.toRequestBody(JSON))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            return ApiResult(response.isSuccessful, response.code, body)
+        }
+    }
+
+    fun markMessagesRead(
+        baseUrl: String,
+        apiKey: String,
+        payload: String,
+    ): ApiResult {
+        val request = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/api/messages/mark-read")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .post(payload.toRequestBody(JSON))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            return ApiResult(response.isSuccessful, response.code, body)
+        }
+    }
+
+    fun syncReadMessages(
+        baseUrl: String,
+        apiKey: String,
+        payload: String,
+    ): ApiResult {
+        val request = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/api/messages/sync")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .post(payload.toRequestBody(JSON))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            return ApiResult(response.isSuccessful, response.code, body)
+        }
+    }
 }
