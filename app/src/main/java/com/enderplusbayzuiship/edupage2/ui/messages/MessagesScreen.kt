@@ -1,5 +1,6 @@
 package com.enderplusbayzuiship.edupage2.ui.messages
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -278,97 +279,110 @@ fun MessagesScreen(
             }
         },
     ) { paddingValues ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            state = refreshState,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            Column(
+        Box(modifier = Modifier.padding(paddingValues)) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                state = refreshState,
                 modifier = Modifier.fillMaxSize()
             ) {
-                if (uiState is MessagesUiState.Success) {
-                    AnimatedVisibility(
-                        visible = showFilterRow,
-                        enter = fadeIn(tween(150)) + androidx.compose.animation.expandVertically(tween(150)),
-                        exit = fadeOut(tween(150)) + androidx.compose.animation.shrinkVertically(tween(150)),
-                    ) {
-                        FilterRow(
-                            selected = selectedFilter,
-                            onSelect = { filter ->
-                                selectedFilter = filter
-                                showFilterRow = false
-                            },
-                        )
-                    }
-                }
-
-                when (val state = uiState) {
-                    is MessagesUiState.Loading -> {
-                        MessagesSkeleton(
-                            bottomPadding = bottomPadding,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-
-                    is MessagesUiState.Error -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(32.dp),
-                            ) {
-                                Text(
-                                    text = state.message,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    textAlign = TextAlign.Center,
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                Button(
-                                    onClick = { haptics.click(); viewModel.refresh() },
-                                    shape = RoundedCornerShape(16.dp),
-                                ) {
-                                    Text(stringResource(R.string.messages_retry))
-                                }
-                            }
-                        }
-                    }
-
-                    is MessagesUiState.Success -> {
-                        val filteredItems = if (selectedFilter == null) state.items
-                        else state.items.filter { typeInfoFor(it.type).labelRes == selectedFilter }
-                        if (filteredItems.isEmpty() && !state.canLoadMore) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = stringResource(R.string.messages_no_messages),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        } else {
-                            MessagesList(
-                                state = state.copy(items = filteredItems),
-                                bottomPadding = bottomPadding,
-                                onLoadMore = { viewModel.loadMore() },
-                                onItemClick = { event ->
-                                    haptics.tick()
-                                    viewModel.markMessageSeen(event.timelineId)
-                                    val type = event.type?.lowercase()
-                                    if (type == "znamka" || type == "znamkydoc" || type == "h_znamky" || type == "settings") {
-                                        val subject = extractSubjectFromGradeText(event.text)
-                                        if (subject != null) {
-                                            onGradeClick(subject)
-                                        } else {
-                                            onGradeClick("")
-                                        }
-                                    } else {
-                                        detailEvent = event
-                                    }
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    if (uiState is MessagesUiState.Success) {
+                        AnimatedVisibility(
+                            visible = showFilterRow,
+                            enter = fadeIn(tween(150)) + androidx.compose.animation.expandVertically(tween(150)),
+                            exit = fadeOut(tween(150)) + androidx.compose.animation.shrinkVertically(tween(150)),
+                        ) {
+                            FilterRow(
+                                selected = selectedFilter,
+                                onSelect = { filter ->
+                                    selectedFilter = filter
+                                    showFilterRow = false
                                 },
                             )
                         }
                     }
+
+                    when (val state = uiState) {
+                        is MessagesUiState.Loading -> {
+                            MessagesSkeleton(
+                                bottomPadding = bottomPadding,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        is MessagesUiState.Error -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(32.dp),
+                                ) {
+                                    Text(
+                                        text = state.message,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    Spacer(Modifier.height(16.dp))
+                                    Button(
+                                        onClick = { haptics.click(); viewModel.refresh() },
+                                        shape = RoundedCornerShape(16.dp),
+                                    ) {
+                                        Text(stringResource(R.string.messages_retry))
+                                    }
+                                }
+                            }
+                        }
+
+                        is MessagesUiState.Success -> {
+                            val filteredItems = if (selectedFilter == null) state.items
+                            else state.items.filter { typeInfoFor(it.type).labelRes == selectedFilter }
+                            if (filteredItems.isEmpty() && !state.canLoadMore) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = stringResource(R.string.messages_no_messages),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                MessagesList(
+                                    state = state.copy(items = filteredItems),
+                                    bottomPadding = bottomPadding,
+                                    onLoadMore = { viewModel.loadMore() },
+                                    onItemClick = { event ->
+                                        haptics.tick()
+                                        viewModel.markMessageSeen(event.timelineId)
+                                        val type = event.type?.lowercase()
+                                        if (type == "znamka" || type == "znamkydoc" || type == "h_znamky" || type == "settings") {
+                                            val subject = extractSubjectFromGradeText(event.text)
+                                            if (subject != null) {
+                                                onGradeClick(subject)
+                                            } else {
+                                                onGradeClick("")
+                                            }
+                                        } else {
+                                            detailEvent = event
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
+            }
+
+            if (isRefreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .height(3.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = androidx.compose.ui.graphics.Color.Transparent
+                )
             }
         }
     }

@@ -53,7 +53,7 @@
     <!-- Timetable Break Separator -->
     <string name="timetable_break_minutes">%dm break</string>
     <string name="timetable_break_hours">%dh break</string>
-    <string name="timetable_break_hours_minutes">%dh %dm break</string>
+    <string name="timetable_break_hours_minutes">%1$dh %2$dm break</string>
 
     <!-- Grades Screen -->
     <string name="grades_title">Grades</string>
@@ -104,6 +104,7 @@
     <string name="messages_detail_due">Due</string>
     <string name="messages_detail_date">Date</string>
     <string name="messages_detail_close">Close</string>
+    <string name="messages_new_label">New</string>
     <string name="messages_mark_all_read">Mark all as read</string>
     <string name="messages_sending">Sending\u2026</string>
     <string name="messages_send_error">Failed to send message</string>
@@ -228,7 +229,7 @@
     <string name="timetable_time_left_under_1m">&lt;1m</string>
     <string name="timetable_time_left_minutes">%dm</string>
     <string name="timetable_time_left_hours">%dh</string>
-    <string name="timetable_time_left_hours_minutes">%dh %dm</string>
+    <string name="timetable_time_left_hours_minutes">%1$dh %2$dm</string>
 
     <!-- Notification Service Content -->
     <string name="notif_loading">Timetable loading\u2026</string>

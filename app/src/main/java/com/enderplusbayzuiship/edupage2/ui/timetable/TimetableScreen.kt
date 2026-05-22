@@ -145,154 +145,167 @@ fun TimetableScreen(
             )
         }
     ) { paddingValues ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            state = refreshState,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            Column(
+        Box(modifier = Modifier.padding(paddingValues)) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                state = refreshState,
                 modifier = Modifier.fillMaxSize()
             ) {
-                DateNavigationBar(
-                    date = selectedDate,
-                    showWeekends = showWeekends,
-                    onPreviousDay = { haptics.tick(); viewModel.setDate(selectedDate.minusDays(1)) },
-                    onNextDay = { haptics.tick(); viewModel.setDate(selectedDate.plusDays(1)) },
-                    onToday = { haptics.tick(); viewModel.setDate(LocalDate.now()) }
-                )
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    DateNavigationBar(
+                        date = selectedDate,
+                        showWeekends = showWeekends,
+                        onPreviousDay = { haptics.tick(); viewModel.setDate(selectedDate.minusDays(1)) },
+                        onNextDay = { haptics.tick(); viewModel.setDate(selectedDate.plusDays(1)) },
+                        onToday = { haptics.tick(); viewModel.setDate(LocalDate.now()) }
+                    )
 
-                when (val state = uiState) {
-                    is TimetableUiState.Loading -> {
-                        TimetableSkeleton(
-                            bottomPadding = bottomPadding,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    is TimetableUiState.Error -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(32.dp)
-                            ) {
-                                Text(
-                                    text = state.message,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = { haptics.click(); viewModel.refresh() },
-                                    shape = RoundedCornerShape(16.dp)
-                                ) {
-                                    Text(stringResource(R.string.timetable_retry))
-                                }
-                            }
+                    when (val state = uiState) {
+                        is TimetableUiState.Loading -> {
+                            TimetableSkeleton(
+                                bottomPadding = bottomPadding,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
-                    }
 
-                    is TimetableUiState.Success -> {
-                        if (state.lessons.isEmpty()) {
+                        is TimetableUiState.Error -> {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    modifier = Modifier.padding(32.dp)
                                 ) {
-                                    Icon(
-                                    imageVector = Icons.Default.DateRange,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                    )
                                     Text(
-                                        text = stringResource(R.string.timetable_no_lessons),
+                                        text = state.message,
+                                        color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
-                                }
-                            }
-                        } else {
-                            val listState = rememberLazyListState()
-
-                            LaunchedEffect(state.lessons, selectedDate) {
-                                if (selectedDate != LocalDate.now()) return@LaunchedEffect
-                                val lessons = state.lessons
-                                val activeLessonIndex = lessons.indexOfFirst { lesson ->
-                                    lesson.startTime != null && lesson.endTime != null &&
-                                        !currentTime.isBefore(lesson.startTime) &&
-                                        currentTime.isBefore(lesson.endTime)
-                                }
-                                val targetIndex = if (activeLessonIndex >= 0) {
-                                    activeLessonIndex
-                                } else {
-                                    lessons.indexOfFirst { lesson ->
-                                        val lessonIdx = lessons.indexOf(lesson)
-                                        if (lessonIdx == 0) return@indexOfFirst false
-                                        val prevEnd = lessons[lessonIdx - 1].endTime
-                                        val thisStart = lesson.startTime
-                                        prevEnd != null && thisStart != null &&
-                                            thisStart > prevEnd &&
-                                            !currentTime.isBefore(prevEnd) &&
-                                            currentTime.isBefore(thisStart)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Button(
+                                        onClick = { haptics.click(); viewModel.refresh() },
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) {
+                                        Text(stringResource(R.string.timetable_retry))
                                     }
                                 }
-                                if (targetIndex >= 0) {
-                                    listState.animateScrollToItem(targetIndex)
-                                }
                             }
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(
-                                    start = 16.dp, end = 16.dp,
-                                    top = 12.dp,
-                                    bottom = 12.dp + bottomPadding.calculateBottomPadding()
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                itemsIndexed(state.lessons) { index, lesson ->
-                                    if (index > 0) {
-                                        val prev = state.lessons[index - 1]
-                                        val prevEnd = prev.endTime
-                                        val thisStart = lesson.startTime
-                                        if (prevEnd != null && thisStart != null && thisStart > prevEnd) {
-                                            val breakMinutes = Duration.between(prevEnd, thisStart).toMinutes()
-                                            val isBreakNow = selectedDate == LocalDate.now() &&
+                        }
+
+                        is TimetableUiState.Success -> {
+                            if (state.lessons.isEmpty()) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(
+                                        imageVector = Icons.Default.DateRange,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.timetable_no_lessons),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else {
+                                val listState = rememberLazyListState()
+
+                                LaunchedEffect(state.lessons, selectedDate) {
+                                    if (selectedDate != LocalDate.now()) return@LaunchedEffect
+                                    val lessons = state.lessons
+                                    val activeLessonIndex = lessons.indexOfFirst { lesson ->
+                                        lesson.startTime != null && lesson.endTime != null &&
+                                            !currentTime.isBefore(lesson.startTime) &&
+                                            currentTime.isBefore(lesson.endTime)
+                                    }
+                                    val targetIndex = if (activeLessonIndex >= 0) {
+                                        activeLessonIndex
+                                    } else {
+                                        lessons.indexOfFirst { lesson ->
+                                            val lessonIdx = lessons.indexOf(lesson)
+                                            if (lessonIdx == 0) return@indexOfFirst false
+                                            val prevEnd = lessons[lessonIdx - 1].endTime
+                                            val thisStart = lesson.startTime
+                                            prevEnd != null && thisStart != null &&
+                                                thisStart > prevEnd &&
                                                 !currentTime.isBefore(prevEnd) &&
                                                 currentTime.isBefore(thisStart)
-                                            val showBreak = when (breakVisibility) {
-                                                BreakVisibility.ALL -> true
-                                                BreakVisibility.ACTIVE_ONLY -> isBreakNow
-                                                BreakVisibility.ACTIVE_OR_LONG ->
-                                                    isBreakNow || breakMinutes >= AppPreferences.LONG_BREAK_THRESHOLD_MINUTES
-                                            }
-                                            if (showBreak) {
-                                                BreakSeparator(
-                                                    breakMinutes = breakMinutes,
-                                                    isActive = isBreakNow,
-                                                    breakEndsAt = if (isBreakNow) thisStart else null,
-                                                    currentTime = currentTime
-                                                )
-                                            }
                                         }
                                     }
-                                    val isCurrentLesson = selectedDate == LocalDate.now() &&
-                                        lesson.startTime != null && lesson.endTime != null &&
-                                        !currentTime.isBefore(lesson.startTime) &&
-                                        currentTime.isBefore(lesson.endTime)
-                                    LessonCard(
-                                        lesson = lesson,
-                                        isCurrentLesson = isCurrentLesson,
-                                        currentTime = if (isCurrentLesson) currentTime else null,
-                                        cancelledLessonStyle = cancelledLessonStyle
-                                    )
+                                    if (targetIndex >= 0) {
+                                        listState.animateScrollToItem(targetIndex)
+                                    }
+                                }
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(
+                                        start = 16.dp, end = 16.dp,
+                                        top = 12.dp,
+                                        bottom = 12.dp + bottomPadding.calculateBottomPadding()
+                                    ),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    itemsIndexed(state.lessons) { index, lesson ->
+                                        if (index > 0) {
+                                            val prev = state.lessons[index - 1]
+                                            val prevEnd = prev.endTime
+                                            val thisStart = lesson.startTime
+                                            if (prevEnd != null && thisStart != null && thisStart > prevEnd) {
+                                                val breakMinutes = Duration.between(prevEnd, thisStart).toMinutes()
+                                                val isBreakNow = selectedDate == LocalDate.now() &&
+                                                    !currentTime.isBefore(prevEnd) &&
+                                                    currentTime.isBefore(thisStart)
+                                                val showBreak = when (breakVisibility) {
+                                                    BreakVisibility.ALL -> true
+                                                    BreakVisibility.ACTIVE_ONLY -> isBreakNow
+                                                    BreakVisibility.ACTIVE_OR_LONG ->
+                                                        isBreakNow || breakMinutes >= AppPreferences.LONG_BREAK_THRESHOLD_MINUTES
+                                                }
+                                                if (showBreak) {
+                                                    BreakSeparator(
+                                                        breakMinutes = breakMinutes,
+                                                        isActive = isBreakNow,
+                                                        breakEndsAt = if (isBreakNow) thisStart else null,
+                                                        currentTime = currentTime
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        val isCurrentLesson = selectedDate == LocalDate.now() &&
+                                            lesson.startTime != null && lesson.endTime != null &&
+                                            !currentTime.isBefore(lesson.startTime) &&
+                                            currentTime.isBefore(lesson.endTime)
+                                        LessonCard(
+                                            lesson = lesson,
+                                            isCurrentLesson = isCurrentLesson,
+                                            currentTime = if (isCurrentLesson) currentTime else null,
+                                            cancelledLessonStyle = cancelledLessonStyle
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            if (isRefreshing) {
+                androidx.compose.material3.LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(androidx.compose.ui.Alignment.TopCenter)
+                        .height(3.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = androidx.compose.ui.graphics.Color.Transparent
+                )
             }
         }
     }

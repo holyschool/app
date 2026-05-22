@@ -26,7 +26,10 @@ import kotlinx.coroutines.launch
 
 sealed interface TimetableUiState {
     object Loading : TimetableUiState
-    data class Success(val lessons: List<Lesson>) : TimetableUiState
+    data class Success(
+        val lessons: List<Lesson>,
+        val isRefreshing: Boolean = false
+    ) : TimetableUiState
     data class Error(val message: String) : TimetableUiState
 }
 
@@ -147,12 +150,18 @@ class TimetableViewModel @Inject constructor(
 
     private fun loadTimetable(date: LocalDate) {
         viewModelScope.launch {
-            _uiState.value = TimetableUiState.Loading
+            val current = _uiState.value
+            if (current is TimetableUiState.Success) {
+                _uiState.value = current.copy(isRefreshing = true)
+            } else {
+                _uiState.value = TimetableUiState.Loading
+            }
+
             val cached = timetableCache.loadWithStale(date)
             if (cached != null) {
                 val (lessons, isStale) = cached
                 if (lessons.isNotEmpty()) {
-                    _uiState.value = TimetableUiState.Success(lessons)
+                    _uiState.value = TimetableUiState.Success(lessons, isRefreshing = isStale)
                     if (!isStale) return@launch
                 }
             }
@@ -161,11 +170,12 @@ class TimetableViewModel @Inject constructor(
                 val lessons = timetable?.lessons ?: emptyList()
                 Log.i(TAG, "loaded ${lessons.size} lessons for $date")
                 timetableCache.save(date, lessons)
-                _uiState.value = TimetableUiState.Success(lessons)
+                _uiState.value = TimetableUiState.Success(lessons, isRefreshing = false)
             } catch (e: Exception) {
                 Log.e(TAG, "failed to load timetable for $date: ${e.message}", e)
-                val current = _uiState.value
-                if (current is TimetableUiState.Success) {
+                val afterFail = _uiState.value
+                if (afterFail is TimetableUiState.Success) {
+                    _uiState.value = afterFail.copy(isRefreshing = false)
                     Log.w(TAG, "background refresh failed, keeping cached data: ${e.message}")
                 } else {
                     _uiState.value = TimetableUiState.Error(e.message ?: context.getString(R.string.timetable_error_failed_to_load))

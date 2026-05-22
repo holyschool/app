@@ -53,6 +53,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -151,22 +152,23 @@ fun GradesScreen(
             )
         }
     ) { paddingValues ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            state = refreshState,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            Column(
+        Box(modifier = Modifier.padding(paddingValues)) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                state = refreshState,
                 modifier = Modifier.fillMaxSize()
             ) {
-                TermSelector(
-                    selected = selectedTerm,
-                    onSelect = { haptics.tick(); viewModel.setTerm(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    TermSelector(
+                        selected = selectedTerm,
+                        onSelect = { haptics.tick(); viewModel.setTerm(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
 
                 when (val state = uiState) {
                     is GradesUiState.Loading -> {
@@ -253,6 +255,18 @@ fun GradesScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (isRefreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .height(3.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Transparent
+                )
             }
         }
     }

@@ -1,5 +1,7 @@
 package com.enderplusbayzuiship.edupage2.ui.overview
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -159,54 +161,67 @@ fun OverviewScreen(
             )
         },
     ) { paddingValues ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            state = refreshState,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            if (isInitialLoading || isRefreshing) {
-                OverviewSkeleton(
-                    bottomPadding = bottomPadding,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Spacer(Modifier.height(8.dp))
-
-                    TimetableCard(
-                        state = timetableState,
-                        currentTime = currentTime,
-                        onGoToTimetable = onGoToTimetable,
-                        haptics = haptics,
+        Box(modifier = Modifier.padding(paddingValues)) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                state = refreshState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (isInitialLoading || isRefreshing) {
+                    OverviewSkeleton(
+                        bottomPadding = bottomPadding,
+                        modifier = Modifier.fillMaxSize(),
                     )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Spacer(Modifier.height(8.dp))
 
-                    GradesCard(
-                        state = gradesState,
-                        onGoToGrades = onGoToGrades,
-                        haptics = haptics,
-                    )
+                        TimetableCard(
+                            state = timetableState,
+                            currentTime = currentTime,
+                            onGoToTimetable = onGoToTimetable,
+                            haptics = haptics,
+                        )
 
-                    MessagesCard(
-                        state = messagesState,
-                        onGoToMessages = onGoToMessages,
-                        haptics = haptics,
-                    )
+                        GradesCard(
+                            state = gradesState,
+                            onGoToGrades = onGoToGrades,
+                            haptics = haptics,
+                        )
 
-                    QuickActionsCard(
-                        onCompose   = onGoToMessages,
-                        onTimetable = onGoToTimetable,
-                        onGrades    = onGoToGrades,
-                        haptics     = haptics,
-                    )
+                        MessagesCard(
+                            state = messagesState,
+                            onGoToMessages = onGoToMessages,
+                            haptics = haptics,
+                        )
+
+                        QuickActionsCard(
+                            onCompose   = onGoToMessages,
+                            onTimetable = onGoToTimetable,
+                            onGrades    = onGoToGrades,
+                            haptics     = haptics,
+                        )
+                    }
                 }
+            }
+
+            if (isRefreshing) {
+                androidx.compose.material3.LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .height(3.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Transparent
+                )
             }
         }
     }

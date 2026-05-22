@@ -53,7 +53,7 @@
     <!-- Timetable Break Separator -->
     <string name="timetable_break_minutes">%dm prestávka</string>
     <string name="timetable_break_hours">%dh prestávka</string>
-    <string name="timetable_break_hours_minutes">%dh %dm prestávka</string>
+    <string name="timetable_break_hours_minutes">%1$dh %2$dm prestávka</string>
 
     <!-- Grades Screen -->
     <string name="grades_title">Známky</string>
@@ -104,6 +104,7 @@
     <string name="messages_detail_due">Termín</string>
     <string name="messages_detail_date">Datum</string>
     <string name="messages_detail_close">Zavřít</string>
+    <string name="messages_new_label">Nový</string>
     <string name="messages_mark_all_read">Označit vše jako přečtené</string>
     <string name="messages_sending">Odesílání\u2026</string>
     <string name="messages_send_error">Zprávu se nepodařilo odeslat</string>
@@ -165,7 +166,7 @@
     <string name="timetable_time_left_under_1m">&lt;1 min</string>
     <string name="timetable_time_left_minutes">%d min</string>
     <string name="timetable_time_left_hours">%d hod</string>
-    <string name="timetable_time_left_hours_minutes">%d hod %d min</string>
+    <string name="timetable_time_left_hours_minutes">%1$d hod %2$d min</string>
 
     <!-- Timetable Error -->
     <string name="timetable_error_failed_to_load">Nepodařilo se načíst rozvrh</string>
