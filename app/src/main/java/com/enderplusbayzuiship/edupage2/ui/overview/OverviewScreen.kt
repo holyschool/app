@@ -57,8 +57,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -112,7 +110,6 @@ fun OverviewScreen(
     val currentTime    by viewModel.currentTime.collectAsState()
     val haptics        = rememberAppHaptics()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
-    val refreshState   = rememberPullToRefreshState()
 
     val isInitialLoading = timetableState is TimetableOverviewState.Loading &&
         gradesState is GradesOverviewState.Loading &&
@@ -161,67 +158,61 @@ fun OverviewScreen(
             )
         },
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refresh() },
-                state = refreshState,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                if (isInitialLoading || isRefreshing) {
-                    OverviewSkeleton(
-                        bottomPadding = bottomPadding,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Spacer(Modifier.height(8.dp))
-
-                        TimetableCard(
-                            state = timetableState,
-                            currentTime = currentTime,
-                            onGoToTimetable = onGoToTimetable,
-                            haptics = haptics,
-                        )
-
-                        GradesCard(
-                            state = gradesState,
-                            onGoToGrades = onGoToGrades,
-                            haptics = haptics,
-                        )
-
-                        MessagesCard(
-                            state = messagesState,
-                            onGoToMessages = onGoToMessages,
-                            haptics = haptics,
-                        )
-
-                        QuickActionsCard(
-                            onCompose   = onGoToMessages,
-                            onTimetable = onGoToTimetable,
-                            onGrades    = onGoToGrades,
-                            haptics     = haptics,
-                        )
-                    }
-                }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+        ) {
+            AnimatedVisibility(visible = isRefreshing) {
+                androidx.compose.material3.LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
             }
 
-            if (isRefreshing) {
-                androidx.compose.material3.LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .height(3.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color.Transparent
+            if (isInitialLoading || isRefreshing) {
+                OverviewSkeleton(
+                    bottomPadding = bottomPadding,
+                    modifier = Modifier.fillMaxSize(),
                 )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Spacer(Modifier.height(8.dp))
+
+                    TimetableCard(
+                        state = timetableState,
+                        currentTime = currentTime,
+                        onGoToTimetable = onGoToTimetable,
+                        haptics = haptics,
+                    )
+
+                    GradesCard(
+                        state = gradesState,
+                        onGoToGrades = onGoToGrades,
+                        haptics = haptics,
+                    )
+
+                    MessagesCard(
+                        state = messagesState,
+                        onGoToMessages = onGoToMessages,
+                        haptics = haptics,
+                    )
+
+                    QuickActionsCard(
+                        onCompose   = onGoToMessages,
+                        onTimetable = onGoToTimetable,
+                        onGrades    = onGoToGrades,
+                        haptics     = haptics,
+                    )
+                }
             }
         }
     }

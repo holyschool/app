@@ -145,13 +145,21 @@ fun TimetableScreen(
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refresh() },
-                state = refreshState,
-                modifier = Modifier.fillMaxSize()
-            ) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = refreshState,
+            modifier = Modifier.padding(paddingValues)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                androidx.compose.animation.AnimatedVisibility(visible = isRefreshing) {
+                    androidx.compose.material3.LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -295,17 +303,6 @@ fun TimetableScreen(
                         }
                     }
                 }
-            }
-
-            if (isRefreshing) {
-                androidx.compose.material3.LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(androidx.compose.ui.Alignment.TopCenter)
-                        .height(3.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = androidx.compose.ui.graphics.Color.Transparent
-                )
             }
         }
     }

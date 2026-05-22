@@ -279,13 +279,21 @@ fun MessagesScreen(
             }
         },
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refresh() },
-                state = refreshState,
-                modifier = Modifier.fillMaxSize()
-            ) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = refreshState,
+            modifier = Modifier.padding(paddingValues)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                AnimatedVisibility(visible = isRefreshing) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -372,17 +380,6 @@ fun MessagesScreen(
                         }
                     }
                 }
-            }
-
-            if (isRefreshing) {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .height(3.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = androidx.compose.ui.graphics.Color.Transparent
-                )
             }
         }
     }

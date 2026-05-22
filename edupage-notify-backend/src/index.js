@@ -612,6 +612,17 @@ async function fetchGrades(user) {
   })).filter((g) => !Number.isNaN(g.eventId));
 }
 
+function isStaleFcmTokenError(err) {
+  const code = String(err?.code || err?.errorInfo?.code || "");
+  const message = String(err?.message || "").toLowerCase();
+  return (
+    code.includes("registration-token-not-registered") ||
+    code.includes("invalid-registration-token") ||
+    message.includes("requested entity was not found") ||
+    message.includes("registration token is not registered")
+  );
+}
+
 async function sendTopicNotification({ title, body, data, topic, token }) {
   const payload = {
     notification: { title, body },
@@ -626,6 +637,26 @@ async function sendTopicNotification({ title, body, data, topic, token }) {
     payload.data = dataPayload;
   }
   await admin.messaging().send(payload);
+}
+
+async function sendToUserDevices(userId, builder) {
+  const devices = queries.listEnabledDevices.all(userId);
+  if (!devices.length) {
+    await builder(null);
+    return;
+  }
+  for (const device of devices) {
+    try {
+      await builder(device.fcm_token);
+    } catch (e) {
+      if (isStaleFcmTokenError(e)) {
+        console.warn("Removing stale FCM device", device.id, "for user", userId);
+        queries.deleteDevice.run(now(), device.id);
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 async function notifyMessages(events, { topic, token }) {
@@ -774,25 +805,12 @@ async function pollUser(user) {
     const substitutionEvents = newEvents.filter((e) => e.type === "substitution");
     const otherEvents = newEvents.filter((e) => e.type !== "grade" && e.type !== "substitution");
 
-    const devices = queries.listEnabledDevices.all(user.id);
-    const tokenTargets = devices.length ? devices.map((d) => d.fcm_token) : [];
-
-    const sendToUser = async (builder) => {
-      if (!tokenTargets.length) {
-        await builder(null);
-        return;
-      }
-      for (const token of tokenTargets) {
-        await builder(token);
-      }
-    };
-
     if (otherEvents.length) {
-      await sendToUser((token) => notifyMessages(otherEvents, { token }));
+      await sendToUserDevices(user.id, (token) => notifyMessages(otherEvents, { token }));
     }
 
     if (substitutionEvents.length) {
-      await sendToUser((token) => notifySubstitutions(substitutionEvents, { token }));
+      await sendToUserDevices(user.id, (token) => notifySubstitutions(substitutionEvents, { token }));
     }
 
     if (gradeEvents.length) {
@@ -802,7 +820,7 @@ async function pollUser(user) {
       );
       const newGrades = grades.filter((g) => !notifiedIds.has(g.eventId));
       if (newGrades.length) {
-        await sendToUser((token) => notifyGrades(newGrades, { token }));
+        await sendToUserDevices(user.id, (token) => notifyGrades(newGrades, { token }));
         newGrades.forEach((g) => {
           queries.insertGradeState.run({
             user_id: user.id,
@@ -819,7 +837,7 @@ async function pollUser(user) {
       updated_at: now(),
     });
   } catch (e) {
-    console.error("poll failed for user", user.id, e.message);
+    console.error("poll failed for user", user.id, user.subdomain, user.username, e.message);
   }
 }
 
