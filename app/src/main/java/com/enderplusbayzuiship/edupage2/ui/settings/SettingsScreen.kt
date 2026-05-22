@@ -1,6 +1,7 @@
 package com.enderplusbayzuiship.edupage2.ui.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -360,20 +362,6 @@ fun SettingsScreen(
                 }
             }
 
-            if (showBackendSettings) {
-                BackendSettingsBottomSheet(
-                    mode = backendMode,
-                    customUrl = backendCustomUrl,
-                    customKey = backendCustomKey,
-                    onModeChange = viewModel::setBackendMode,
-                    onUrlChange = viewModel::setBackendBaseUrl,
-                    onKeyChange = viewModel::setBackendApiKey,
-                    onRegister = viewModel::registerDevice,
-                    onSync = viewModel::syncReadNow,
-                    onDismiss = { showBackendSettings = false }
-                )
-            }
-
             // ABOUT
             item {
                 SectionHeader(
@@ -418,6 +406,20 @@ fun SettingsScreen(
             }
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
+        }
+
+        if (showBackendSettings) {
+            BackendSettingsBottomSheet(
+                mode = backendMode,
+                customUrl = backendCustomUrl,
+                customKey = backendCustomKey,
+                onModeChange = viewModel::setBackendMode,
+                onUrlChange = viewModel::setBackendBaseUrl,
+                onKeyChange = viewModel::setBackendApiKey,
+                onRegister = viewModel::registerDevice,
+                onSync = viewModel::syncReadNow,
+                onDismiss = { showBackendSettings = false }
+            )
         }
     }
 }
@@ -704,11 +706,11 @@ private fun BackendModeItem(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    androidx.compose.material3.Surface(
+    Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = if (selected) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)

@@ -16,6 +16,7 @@ class BackendRegistrationManager @Inject constructor(
     private val backendApi: BackendApi,
     private val credentialStore: CredentialStore,
     private val appPreferences: AppPreferences,
+    private val securityManager: BackendSecurityManager,
     private val gson: Gson,
 ) {
     data class ReadSyncResult(val ok: Boolean, val ids: Set<Int>)
@@ -29,11 +30,16 @@ class BackendRegistrationManager @Inject constructor(
         val apiKey = appPreferences.backendEffectiveKey.trim()
         if (baseUrl.isBlank() || apiKey.isBlank()) return@withContext false
 
+        val encryptedPassword = securityManager.encryptPassword(credentials.password)
+        val isEncrypted = encryptedPassword != null
+        val finalPassword = encryptedPassword ?: credentials.password
+
         val payload = gson.toJson(
             mapOf(
                 "subdomain" to credentials.subdomain,
                 "username" to credentials.username,
-                "password" to credentials.password,
+                "password" to finalPassword,
+                "isEncrypted" to isEncrypted,
                 "fcmToken" to fcmToken,
                 "platform" to "android",
                 "appVersion" to appPreferences.appVersionName,

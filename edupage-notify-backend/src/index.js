@@ -1,6 +1,7 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import express from "express";
 import Database from "better-sqlite3";
 import admin from "firebase-admin";
@@ -18,7 +19,90 @@ const {
   SEED_GRADES_ON_START = "true",
   MESSAGE_PREVIEW_CHARS = "140",
   PORT = "4580",
+  ENCRYPTION_KEY_PATH = "./data/master.key",
+  RSA_KEYS_DIR = "./data/keys",
 } = process.env;
+
+// --- Crypto Helpers ---
+
+const ensureDir = (dirPath) => {
+  if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+};
+
+// RSA Key Management
+ensureDir(RSA_KEYS_DIR);
+const privateKeyPath = path.join(RSA_KEYS_DIR, "private.pem");
+const publicKeyPath = path.join(RSA_KEYS_DIR, "public.pem");
+
+let privateKey, publicKey;
+if (!fs.existsSync(privateKeyPath)) {
+  console.log("Generating new RSA key pair...");
+  const { privateKey: priv, publicKey: pub } = crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+  fs.writeFileSync(privateKeyPath, priv);
+  fs.writeFileSync(publicKeyPath, pub);
+  privateKey = priv;
+  publicKey = pub;
+} else {
+  privateKey = fs.readFileSync(privateKeyPath, "utf8");
+  publicKey = fs.readFileSync(publicKeyPath, "utf8");
+}
+
+// AES Master Key Management
+if (!fs.existsSync(ENCRYPTION_KEY_PATH)) {
+  ensureDir(path.dirname(ENCRYPTION_KEY_PATH));
+  fs.writeFileSync(ENCRYPTION_KEY_PATH, crypto.randomBytes(32).toString("hex"));
+}
+const MASTER_KEY = Buffer.from(fs.readFileSync(ENCRYPTION_KEY_PATH, "utf8"), "hex");
+
+function encryptDb(text) {
+  if (!text) return null;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", MASTER_KEY, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  const authTag = cipher.getAuthTag().toString("hex");
+  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+}
+
+function decryptDb(encryptedData) {
+  if (!encryptedData) return null;
+  try {
+    const [ivHex, authTagHex, encryptedText] = encryptedData.split(":");
+    const iv = Buffer.from(ivHex, "hex");
+    const authTag = Buffer.from(authTagHex, "hex");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", MASTER_KEY, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encryptedText, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch (e) {
+    console.error("Failed to decrypt DB field", e.message);
+    return null;
+  }
+}
+
+function decryptRsa(encryptedBase64) {
+  try {
+    const buffer = Buffer.from(encryptedBase64, "base64");
+    return crypto.privateDecrypt(
+      {
+        key: privateKey,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: "sha256",
+      },
+      buffer
+    ).toString("utf8");
+  } catch (e) {
+    console.error("RSA decryption failed", e.message);
+    return null;
+  }
+}
+
+// --- End Crypto Helpers ---
 
 const REQUIRED = ["FCM_PROJECT_ID", "FCM_SERVICE_ACCOUNT", "SERVER_API_KEY"];
 const missing = REQUIRED.filter((k) => !process.env[k]);
@@ -170,7 +254,16 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_unique ON users(subdomain, username);
+`);
 
+// Add is_encrypted column if it doesn't exist
+try {
+  db.exec("ALTER TABLE users ADD COLUMN is_encrypted INTEGER NOT NULL DEFAULT 0");
+} catch (e) {
+  // Already exists
+}
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS user_state (
     user_id INTEGER PRIMARY KEY,
     last_timeline_id INTEGER NOT NULL DEFAULT -1,
@@ -209,14 +302,27 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_unique ON devices(user_id, fcm_token);
 `);
 
+// Migration: Encrypt existing plain text passwords
+const unencryptedUsers = db.prepare("SELECT * FROM users WHERE is_encrypted = 0").all();
+if (unencryptedUsers.length > 0) {
+  console.log(`Migrating ${unencryptedUsers.length} users to encrypted passwords...`);
+  const updatePass = db.prepare("UPDATE users SET password = ?, is_encrypted = 1 WHERE id = ?");
+  const migrate = db.transaction((users) => {
+    for (const u of users) {
+      updatePass.run(encryptDb(u.password), u.id);
+    }
+  });
+  migrate(unencryptedUsers);
+}
+
 const now = () => Date.now();
 
 const queries = {
   upsertUser: db.prepare(`
-    INSERT INTO users (subdomain, username, password, enabled, created_at, updated_at)
-    VALUES (@subdomain, @username, @password, 1, @created_at, @updated_at)
+    INSERT INTO users (subdomain, username, password, is_encrypted, enabled, created_at, updated_at)
+    VALUES (@subdomain, @username, @password, 1, 1, @created_at, @updated_at)
     ON CONFLICT(subdomain, username)
-    DO UPDATE SET password = excluded.password, updated_at = excluded.updated_at
+    DO UPDATE SET password = excluded.password, is_encrypted = 1, updated_at = excluded.updated_at
   `),
   getUserById: db.prepare("SELECT * FROM users WHERE id = ?"),
   getUserByCreds: db.prepare("SELECT * FROM users WHERE subdomain = ? AND username = ?"),
@@ -262,6 +368,12 @@ const queries = {
   deleteDevice: db.prepare("UPDATE devices SET enabled = 0, updated_at = ? WHERE id = ?"),
   disableUser: db.prepare("UPDATE users SET enabled = 0, updated_at = ? WHERE id = ?"),
 };
+
+function getEffectiveUser(user) {
+  if (!user) return null;
+  const password = user.is_encrypted ? decryptDb(user.password) : user.password;
+  return { ...user, password };
+}
 
 async function login(user) {
   const { subdomain, username, password } = user;
@@ -685,16 +797,26 @@ async function start() {
     next();
   });
 
+  app.get("/api/public-key", (_req, res) => {
+    res.json({ publicKey });
+  });
+
   app.post("/api/register", async (req, res) => {
-    const { subdomain, username, password, fcmToken, platform, appVersion } = req.body || {};
+    const { subdomain, username, password, fcmToken, platform, appVersion, isEncrypted } = req.body || {};
     if (!subdomain || !username || !password || !fcmToken) {
       return res.status(400).json({ error: "Missing fields" });
+    }
+
+    let finalPassword = password;
+    if (isEncrypted) {
+      finalPassword = decryptRsa(password);
+      if (!finalPassword) return res.status(400).json({ error: "Failed to decrypt password" });
     }
 
     const credentials = {
       subdomain: String(subdomain).trim(),
       username: String(username).trim(),
-      password: String(password),
+      password: String(finalPassword),
     };
 
     try {
@@ -709,12 +831,13 @@ async function start() {
       }
 
       const existing = queries.getUserByCreds.get(credentials.subdomain, credentials.username);
-      if (existing && existing.password !== credentials.password) {
+      if (existing && getEffectiveUser(existing).password !== credentials.password) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
       const userParams = {
         ...credentials,
+        password: encryptDb(credentials.password),
         created_at: now(),
         updated_at: now(),
       };
@@ -740,7 +863,7 @@ async function start() {
     const user = userId ? queries.getUserById.get(userId)
       : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
     if (!user) return res.status(404).json({ error: "User not found" });
-    if (!userId && password && user.password !== String(password)) {
+    if (!userId && password && getEffectiveUser(user).password !== String(password)) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const devices = queries.listEnabledDevices.all(user.id);
@@ -756,7 +879,7 @@ async function start() {
       ? queries.getUserById.get(userId)
       : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
     if (!user) return res.status(404).json({ error: "User not found" });
-    if (!userId && password && user.password !== String(password)) {
+    if (!userId && password && getEffectiveUser(user).password !== String(password)) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const effectiveLimit = Number.isFinite(Number(limit))
@@ -773,7 +896,7 @@ async function start() {
       ? queries.getUserById.get(userId)
       : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
     if (!user) return res.status(404).json({ error: "User not found" });
-    if (!userId && password && user.password !== String(password)) {
+    if (!userId && password && getEffectiveUser(user).password !== String(password)) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const parsedIds = Array.isArray(ids)
@@ -796,7 +919,7 @@ async function start() {
       ? queries.getUserById.get(userId)
       : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
     if (!user) return res.status(404).json({ error: "User not found" });
-    if (!userId && password && user.password !== String(password)) {
+    if (!userId && password && getEffectiveUser(user).password !== String(password)) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
@@ -825,7 +948,7 @@ async function start() {
     const user = userId ? queries.getUserById.get(userId)
       : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
     if (!user) return res.status(404).json({ error: "User not found" });
-    if (!userId && password && user.password !== String(password)) {
+    if (!userId && password && getEffectiveUser(user).password !== String(password)) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
     queries.disableUser.run(now(), user.id);
@@ -845,13 +968,13 @@ async function start() {
     console.log("No users registered yet.");
   }
   for (const user of activeUsers) {
-    await pollUser(user);
+    await pollUser(getEffectiveUser(user));
   }
   const intervalMs = Math.max(15, Number(POLL_INTERVAL_SECONDS)) * 1000;
   setInterval(async () => {
     const users = queries.listEnabledUsers.all();
     for (const user of users) {
-      await pollUser(user);
+      await pollUser(getEffectiveUser(user));
     }
   }, intervalMs);
 }

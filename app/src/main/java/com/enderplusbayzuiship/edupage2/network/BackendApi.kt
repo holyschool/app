@@ -17,6 +17,21 @@ class BackendApi @Inject constructor(
 
     data class ApiResult(val ok: Boolean, val code: Int, val body: String)
 
+    fun getPublicKey(
+        baseUrl: String,
+        apiKey: String,
+    ): ApiResult {
+        val request = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/api/public-key")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            return ApiResult(response.isSuccessful, response.code, body)
+        }
+    }
+
     fun registerDevice(
         baseUrl: String,
         apiKey: String,
