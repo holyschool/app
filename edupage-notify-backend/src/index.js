@@ -342,13 +342,53 @@ async function fetchTimeline({ subdomain, username, password }) {
   return data?.items || [];
 }
 
+const MESSAGE_TYPE_MAP = {
+  "sprava": "message",
+  "hw": "homework",
+  "homework": "homework",
+  "h_homework": "homework",
+  "test": "test",
+  "bexam": "test",
+  "oexam": "test",
+  "sexam": "test",
+  "rexam": "test",
+  "pexam": "test",
+  "testing": "test",
+  "testpridelenie": "test",
+  "oznam": "announcement",
+  "news": "announcement",
+  "znamka": "grade",
+  "znamkydoc": "grade",
+  "h_znamky": "grade",
+  "absent": "absence",
+  "student_absent": "absence",
+  "ospravedlnenka": "absence",
+  "event": "event",
+  "schoolevent": "event",
+  "culture": "event",
+  "excursion": "event",
+  "trip": "event",
+  "parentsevening": "event",
+  "meeting": "event",
+  "bmeeting": "event",
+  "signin": "signin",
+  "confirmation": "signin",
+  "payments": "payment",
+  "h_financie": "payment",
+  "h_album": "album",
+  "vcelicka": "behaviour",
+  "suplovanie": "substitution",
+  "notifikacia": "notification"
+};
+
 function parseTimeline(items) {
   return items
     .map((item) => {
       if (!item || typeof item !== "object") return null;
       const timelineId = Number(item.timelineid);
       if (Number.isNaN(timelineId)) return null;
-      const type = stringOrNull(item.typ);
+      const rawType = stringOrNull(item.typ)?.toLowerCase();
+      const type = MESSAGE_TYPE_MAP[rawType] || "notification";
       const authorName = stringOrNull(item.vlastnik_meno);
       const title = stringOrNull(item.titulok);
       const data = parseItemData(item.data);
@@ -359,12 +399,13 @@ function parseTimeline(items) {
         if (messageContent) text = messageContent;
       }
 
-      if (!text && (type === "homework" || type === "hw")) {
+      if (!text && (type === "homework")) {
         text = buildHomeworkText(data);
       }
 
       return {
         timelineId,
+        rawType,
         type,
         authorName,
         title,
@@ -440,7 +481,7 @@ async function notifyMessages(events, { topic, token }) {
     await sendTopicNotification({
       title: `Message from ${sender}`,
       body: preview || "You have a new message",
-      data: { type: "message", timelineId: msg.timelineId, sender },
+      data: { type: msg.type, timelineId: msg.timelineId, sender, rawType: msg.rawType },
       topic,
       token,
     });
@@ -449,7 +490,7 @@ async function notifyMessages(events, { topic, token }) {
   const latest = sorted[0];
   const preview = buildPreview(latest.text || latest.title || "", messagePreviewChars);
   await sendTopicNotification({
-    title: `${sorted.length} new messages`,
+    title: `${sorted.length} new updates`,
     body: preview || "Open Edupage to view them",
     data: { type: "message", count: sorted.length, timelineId: latest.timelineId },
     topic,
@@ -566,9 +607,9 @@ async function pollUser(user) {
       return;
     }
 
-    const messageEvents = newEvents.filter((e) => e.type === "sprava");
-    const gradeEvents = newEvents.filter((e) => e.type === "znamka" || e.type === "znamkydoc");
-    const substitutionEvents = newEvents.filter((e) => e.type === "suplovanie");
+    const gradeEvents = newEvents.filter((e) => e.type === "grade");
+    const substitutionEvents = newEvents.filter((e) => e.type === "substitution");
+    const otherEvents = newEvents.filter((e) => e.type !== "grade" && e.type !== "substitution");
 
     const devices = queries.listEnabledDevices.all(user.id);
     const tokenTargets = devices.length ? devices.map((d) => d.fcm_token) : [];
@@ -583,8 +624,8 @@ async function pollUser(user) {
       }
     };
 
-    if (messageEvents.length) {
-      await sendToUser((token) => notifyMessages(messageEvents, { token }));
+    if (otherEvents.length) {
+      await sendToUser((token) => notifyMessages(otherEvents, { token }));
     }
 
     if (substitutionEvents.length) {

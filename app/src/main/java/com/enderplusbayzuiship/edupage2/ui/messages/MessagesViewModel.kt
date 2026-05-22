@@ -152,6 +152,10 @@ class MessagesViewModel @Inject constructor(
         }
     }
 
+    fun getEventById(timelineId: Int): TimelineEvent? {
+        return allEvents.find { it.timelineId == timelineId }
+    }
+
     fun loadRecipients() {
         if (_recipientsState.value is RecipientsState.Loading ||
             _recipientsState.value is RecipientsState.Ready) return

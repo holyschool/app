@@ -53,14 +53,14 @@ class DeveloperOptionsViewModel @Inject constructor(
         )
 
         val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_GRADES)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_notif_grade)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(DeepLinkHelper.createGradesIntent(context, title, body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_notification, "Mark as read", markReadPendingIntent)
+            .addAction(R.drawable.ic_notif_grade, "Mark as read", markReadPendingIntent)
             .build()
         nm.notify(notifId, notification)
     }
@@ -82,14 +82,101 @@ class DeveloperOptionsViewModel @Inject constructor(
         )
 
         val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_MESSAGES)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_notif_message)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(DeepLinkHelper.createMessagesIntent(context, title, body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_notification, "Mark as read", markReadPendingIntent)
+            .addAction(R.drawable.ic_notif_message, "Mark as read", markReadPendingIntent)
+            .build()
+        nm.notify(notifId, notification)
+    }
+
+    fun testHomeworkNotification() {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notifId = 9997
+        val title = "New Homework: Physics"
+        val body = "Chapter 5 exercises 1-10. Due on Monday."
+
+        val markReadIntent = Intent(context, MarkAsReadReceiver::class.java).apply {
+            action = MarkAsReadReceiver.ACTION_MARK_AS_READ
+            putExtra(MarkAsReadReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            putExtra(MarkAsReadReceiver.EXTRA_NOTIFICATION_CHANNEL, GradeMessageCheckWorker.CHANNEL_MESSAGES)
+        }
+        val markReadPendingIntent = PendingIntent.getBroadcast(
+            context, 2, markReadIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_notif_homework)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setContentIntent(DeepLinkHelper.createMessagesIntent(context, title, body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .addAction(R.drawable.ic_notif_homework, "Mark as read", markReadPendingIntent)
+            .build()
+        nm.notify(notifId, notification)
+    }
+
+    fun testSubstitutionNotification() {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notifId = 9996
+        val title = context.getString(R.string.notif_substitution_title)
+        val body = "Monday, 3rd period: English is cancelled."
+
+        val markReadIntent = Intent(context, MarkAsReadReceiver::class.java).apply {
+            action = MarkAsReadReceiver.ACTION_MARK_AS_READ
+            putExtra(MarkAsReadReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            putExtra(MarkAsReadReceiver.EXTRA_NOTIFICATION_CHANNEL, GradeMessageCheckWorker.CHANNEL_SUBSTITUTIONS)
+        }
+        val markReadPendingIntent = PendingIntent.getBroadcast(
+            context, 3, markReadIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_SUBSTITUTIONS)
+            .setSmallIcon(R.drawable.ic_notif_substitution)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setContentIntent(DeepLinkHelper.createTimetableIntent(context, title, body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .addAction(R.drawable.ic_notif_substitution, "Mark as read", markReadPendingIntent)
+            .build()
+        nm.notify(notifId, notification)
+    }
+
+    fun testEventNotification() {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notifId = 9995
+        val title = "School Trip: Science Museum"
+        val body = "Meeting at 8:00 AM in front of the school. Don't forget your lunch!"
+
+        val markReadIntent = Intent(context, MarkAsReadReceiver::class.java).apply {
+            action = MarkAsReadReceiver.ACTION_MARK_AS_READ
+            putExtra(MarkAsReadReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            putExtra(MarkAsReadReceiver.EXTRA_NOTIFICATION_CHANNEL, GradeMessageCheckWorker.CHANNEL_MESSAGES)
+        }
+        val markReadPendingIntent = PendingIntent.getBroadcast(
+            context, 4, markReadIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_notif_event)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setContentIntent(DeepLinkHelper.createMessagesIntent(context, title, body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .addAction(R.drawable.ic_notif_event, "Mark as read", markReadPendingIntent)
             .build()
         nm.notify(notifId, notification)
     }

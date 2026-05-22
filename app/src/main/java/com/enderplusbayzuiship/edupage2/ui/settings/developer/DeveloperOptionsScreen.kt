@@ -139,6 +139,27 @@ fun DeveloperOptionsScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
+                        onClick = { viewModel.testHomeworkNotification() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Test Homework Notif")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { viewModel.testSubstitutionNotification() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Test Substitution Notif")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { viewModel.testEventNotification() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Test Event Notif")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
                         onClick = { viewModel.triggerWorker() },
                         modifier = Modifier.fillMaxWidth()
                     ) {

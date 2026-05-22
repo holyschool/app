@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
 import com.enderplusbayzuiship.edupage2.data.AppLanguage
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.data.BackendMode
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
@@ -71,6 +72,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _backendApiKey = MutableStateFlow(appPreferences.backendApiKey)
     val backendApiKey: StateFlow<String> = _backendApiKey.asStateFlow()
+
+    private val _backendMode = MutableStateFlow(appPreferences.backendMode)
+    val backendMode: StateFlow<BackendMode> = _backendMode.asStateFlow()
 
     private val _backendRegisterStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val backendRegisterStatus: SharedFlow<Boolean> = _backendRegisterStatus.asSharedFlow()
@@ -164,13 +168,18 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setBackendBaseUrl(value: String) {
-        appPreferences.backendBaseUrl = value
+        appPreferences.backendCustomUrl = value
         _backendBaseUrl.value = value
     }
 
     fun setBackendApiKey(value: String) {
-        appPreferences.backendApiKey = value
+        appPreferences.backendCustomKey = value
         _backendApiKey.value = value
+    }
+
+    fun setBackendMode(value: BackendMode) {
+        appPreferences.backendMode = value
+        _backendMode.value = value
     }
 
     fun registerDevice() {

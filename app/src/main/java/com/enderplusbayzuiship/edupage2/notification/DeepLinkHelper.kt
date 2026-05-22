@@ -11,6 +11,7 @@ object DeepLinkHelper {
     const val EXTRA_NOTIFICATION_TYPE = "notification_type"
     const val EXTRA_NOTIF_DETAIL_TITLE = "notif_detail_title"
     const val EXTRA_NOTIF_DETAIL_TEXT = "notif_detail_text"
+    const val EXTRA_TIMELINE_ID = "timeline_id"
 
     const val TARGET_GRADES = "grades"
     const val TARGET_MESSAGES = "messages"
@@ -21,20 +22,20 @@ object DeepLinkHelper {
     const val NOTIFICATION_TYPE_MESSAGE = "message"
     const val NOTIFICATION_TYPE_TIMETABLE = "timetable"
 
-    fun createGradesIntent(context: Context, detailTitle: String? = null, detailText: String? = null): PendingIntent {
-        return buildPendingIntent(context, TARGET_GRADES, NOTIFICATION_TYPE_GRADE, generateRequestCode(NOTIFICATION_TYPE_GRADE), detailTitle, detailText)
+    fun createGradesIntent(context: Context, detailTitle: String? = null, detailText: String? = null, timelineId: Int = -1): PendingIntent {
+        return buildPendingIntent(context, TARGET_GRADES, NOTIFICATION_TYPE_GRADE, generateRequestCode(NOTIFICATION_TYPE_GRADE), detailTitle, detailText, timelineId)
     }
 
-    fun createMessagesIntent(context: Context, detailTitle: String? = null, detailText: String? = null): PendingIntent {
-        return buildPendingIntent(context, TARGET_MESSAGES, NOTIFICATION_TYPE_MESSAGE, generateRequestCode(NOTIFICATION_TYPE_MESSAGE), detailTitle, detailText)
+    fun createMessagesIntent(context: Context, detailTitle: String? = null, detailText: String? = null, timelineId: Int = -1): PendingIntent {
+        return buildPendingIntent(context, TARGET_MESSAGES, NOTIFICATION_TYPE_MESSAGE, generateRequestCode(NOTIFICATION_TYPE_MESSAGE), detailTitle, detailText, timelineId)
     }
 
-    fun createTimetableIntent(context: Context, detailTitle: String? = null, detailText: String? = null): PendingIntent {
-        return buildPendingIntent(context, TARGET_TIMETABLE, NOTIFICATION_TYPE_TIMETABLE, generateRequestCode(NOTIFICATION_TYPE_TIMETABLE), detailTitle, detailText)
+    fun createTimetableIntent(context: Context, detailTitle: String? = null, detailText: String? = null, timelineId: Int = -1): PendingIntent {
+        return buildPendingIntent(context, TARGET_TIMETABLE, NOTIFICATION_TYPE_TIMETABLE, generateRequestCode(NOTIFICATION_TYPE_TIMETABLE), detailTitle, detailText, timelineId)
     }
 
     fun createOverviewIntent(context: Context): PendingIntent {
-        return buildPendingIntent(context, TARGET_OVERVIEW, null, generateRequestCode("overview"), null, null)
+        return buildPendingIntent(context, TARGET_OVERVIEW, null, generateRequestCode("overview"), null, null, -1)
     }
 
     private fun buildPendingIntent(
@@ -43,7 +44,8 @@ object DeepLinkHelper {
         notificationType: String?,
         requestCode: Int,
         detailTitle: String?,
-        detailText: String?
+        detailText: String?,
+        timelineId: Int
     ): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -51,6 +53,7 @@ object DeepLinkHelper {
             if (notificationType != null) putExtra(EXTRA_NOTIFICATION_TYPE, notificationType)
             if (detailTitle != null) putExtra(EXTRA_NOTIF_DETAIL_TITLE, detailTitle)
             if (detailText != null) putExtra(EXTRA_NOTIF_DETAIL_TEXT, detailText)
+            if (timelineId > 0) putExtra(EXTRA_TIMELINE_ID, timelineId)
         }
         return PendingIntent.getActivity(
             context,
@@ -65,12 +68,14 @@ object DeepLinkHelper {
         val notificationType = intent.getStringExtra(EXTRA_NOTIFICATION_TYPE)
         val detailTitle = intent.getStringExtra(EXTRA_NOTIF_DETAIL_TITLE)
         val detailText = intent.getStringExtra(EXTRA_NOTIF_DETAIL_TEXT)
+        val timelineId = intent.getIntExtra(EXTRA_TIMELINE_ID, -1)
 
         return DeepLinkInfo(
             target = target,
             notificationType = notificationType,
             detailTitle = detailTitle,
-            detailText = detailText
+            detailText = detailText,
+            timelineId = timelineId
         )
     }
 
@@ -88,6 +93,7 @@ object DeepLinkHelper {
         val target: String,
         val notificationType: String?,
         val detailTitle: String? = null,
-        val detailText: String? = null
+        val detailText: String? = null,
+        val timelineId: Int = -1
     )
 }

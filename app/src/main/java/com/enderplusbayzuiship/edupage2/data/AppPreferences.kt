@@ -53,6 +53,16 @@ enum class CancelledLessonStyle(val key: String) {
     }
 }
 
+enum class BackendMode(val key: String) {
+    OFFICIAL("official"),
+    OWN("own");
+
+    companion object {
+        val DEFAULT = OWN
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
 @Singleton
 class AppPreferences @Inject constructor(
     @ApplicationContext private val context: Context
@@ -91,6 +101,10 @@ class AppPreferences @Inject constructor(
         private const val KEY_BACKEND_BASE_URL = "backend_base_url"
         private const val KEY_BACKEND_API_KEY = "backend_api_key"
         private const val KEY_APP_VERSION_NAME = "app_version_name"
+        private const val KEY_BACKEND_MODE = "backend_mode"
+
+        private const val OFFICIAL_BACKEND_URL = "https://edupage.stwupid.tech"
+        private const val OFFICIAL_BACKEND_KEY = "change-this-long-random"
     }
 
     private val prefs by lazy {
@@ -222,6 +236,24 @@ class AppPreferences @Inject constructor(
     var appVersionName: String
         get() = prefs.getString(KEY_APP_VERSION_NAME, "") ?: ""
         set(value) = prefs.edit().putString(KEY_APP_VERSION_NAME, value).apply()
+
+    var backendMode: BackendMode
+        get() = BackendMode.fromKey(prefs.getString(KEY_BACKEND_MODE, null))
+        set(value) = prefs.edit().putString(KEY_BACKEND_MODE, value.key).apply()
+
+    var backendCustomUrl: String
+        get() = prefs.getString(KEY_BACKEND_BASE_URL, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_BACKEND_BASE_URL, value).apply()
+
+    var backendCustomKey: String
+        get() = prefs.getString(KEY_BACKEND_API_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_BACKEND_API_KEY, value).apply()
+
+    val backendEffectiveUrl: String
+        get() = if (backendMode == BackendMode.OFFICIAL) OFFICIAL_BACKEND_URL else backendCustomUrl
+
+    val backendEffectiveKey: String
+        get() = if (backendMode == BackendMode.OFFICIAL) OFFICIAL_BACKEND_KEY else backendCustomKey
 
     private fun <T> prefFlow(
         key: String,

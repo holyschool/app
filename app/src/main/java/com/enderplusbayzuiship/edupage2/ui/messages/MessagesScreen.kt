@@ -693,7 +693,7 @@ private val detailDateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MM
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailSheet(
+fun DetailSheet(
     event: TimelineEvent,
     onDismiss: () -> Unit,
 ) {

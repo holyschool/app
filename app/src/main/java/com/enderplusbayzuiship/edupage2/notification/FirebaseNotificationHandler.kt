@@ -20,15 +20,17 @@ object FirebaseNotificationHandler {
 
         val resolvedTitle = title ?: data["title"] ?: defaultTitle(context, type)
         val resolvedBody = body ?: data["body"] ?: defaultBody(context, type, data)
+        val timelineId = data["timelineId"]?.toIntOrNull() ?: -1
+
         val tapIntent = when (type) {
-            "grade" -> DeepLinkHelper.createGradesIntent(context, resolvedTitle, resolvedBody)
-            "substitution" -> DeepLinkHelper.createTimetableIntent(context, resolvedTitle, resolvedBody)
-            else -> DeepLinkHelper.createMessagesIntent(context, resolvedTitle, resolvedBody)
+            "grade" -> DeepLinkHelper.createGradesIntent(context, resolvedTitle, resolvedBody, timelineId)
+            "substitution" -> DeepLinkHelper.createTimetableIntent(context, resolvedTitle, resolvedBody, timelineId)
+            else -> DeepLinkHelper.createMessagesIntent(context, resolvedTitle, resolvedBody, timelineId)
         }
 
         val notificationId = System.currentTimeMillis().toInt()
-        val timelineId = data["timelineId"]?.toIntOrNull() ?: -1
-        val shouldAddAction = type == "message" && timelineId > 0
+        // All notifications should have a "Mark as read" action if they are related to a timeline event
+        val shouldAddAction = timelineId > 0 || type == "grade" || type == "substitution" || type == "message"
         val markPending = if (shouldAddAction) {
             val markIntent = android.content.Intent(context, MarkAsReadReceiver::class.java).apply {
                 action = MarkAsReadReceiver.ACTION_MARK_AS_READ
@@ -45,7 +47,7 @@ object FirebaseNotificationHandler {
         } else null
 
         val builder = NotificationCompat.Builder(context, channel)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(getNotificationIcon(type))
             .setContentTitle(resolvedTitle)
             .setContentText(resolvedBody)
             .setStyle(NotificationCompat.BigTextStyle().bigText(resolvedBody))
@@ -53,12 +55,30 @@ object FirebaseNotificationHandler {
             .setContentIntent(tapIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         if (markPending != null) {
-            builder.addAction(R.drawable.ic_notification, context.getString(R.string.notif_mark_read), markPending)
+            builder.addAction(getNotificationIcon(type), context.getString(R.string.notif_mark_read), markPending)
         }
         val notification = builder.build()
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(notificationId, notification)
+    }
+
+    fun getNotificationIcon(type: String?): Int {
+        return when (type?.lowercase()) {
+            "message"      -> R.drawable.ic_notif_message
+            "homework"     -> R.drawable.ic_notif_homework
+            "test"         -> R.drawable.ic_notif_test
+            "announcement" -> R.drawable.ic_notif_announcement
+            "grade"        -> R.drawable.ic_notif_grade
+            "substitution" -> R.drawable.ic_notif_substitution
+            "event"        -> R.drawable.ic_notif_event
+            "absence"      -> R.drawable.ic_notif_event
+            "payment"      -> R.drawable.ic_notif_generic
+            "signin"       -> R.drawable.ic_notif_generic
+            "behaviour"    -> R.drawable.ic_notif_generic
+            "album"        -> R.drawable.ic_notif_generic
+            else           -> R.drawable.ic_notification
+        }
     }
 
     private fun defaultTitle(context: Context, type: String?): String {

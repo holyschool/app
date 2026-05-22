@@ -53,8 +53,8 @@ class BackendRegistrationManager @Inject constructor(
     }
 
     suspend fun fetchReadMessageIds(limit: Int = 1000): ReadSyncResult = withContext(Dispatchers.IO) {
-        val credentials = credentialStore.load() ?: return@withContext emptySet()
-        val baseUrl = appPreferences.backendBaseUrl.trim()
+    val credentials = credentialStore.load() ?: return@withContext ReadSyncResult(false, emptySet())
+    val baseUrl = appPreferences.backendBaseUrl.trim()
         val apiKey = appPreferences.backendApiKey.trim()
         if (baseUrl.isBlank() || apiKey.isBlank()) return@withContext ReadSyncResult(false, emptySet())
 

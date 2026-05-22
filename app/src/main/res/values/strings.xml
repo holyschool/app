@@ -203,6 +203,12 @@
     <string name="settings_backend_sync">Sync read status</string>
     <string name="settings_backend_sync_success">Sync complete</string>
     <string name="settings_backend_sync_failed">Sync failed</string>
+    <string name="settings_backend_settings">Backend settings</string>
+    <string name="settings_backend_mode">Backend mode</string>
+    <string name="settings_backend_mode_official">Official</string>
+    <string name="settings_backend_mode_own">Own server</string>
+    <string name="settings_backend_official_desc">Use the official backend</string>
+    <string name="settings_backend_own_desc">Use your own backend URL and key</string>
 
     <!-- Developer Options Screen -->
     <string name="dev_options_title">Developer Options</string>

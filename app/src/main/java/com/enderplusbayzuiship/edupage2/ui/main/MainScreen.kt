@@ -85,6 +85,7 @@ fun MainScreen(onLogout: () -> Unit) {
     val pagerState    = rememberPagerState(initialPage = 0) { tabList.size }
     val gradesVm: GradesViewModel = hiltViewModel()
     val overviewVm: OverviewViewModel = hiltViewModel()
+    val messagesVm: com.enderplusbayzuiship.edupage2.ui.messages.MessagesViewModel = hiltViewModel()
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
@@ -93,6 +94,7 @@ fun MainScreen(onLogout: () -> Unit) {
             }
     }
 
+    var detailEvent by remember { mutableStateOf<com.edupage.api.model.TimelineEvent?>(null) }
     var deepLinkDetail by remember { mutableStateOf<DeepLinkHelper.DeepLinkInfo?>(null) }
 
     LaunchedEffect(Unit) {
@@ -111,7 +113,15 @@ fun MainScreen(onLogout: () -> Unit) {
                 MainActivity.pendingDeepLinkInfo = null
             }
 
-            if (!deepLinkInfo.detailTitle.isNullOrBlank()) {
+            if (deepLinkInfo.timelineId > 0) {
+                val event = messagesVm.getEventById(deepLinkInfo.timelineId)
+                if (event != null) {
+                    detailEvent = event
+                } else {
+                    // Fallback to basic dialog if event not found in cache
+                    deepLinkDetail = deepLinkInfo
+                }
+            } else if (!deepLinkInfo.detailTitle.isNullOrBlank()) {
                 deepLinkDetail = deepLinkInfo
             }
         }
@@ -126,6 +136,13 @@ fun MainScreen(onLogout: () -> Unit) {
     val onGradeClick: (subjectHint: String) -> Unit = { subjectHint ->
         gradesVm.requestHighlight(subjectHint)
         scope.launch { pagerState.scrollToPage(3) }
+    }
+
+    detailEvent?.let { event ->
+        com.enderplusbayzuiship.edupage2.ui.messages.DetailSheet(
+            event = event,
+            onDismiss = { detailEvent = null },
+        )
     }
 
     val backEnabled = showAbout || showSettings || showDeveloperOptions || pagerState.currentPage != 0

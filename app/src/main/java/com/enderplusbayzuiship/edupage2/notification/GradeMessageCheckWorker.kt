@@ -221,7 +221,8 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             }
             val subject = g.subjectName ?: appContext.getString(R.string.grades_unknown_subject)
             nm.notify(NOTIF_ID_GRADES, buildNotification(CHANNEL_GRADES, appContext.getString(R.string.notif_grade_title),
-                appContext.getString(R.string.notif_grade_single, gradeText, subject), R.drawable.ic_notification, NOTIF_GROUP_GRADES))
+                appContext.getString(R.string.notif_grade_single, gradeText, subject), 
+                FirebaseNotificationHandler.getNotificationIcon("grade"), NOTIF_GROUP_GRADES))
         } else {
             newGrades.forEachIndexed { index, grade ->
                 val gradeText = when (val n = grade.gradeN) {
@@ -231,10 +232,12 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                 }
                 val subject = grade.subjectName ?: appContext.getString(R.string.grades_unknown_subject)
                 nm.notify(NOTIF_ID_GRADES + index + 1, buildNotification(CHANNEL_GRADES, appContext.getString(R.string.notif_grade_title),
-                    appContext.getString(R.string.notif_grade_single, gradeText, subject), R.drawable.ic_notification, NOTIF_GROUP_GRADES))
+                    appContext.getString(R.string.notif_grade_single, gradeText, subject), 
+                    FirebaseNotificationHandler.getNotificationIcon("grade"), NOTIF_GROUP_GRADES))
             }
             nm.notify(NOTIF_ID_GRADES, buildSummaryNotification(CHANNEL_GRADES, appContext.getString(R.string.notif_grade_title),
-                appContext.getString(R.string.notif_grade_multiple, newGrades.size), R.drawable.ic_notification, NOTIF_GROUP_GRADES))
+                appContext.getString(R.string.notif_grade_multiple, newGrades.size), 
+                FirebaseNotificationHandler.getNotificationIcon("grade"), NOTIF_GROUP_GRADES))
         }
     }
 
@@ -248,16 +251,19 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             val sender = msg.authorName ?: appContext.getString(R.string.notif_message_unknown_sender)
             val preview = msg.text?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: ""
             nm.notify(NOTIF_ID_MESSAGES, buildNotification(CHANNEL_MESSAGES, appContext.getString(R.string.notif_message_title, sender),
-                preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) }, R.drawable.ic_notification, NOTIF_GROUP_MESSAGES))
+                preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) }, 
+                FirebaseNotificationHandler.getNotificationIcon(msg.type), NOTIF_GROUP_MESSAGES))
         } else {
             newEvents.forEachIndexed { index, msg ->
                 val sender = msg.authorName ?: appContext.getString(R.string.notif_message_unknown_sender)
                 val preview = msg.text?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: ""
                 nm.notify(NOTIF_ID_MESSAGES + index + 1, buildNotification(CHANNEL_MESSAGES, appContext.getString(R.string.notif_message_title, sender),
-                    preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) }, R.drawable.ic_notification, NOTIF_GROUP_MESSAGES))
+                    preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) }, 
+                    FirebaseNotificationHandler.getNotificationIcon(msg.type), NOTIF_GROUP_MESSAGES))
             }
             nm.notify(NOTIF_ID_MESSAGES, buildSummaryNotification(CHANNEL_MESSAGES, appContext.getString(R.string.notif_message_title_multiple),
-                appContext.getString(R.string.notif_message_multiple, newEvents.size), R.drawable.ic_notification, NOTIF_GROUP_MESSAGES))
+                appContext.getString(R.string.notif_message_multiple, newEvents.size), 
+                FirebaseNotificationHandler.getNotificationIcon("message"), NOTIF_GROUP_MESSAGES))
         }
     }
 
@@ -273,18 +279,18 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             nm.notify(NOTIF_ID_SUBSTITUTIONS, buildNotification(CHANNEL_SUBSTITUTIONS, 
                 appContext.getString(R.string.notif_substitution_title),
                 ev.title ?: appContext.getString(R.string.notif_substitution_new), 
-                R.drawable.ic_notification, NOTIF_GROUP_SUBSTITUTIONS))
+                FirebaseNotificationHandler.getNotificationIcon("substitution"), NOTIF_GROUP_SUBSTITUTIONS))
         } else {
             newEvents.forEachIndexed { index, ev ->
                 nm.notify(NOTIF_ID_SUBSTITUTIONS + index + 1, buildNotification(CHANNEL_SUBSTITUTIONS,
                     appContext.getString(R.string.notif_substitution_title),
                     ev.title ?: appContext.getString(R.string.notif_substitution_new),
-                    R.drawable.ic_notification, NOTIF_GROUP_SUBSTITUTIONS))
+                    FirebaseNotificationHandler.getNotificationIcon("substitution"), NOTIF_GROUP_SUBSTITUTIONS))
             }
             nm.notify(NOTIF_ID_SUBSTITUTIONS, buildSummaryNotification(CHANNEL_SUBSTITUTIONS,
                 appContext.getString(R.string.notif_substitution_title),
                 appContext.getString(R.string.notif_substitution_multiple, newEvents.size),
-                R.drawable.ic_notification, NOTIF_GROUP_SUBSTITUTIONS))
+                FirebaseNotificationHandler.getNotificationIcon("substitution"), NOTIF_GROUP_SUBSTITUTIONS))
         }
     }
 
