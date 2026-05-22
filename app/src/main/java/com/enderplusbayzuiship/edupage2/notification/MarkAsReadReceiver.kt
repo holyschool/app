@@ -4,13 +4,9 @@ import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MarkAsReadReceiver : BroadcastReceiver() {
@@ -27,33 +23,17 @@ class MarkAsReadReceiver : BroadcastReceiver() {
         if (intent.action != ACTION_MARK_AS_READ) return
 
         val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
-        val channel = intent.getStringExtra(EXTRA_NOTIFICATION_CHANNEL) ?: return
         val timelineId = intent.getIntExtra(FirebaseNotificationHandler.EXTRA_TIMELINE_ID, -1)
 
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(notificationId)
-
-        val prefs = AppPreferences(context)
-        when (channel) {
-            GradeMessageCheckWorker.CHANNEL_GRADES -> {
-                val currentId = prefs.lastTimelineId
-                if (currentId < 99999) prefs.lastTimelineId = 99999
-                prefs.markGradeIdsNotified(emptyList())
-            }
-            GradeMessageCheckWorker.CHANNEL_MESSAGES -> {
-                if (timelineId > 0) {
-                    prefs.markTimelineIdsSeen(listOf(timelineId))
-                    val currentId = prefs.lastTimelineId
-                    if (timelineId > currentId) prefs.lastTimelineId = timelineId
-                    CoroutineScope(Dispatchers.IO).launch {
-                        backendRegistrationManager.markMessagesRead(listOf(timelineId))
-                    }
-                }
-            }
-            GradeMessageCheckWorker.CHANNEL_SUBSTITUTIONS -> {
-                val currentId = prefs.lastTimelineId
-                if (currentId < 99999) prefs.lastTimelineId = 99999
-            }
+        if (notificationId >= 0) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(notificationId)
         }
+
+        NotificationReadHelper.markTimelineRead(
+            context = context,
+            timelineId = timelineId,
+            backendRegistrationManager = backendRegistrationManager,
+        )
     }
 }

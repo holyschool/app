@@ -126,22 +126,24 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             val newEvents = timelineEvents.filter { it.timelineId > effectiveLastTimelineId }
             Log.i(TAG, "Found ${newEvents.size} new timeline event(s)")
 
-            val hasNewGrades = newEvents.any { it.type == "znamka" || it.type == "znamkydoc" }
-            val hasNewMessages = newEvents.any { it.type == "sprava" }
-            val hasNewSubstitutions = newEvents.any { it.type == "suplovanie" }
-
-            if (hasNewGrades && appPreferences.notifGradesEnabled) {
-                checkGrades()
+            val gradeEvents = newEvents.filter { NotificationType.isGrade(it.type) }
+            val substitutionEvents = newEvents.filter { NotificationType.isSubstitution(it.type) }
+            val otherTimelineEvents = newEvents.filter {
+                val t = NotificationType.normalize(it.type)
+                t != "grade" && t != "substitution"
             }
 
-            if (hasNewMessages && appPreferences.notifMessagesEnabled) {
-                // Messages are already filtered by timeline ID in checkMessages
-                // but we trigger it here based on timeline optimization.
-                checkMessages(newEvents.filter { it.type == "sprava" })
+            if (gradeEvents.isNotEmpty() && appPreferences.notifGradesEnabled) {
+                val gradeTimelineId = gradeEvents.maxOf { it.timelineId }
+                checkGrades(gradeTimelineId)
             }
 
-            if (hasNewSubstitutions && appPreferences.notifSubstitutionsEnabled) {
-                checkSubstitutions(newEvents.filter { it.type == "suplovanie" })
+            if (otherTimelineEvents.isNotEmpty() && appPreferences.notifMessagesEnabled) {
+                checkTimelineNotifications(otherTimelineEvents)
+            }
+
+            if (substitutionEvents.isNotEmpty() && appPreferences.notifSubstitutionsEnabled) {
+                checkSubstitutions(substitutionEvents)
             }
 
             appPreferences.lastTimelineId = maxTimelineId
@@ -193,7 +195,7 @@ class GradeMessageCheckWorker @AssistedInject constructor(
         return Result.failure()
     }
 
-    private suspend fun checkGrades() {
+    private suspend fun checkGrades(gradeTimelineId: Int = -1) {
         val year = edupage.getSchoolYear() ?: return
         val activeTerm = if (gradesCache.hasCacheFor(Term.SECOND)) Term.SECOND else Term.FIRST
         
@@ -220,9 +222,17 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                 else      -> "?"
             }
             val subject = g.subjectName ?: appContext.getString(R.string.grades_unknown_subject)
-            nm.notify(NOTIF_ID_GRADES, buildNotification(CHANNEL_GRADES, appContext.getString(R.string.notif_grade_title),
-                appContext.getString(R.string.notif_grade_single, gradeText, subject), 
-                FirebaseNotificationHandler.getNotificationIcon("grade"), NOTIF_GROUP_GRADES))
+            nm.notify(
+                NOTIF_ID_GRADES,
+                buildNotification(
+                    channel = CHANNEL_GRADES,
+                    title = appContext.getString(R.string.notif_grade_title),
+                    text = appContext.getString(R.string.notif_grade_single, gradeText, subject),
+                    iconRes = NotificationType.iconFor("grade"),
+                    group = NOTIF_GROUP_GRADES,
+                    timelineId = gradeTimelineId,
+                ),
+            )
         } else {
             newGrades.forEachIndexed { index, grade ->
                 val gradeText = when (val n = grade.gradeN) {
@@ -231,40 +241,96 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                     else      -> "?"
                 }
                 val subject = grade.subjectName ?: appContext.getString(R.string.grades_unknown_subject)
-                nm.notify(NOTIF_ID_GRADES + index + 1, buildNotification(CHANNEL_GRADES, appContext.getString(R.string.notif_grade_title),
-                    appContext.getString(R.string.notif_grade_single, gradeText, subject), 
-                    FirebaseNotificationHandler.getNotificationIcon("grade"), NOTIF_GROUP_GRADES))
+                nm.notify(
+                    NOTIF_ID_GRADES + index + 1,
+                    buildNotification(
+                        channel = CHANNEL_GRADES,
+                        title = appContext.getString(R.string.notif_grade_title),
+                        text = appContext.getString(R.string.notif_grade_single, gradeText, subject),
+                        iconRes = NotificationType.iconFor("grade"),
+                        group = NOTIF_GROUP_GRADES,
+                        timelineId = gradeTimelineId,
+                    ),
+                )
             }
-            nm.notify(NOTIF_ID_GRADES, buildSummaryNotification(CHANNEL_GRADES, appContext.getString(R.string.notif_grade_title),
-                appContext.getString(R.string.notif_grade_multiple, newGrades.size), 
-                FirebaseNotificationHandler.getNotificationIcon("grade"), NOTIF_GROUP_GRADES))
+            nm.notify(
+                NOTIF_ID_GRADES,
+                buildSummaryNotification(
+                    channel = CHANNEL_GRADES,
+                    title = appContext.getString(R.string.notif_grade_title),
+                    text = appContext.getString(R.string.notif_grade_multiple, newGrades.size),
+                    iconRes = NotificationType.iconFor("grade"),
+                    group = NOTIF_GROUP_GRADES,
+                ),
+            )
         }
     }
 
-    private fun checkMessages(newEvents: List<com.edupage.api.model.TimelineEvent>) {
+    private fun checkTimelineNotifications(newEvents: List<com.edupage.api.model.TimelineEvent>) {
         if (newEvents.isEmpty()) return
 
         val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (newEvents.size == 1) {
             val msg = newEvents.first()
-            val sender = msg.authorName ?: appContext.getString(R.string.notif_message_unknown_sender)
-            val preview = msg.text?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: ""
-            nm.notify(NOTIF_ID_MESSAGES, buildNotification(CHANNEL_MESSAGES, appContext.getString(R.string.notif_message_title, sender),
-                preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) }, 
-                FirebaseNotificationHandler.getNotificationIcon(msg.type), NOTIF_GROUP_MESSAGES))
+            val (title, body) = timelineNotificationContent(msg)
+            nm.notify(
+                msg.timelineId,
+                buildNotification(
+                    channel = CHANNEL_MESSAGES,
+                    title = title,
+                    text = body,
+                    iconRes = NotificationType.iconFor(msg.type),
+                    group = NOTIF_GROUP_MESSAGES,
+                    timelineId = msg.timelineId,
+                ),
+            )
         } else {
-            newEvents.forEachIndexed { index, msg ->
-                val sender = msg.authorName ?: appContext.getString(R.string.notif_message_unknown_sender)
-                val preview = msg.text?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: ""
-                nm.notify(NOTIF_ID_MESSAGES + index + 1, buildNotification(CHANNEL_MESSAGES, appContext.getString(R.string.notif_message_title, sender),
-                    preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) }, 
-                    FirebaseNotificationHandler.getNotificationIcon(msg.type), NOTIF_GROUP_MESSAGES))
+            newEvents.forEach { msg ->
+                val (title, body) = timelineNotificationContent(msg)
+                nm.notify(
+                    msg.timelineId,
+                    buildNotification(
+                        channel = CHANNEL_MESSAGES,
+                        title = title,
+                        text = body,
+                        iconRes = NotificationType.iconFor(msg.type),
+                        group = NOTIF_GROUP_MESSAGES,
+                        timelineId = msg.timelineId,
+                    ),
+                )
             }
-            nm.notify(NOTIF_ID_MESSAGES, buildSummaryNotification(CHANNEL_MESSAGES, appContext.getString(R.string.notif_message_title_multiple),
-                appContext.getString(R.string.notif_message_multiple, newEvents.size), 
-                FirebaseNotificationHandler.getNotificationIcon("message"), NOTIF_GROUP_MESSAGES))
+            nm.notify(
+                NOTIF_ID_MESSAGES,
+                buildSummaryNotification(
+                    channel = CHANNEL_MESSAGES,
+                    title = appContext.getString(R.string.notif_message_title_multiple),
+                    text = appContext.getString(R.string.notif_message_multiple, newEvents.size),
+                    iconRes = NotificationType.iconFor("message"),
+                    group = NOTIF_GROUP_MESSAGES,
+                ),
+            )
         }
+    }
+
+    private fun timelineNotificationContent(event: com.edupage.api.model.TimelineEvent): Pair<String, String> {
+        val sender = event.authorName ?: appContext.getString(R.string.notif_message_unknown_sender)
+        val type = NotificationType.normalize(event.type)
+        val title = when (type) {
+            "homework" -> appContext.getString(R.string.notif_homework_title_sender, sender)
+            "test" -> appContext.getString(R.string.notif_test_title_sender, sender)
+            "absence" -> appContext.getString(R.string.notif_absence_title_sender, sender)
+            "announcement" -> appContext.getString(R.string.notif_announcement_title_sender, sender)
+            "event" -> appContext.getString(R.string.notif_event_title_sender, sender)
+            else -> appContext.getString(R.string.notif_message_title, sender)
+        }
+        val preview = (event.title ?: event.text)
+            ?.replace(Regex("<[^>]+>"), "")
+            ?.trim()
+            ?.let { if (it.length > 80) "${it.take(80)}…" else it }
+            ?: ""
+        val body = preview.ifBlank { appContext.getString(R.string.notif_message_no_preview) }
+        return title to body
     }
 
     private suspend fun checkSubstitutions(newEvents: List<com.edupage.api.model.TimelineEvent>) {
@@ -276,33 +342,67 @@ class GradeMessageCheckWorker @AssistedInject constructor(
 
         if (newEvents.size == 1) {
             val ev = newEvents.first()
-            nm.notify(NOTIF_ID_SUBSTITUTIONS, buildNotification(CHANNEL_SUBSTITUTIONS, 
-                appContext.getString(R.string.notif_substitution_title),
-                ev.title ?: appContext.getString(R.string.notif_substitution_new), 
-                FirebaseNotificationHandler.getNotificationIcon("substitution"), NOTIF_GROUP_SUBSTITUTIONS))
+            nm.notify(
+                ev.timelineId,
+                buildNotification(
+                    channel = CHANNEL_SUBSTITUTIONS,
+                    title = appContext.getString(R.string.notif_substitution_title),
+                    text = ev.title ?: appContext.getString(R.string.notif_substitution_new),
+                    iconRes = NotificationType.iconFor("substitution"),
+                    group = NOTIF_GROUP_SUBSTITUTIONS,
+                    timelineId = ev.timelineId,
+                ),
+            )
         } else {
-            newEvents.forEachIndexed { index, ev ->
-                nm.notify(NOTIF_ID_SUBSTITUTIONS + index + 1, buildNotification(CHANNEL_SUBSTITUTIONS,
-                    appContext.getString(R.string.notif_substitution_title),
-                    ev.title ?: appContext.getString(R.string.notif_substitution_new),
-                    FirebaseNotificationHandler.getNotificationIcon("substitution"), NOTIF_GROUP_SUBSTITUTIONS))
+            newEvents.forEach { ev ->
+                nm.notify(
+                    ev.timelineId,
+                    buildNotification(
+                        channel = CHANNEL_SUBSTITUTIONS,
+                        title = appContext.getString(R.string.notif_substitution_title),
+                        text = ev.title ?: appContext.getString(R.string.notif_substitution_new),
+                        iconRes = NotificationType.iconFor("substitution"),
+                        group = NOTIF_GROUP_SUBSTITUTIONS,
+                        timelineId = ev.timelineId,
+                    ),
+                )
             }
-            nm.notify(NOTIF_ID_SUBSTITUTIONS, buildSummaryNotification(CHANNEL_SUBSTITUTIONS,
-                appContext.getString(R.string.notif_substitution_title),
-                appContext.getString(R.string.notif_substitution_multiple, newEvents.size),
-                FirebaseNotificationHandler.getNotificationIcon("substitution"), NOTIF_GROUP_SUBSTITUTIONS))
+            nm.notify(
+                NOTIF_ID_SUBSTITUTIONS,
+                buildSummaryNotification(
+                    channel = CHANNEL_SUBSTITUTIONS,
+                    title = appContext.getString(R.string.notif_substitution_title),
+                    text = appContext.getString(R.string.notif_substitution_multiple, newEvents.size),
+                    iconRes = NotificationType.iconFor("substitution"),
+                    group = NOTIF_GROUP_SUBSTITUTIONS,
+                ),
+            )
         }
     }
 
-    private fun buildNotification(channel: String, title: String, text: String, iconRes: Int, group: String? = null): android.app.Notification {
+    private fun buildNotification(
+        channel: String,
+        title: String,
+        text: String,
+        iconRes: Int,
+        group: String? = null,
+        timelineId: Int = -1,
+    ): android.app.Notification {
         val tapIntent = when (channel) {
-            CHANNEL_GRADES -> DeepLinkHelper.createGradesIntent(appContext, title, text)
-            CHANNEL_MESSAGES -> DeepLinkHelper.createMessagesIntent(appContext, title, text)
-            CHANNEL_SUBSTITUTIONS -> DeepLinkHelper.createTimetableIntent(appContext, title, text)
+            CHANNEL_GRADES -> DeepLinkHelper.createGradesIntent(appContext, title, text, timelineId)
+            CHANNEL_MESSAGES -> DeepLinkHelper.createMessagesIntent(appContext, title, text, timelineId)
+            CHANNEL_SUBSTITUTIONS -> DeepLinkHelper.createTimetableIntent(appContext, title, text, timelineId)
             else -> DeepLinkHelper.createOverviewIntent(appContext)
         }
 
-        return NotificationCompat.Builder(appContext, channel)
+        val notificationId = if (timelineId > 0) timelineId else System.currentTimeMillis().toInt()
+        val markPending = if (timelineId > 0) {
+            FirebaseNotificationHandler.createMarkReadPendingIntent(
+                appContext, timelineId, notificationId, channel,
+            )
+        } else null
+
+        val builder = NotificationCompat.Builder(appContext, channel)
             .setSmallIcon(iconRes)
             .setContentTitle(title)
             .setContentText(text)
@@ -311,7 +411,14 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             .setContentIntent(tapIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .apply { if (group != null) setGroup(group) }
-            .build()
+
+        if (markPending != null) {
+            builder
+                .addAction(iconRes, appContext.getString(R.string.notif_mark_read), markPending)
+                .setDeleteIntent(markPending)
+        }
+
+        return builder.build()
     }
 
     private fun buildSummaryNotification(channel: String, title: String, text: String, iconRes: Int, group: String): android.app.Notification {

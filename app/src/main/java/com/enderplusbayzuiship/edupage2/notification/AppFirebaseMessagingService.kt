@@ -26,8 +26,8 @@ class AppFirebaseMessagingService : FirebaseMessagingService() {
         FirebaseNotificationHandler.showNotification(
             context = this,
             data = message.data,
-            title = message.notification?.title,
-            body = message.notification?.body,
+            title = message.notification?.title ?: message.data["title"],
+            body = message.notification?.body ?: message.data["body"],
         )
 
     }

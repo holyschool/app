@@ -184,7 +184,7 @@ fun MessagesScreen(
     val refreshState    = rememberPullToRefreshState()
 
     var showCompose    by remember { mutableStateOf(false) }
-    var detailEvent    by remember { mutableStateOf<TimelineEvent?>(null) }
+    var detailGroup    by remember { mutableStateOf<MessageGroup?>(null) }
     var selectedFilter by remember { mutableStateOf<Int?>(null) }
     var showFilterRow  by remember { mutableStateOf(false) }
 
@@ -345,9 +345,9 @@ fun MessagesScreen(
                         }
 
                         is MessagesUiState.Success -> {
-                            val filteredItems = if (selectedFilter == null) state.items
-                            else state.items.filter { typeInfoFor(it.type).labelRes == selectedFilter }
-                            if (filteredItems.isEmpty() && !state.canLoadMore) {
+                            val filteredGroups = if (selectedFilter == null) state.groups
+                            else state.groups.filter { typeInfoFor(it.main.type).labelRes == selectedFilter }
+                            if (filteredGroups.isEmpty() && !state.canLoadMore) {
                                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Text(
                                         text = stringResource(R.string.messages_no_messages),
@@ -357,22 +357,23 @@ fun MessagesScreen(
                                 }
                             } else {
                                 MessagesList(
-                                    state = state.copy(items = filteredItems),
+                                    state = state.copy(groups = filteredGroups),
                                     bottomPadding = bottomPadding,
                                     onLoadMore = { viewModel.loadMore() },
-                                    onItemClick = { event ->
+                                    onItemClick = { group ->
                                         haptics.tick()
-                                        viewModel.markMessageSeen(event.timelineId)
-                                        val type = event.type?.lowercase()
+                                        viewModel.markMessageSeen(group.main.timelineId)
+                                        group.replies.forEach { viewModel.markMessageSeen(it.timelineId) }
+                                        val type = group.main.type?.lowercase()
                                         if (type == "znamka" || type == "znamkydoc" || type == "h_znamky" || type == "settings") {
-                                            val subject = extractSubjectFromGradeText(event.text)
+                                            val subject = extractSubjectFromGradeText(group.main.text)
                                             if (subject != null) {
                                                 onGradeClick(subject)
                                             } else {
                                                 onGradeClick("")
                                             }
                                         } else {
-                                            detailEvent = event
+                                            detailGroup = group
                                         }
                                     },
                                 )
@@ -384,10 +385,10 @@ fun MessagesScreen(
         }
     }
 
-    detailEvent?.let { event ->
+    detailGroup?.let { group ->
         DetailSheet(
-            event = event,
-            onDismiss = { detailEvent = null },
+            group = group,
+            onDismiss = { detailGroup = null },
         )
     }
 
@@ -441,7 +442,7 @@ private fun FilterRow(
 }
 
 private sealed interface MessageListItem {
-    data class Event(val event: TimelineEvent, val isUnread: Boolean) : MessageListItem
+    data class Group(val group: MessageGroup, val isUnread: Boolean) : MessageListItem
     data object NewDivider : MessageListItem
 }
 
@@ -450,7 +451,7 @@ private fun MessagesList(
     state: MessagesUiState.Success,
     bottomPadding: PaddingValues,
     onLoadMore: () -> Unit,
-    onItemClick: (TimelineEvent) -> Unit,
+    onItemClick: (MessageGroup) -> Unit,
 ) {
     val listState = rememberLazyListState()
 
@@ -471,15 +472,18 @@ private fun MessagesList(
             }
     }
 
-    val listItems = remember(state.items, state.seenIds) {
+    val listItems = remember(state.groups, state.seenIds) {
         val seenIds = state.seenIds
-        val firstReadIdx = state.items.indexOfFirst { it.timelineId in seenIds }
+        val firstReadIdx = state.groups.indexOfFirst { g ->
+            g.main.timelineId in seenIds && g.replies.all { it.timelineId in seenIds }
+        }
         val items = mutableListOf<MessageListItem>()
-        state.items.forEachIndexed { index, event ->
+        state.groups.forEachIndexed { index, group ->
             if (firstReadIdx > 0 && index == firstReadIdx) {
                 items.add(MessageListItem.NewDivider)
             }
-            items.add(MessageListItem.Event(event, event.timelineId !in seenIds))
+            val isUnread = group.main.timelineId !in seenIds || group.replies.any { it.timelineId !in seenIds }
+            items.add(MessageListItem.Group(group, isUnread))
         }
         items.toList()
     }
@@ -494,14 +498,14 @@ private fun MessagesList(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         items(listItems, key = { when (it) {
-            is MessageListItem.Event -> "evt_${it.event.timelineId}"
+            is MessageListItem.Group -> "grp_${it.group.main.timelineId}"
             is MessageListItem.NewDivider -> "new_divider"
         } }) { item ->
             when (item) {
-                is MessageListItem.Event -> MessageItem(
-                    event = item.event,
+                is MessageListItem.Group -> MessageItem(
+                    group = item.group,
                     isUnread = item.isUnread,
-                    onClick = { onItemClick(item.event) }
+                    onClick = { onItemClick(item.group) }
                 )
                 is MessageListItem.NewDivider -> NewMessagesDivider()
             }
@@ -526,7 +530,8 @@ private val timeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
 private val fullTimeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 @Composable
-private fun MessageItem(event: TimelineEvent, isUnread: Boolean, onClick: () -> Unit) {
+private fun MessageItem(group: MessageGroup, isUnread: Boolean, onClick: () -> Unit) {
+    val event = group.main
     val typeInfo  = typeInfoFor(event.type)
     val typeLabel = stringResource(typeInfo.labelRes)
     val timeText  = event.timestamp?.let { ts ->
@@ -610,6 +615,20 @@ private fun MessageItem(event: TimelineEvent, isUnread: Boolean, onClick: () -> 
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (group.replies.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ) {
+                            Text(
+                                text = "+${group.replies.size}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
                     TypeChip(label = typeLabel)
                 }
             }
@@ -683,7 +702,7 @@ private val detailDateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MM
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailSheet(
-    event: TimelineEvent,
+    group: MessageGroup,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -694,7 +713,7 @@ fun DetailSheet(
         sheetState = sheetState,
     ) {
         DetailSheetContent(
-            event = event,
+            group = group,
             onClose = {
                 scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
             },
@@ -704,9 +723,10 @@ fun DetailSheet(
 
 @Composable
 private fun DetailSheetContent(
-    event: TimelineEvent,
+    group: MessageGroup,
     onClose: () -> Unit,
 ) {
+    val event = group.main
     val typeInfo  = typeInfoFor(event.type)
     val typeLabel = stringResource(typeInfo.labelRes)
     val displayText = event.text?.unescapeHtml()
@@ -773,6 +793,59 @@ private fun DetailSheetContent(
                 text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+
+        if (group.replies.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = stringResource(R.string.messages_replies_label, group.replies.size),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(12.dp))
+            
+            group.replies.forEach { reply ->
+                ReplyItem(reply = reply)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplyItem(reply: TimelineEvent) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = reply.authorName ?: stringResource(R.string.messages_unknown_sender),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                reply.timestamp?.let {
+                    Text(
+                        text = it.format(detailDateFmt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = (reply.text ?: reply.title ?: "").unescapeHtml(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

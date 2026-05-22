@@ -114,11 +114,11 @@ fun MainScreen(onLogout: () -> Unit) {
             }
 
             if (deepLinkInfo.timelineId > 0) {
+                messagesVm.markMessageSeen(deepLinkInfo.timelineId)
                 val event = messagesVm.getEventById(deepLinkInfo.timelineId)
                 if (event != null) {
                     detailEvent = event
                 } else {
-                    // Fallback to basic dialog if event not found in cache
                     deepLinkDetail = deepLinkInfo
                 }
             } else if (!deepLinkInfo.detailTitle.isNullOrBlank()) {

@@ -560,6 +560,8 @@ function parseTimeline(items) {
         else if (data && data.text) text = stringOrNull(data.text);
       }
 
+      const reactionTo = Number(item.reakcia_na) || null;
+
       return {
         timelineId,
         rawType,
@@ -567,6 +569,7 @@ function parseTimeline(items) {
         authorName,
         title,
         text,
+        reactionTo,
       };
     })
     .filter(Boolean);
@@ -623,18 +626,27 @@ function isStaleFcmTokenError(err) {
   );
 }
 
+function channelForType(type) {
+  if (type === "grade") return "grades_new";
+  if (type === "substitution") return "substitutions_new";
+  return "messages_new";
+}
+
 async function sendTopicNotification({ title, body, data, topic, token }) {
+  // Data-only so the app always builds notifications with correct icons, channels, and actions.
   const payload = {
-    notification: { title, body },
+    data: toDataPayload({
+      title,
+      body,
+      channel: channelForType(data?.type),
+      ...data,
+    }),
+    android: { priority: "high" },
   };
   if (token) {
     payload.token = token;
   } else {
     payload.topic = topic || FCM_TOPIC;
-  }
-  const dataPayload = toDataPayload(data);
-  if (Object.keys(dataPayload).length) {
-    payload.data = dataPayload;
   }
   await admin.messaging().send(payload);
 }
@@ -672,12 +684,24 @@ async function notifyMessages(events, { topic, token }) {
     else if (msg.type === "test") title = `New Test: ${sender}`;
     else if (msg.type === "event") title = `School Event: ${sender}`;
     else if (msg.type === "announcement") title = `Announcement: ${sender}`;
+    else if (msg.type === "signin") title = `Confirmation request: ${sender}`;
+    else if (msg.type === "payment") title = `New Payment: ${sender}`;
+    else if (msg.type === "album") title = `New Photos: ${sender}`;
+    else if (msg.type === "behaviour") title = `Behaviour record: ${sender}`;
+    else if (msg.type === "notification") title = `Notification: ${sender}`;
 
     const preview = buildPreview(msg.text || msg.title || "", messagePreviewChars);
     await sendTopicNotification({
       title,
       body: preview || "You have a new update",
-      data: { type: msg.type, timelineId: msg.timelineId, sender, rawType: msg.rawType },
+      data: {
+        type: msg.type,
+        timelineId: msg.timelineId,
+        sender,
+        rawType: msg.rawType,
+        title,
+        body: preview || "You have a new update",
+      },
       topic,
       token,
     });
@@ -688,7 +712,14 @@ async function notifyMessages(events, { topic, token }) {
   await sendTopicNotification({
     title: `${sorted.length} new updates`,
     body: preview || "Open Edupage to view them",
-    data: { type: "message", count: sorted.length, timelineId: latest.timelineId },
+    data: {
+      type: latest.type,
+      count: sorted.length,
+      timelineId: latest.timelineId,
+      sender: latest.authorName || "",
+      title: `${sorted.length} new updates`,
+      body: preview || "Open Edupage to view them",
+    },
     topic,
     token,
   });
@@ -704,7 +735,7 @@ async function notifySubstitutions(events, { topic, token }) {
     await sendTopicNotification({
       title,
       body,
-      data: { type: "substitution", timelineId: ev.timelineId },
+      data: { type: "substitution", timelineId: ev.timelineId, title, body },
       topic,
       token,
     });
@@ -715,23 +746,39 @@ async function notifySubstitutions(events, { topic, token }) {
   await sendTopicNotification({
     title: `${sorted.length} substitution updates`,
     body: body || "Open Edupage to view them",
-    data: { type: "substitution", count: sorted.length, timelineId: latest.timelineId },
+    data: {
+      type: "substitution",
+      count: sorted.length,
+      timelineId: latest.timelineId,
+      title: `${sorted.length} substitution updates`,
+      body: body || "Open Edupage to view them",
+    },
     topic,
     token,
   });
 }
 
-async function notifyGrades(grades, { topic, token }) {
+async function notifyGrades(grades, { topic, token, timelineId = 0 }) {
   if (!grades.length) return;
   const sorted = [...grades].sort((a, b) => b.eventId - a.eventId);
   if (sorted.length === 1) {
     const g = sorted[0];
     const gradeText = formatGrade(g.grade);
     const subject = g.subject || "Subject";
+    const title = "New grade";
+    const body = `${gradeText} in ${subject}`;
     await sendTopicNotification({
-      title: "New grade",
-      body: `${gradeText} in ${subject}`,
-      data: { type: "grade", eventId: g.eventId, subject, grade: gradeText },
+      title,
+      body,
+      data: {
+        type: "grade",
+        eventId: g.eventId,
+        timelineId,
+        subject,
+        grade: gradeText,
+        title,
+        body,
+      },
       topic,
       token,
     });
@@ -740,10 +787,21 @@ async function notifyGrades(grades, { topic, token }) {
   const latest = sorted[0];
   const gradeText = formatGrade(latest.grade);
   const subject = latest.subject || "Subject";
+  const title = `${sorted.length} new grades`;
+  const body = `Latest: ${gradeText} in ${subject}`;
   await sendTopicNotification({
-    title: `${sorted.length} new grades`,
-    body: `Latest: ${gradeText} in ${subject}`,
-    data: { type: "grade", count: sorted.length, eventId: latest.eventId, subject, grade: gradeText },
+    title,
+    body,
+    data: {
+      type: "grade",
+      count: sorted.length,
+      eventId: latest.eventId,
+      timelineId,
+      subject,
+      grade: gradeText,
+      title,
+      body,
+    },
     topic,
     token,
   });
@@ -791,7 +849,7 @@ async function pollUser(user) {
       log("first run: notifying for existing timeline events");
     }
 
-    const newEvents = events.filter((e) => e.timelineId > effectiveLastTimelineId);
+    const newEvents = events.filter((e) => e.timelineId > effectiveLastTimelineId && !e.reactionTo);
     if (!newEvents.length) {
       queries.upsertUserState.run({
         user_id: user.id,
@@ -820,7 +878,10 @@ async function pollUser(user) {
       );
       const newGrades = grades.filter((g) => !notifiedIds.has(g.eventId));
       if (newGrades.length) {
-        await sendToUserDevices(user.id, (token) => notifyGrades(newGrades, { token }));
+        const gradeTimelineId = Math.max(...gradeEvents.map((e) => e.timelineId));
+        await sendToUserDevices(user.id, (token) =>
+          notifyGrades(newGrades, { token, timelineId: gradeTimelineId }),
+        );
         newGrades.forEach((g) => {
           queries.insertGradeState.run({
             user_id: user.id,

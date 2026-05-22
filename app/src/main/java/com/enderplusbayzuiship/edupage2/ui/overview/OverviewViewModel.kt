@@ -69,6 +69,7 @@ class OverviewViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "OverviewViewModel"
+        private var hasRefreshedThisSession = false
     }
 
     private val _timetableState = MutableStateFlow<TimetableOverviewState>(TimetableOverviewState.Loading)
@@ -87,7 +88,9 @@ class OverviewViewModel @Inject constructor(
     val currentTime: StateFlow<LocalTime> = _currentTime.asStateFlow()
 
     init {
-        load()
+        val shouldRefresh = !hasRefreshedThisSession
+        load(forceRefresh = shouldRefresh)
+        hasRefreshedThisSession = true
 
         viewModelScope.launch {
             while (true) {
@@ -99,14 +102,14 @@ class OverviewViewModel @Inject constructor(
 
     fun refresh() {
         _isRefreshing.value = true
-        load()
+        load(forceRefresh = true)
     }
 
-    private fun load() {
+    private fun load(forceRefresh: Boolean) {
         viewModelScope.launch {
-            val timetableDeferred = async { loadTimetable() }
-            val gradesDeferred    = async { loadGrades() }
-            val messagesDeferred  = async { loadMessages() }
+            val timetableDeferred = async { loadTimetable(forceRefresh) }
+            val gradesDeferred    = async { loadGrades(forceRefresh) }
+            val messagesDeferred  = async { loadMessages(forceRefresh) }
             timetableDeferred.await()
             gradesDeferred.await()
             messagesDeferred.await()
@@ -114,7 +117,7 @@ class OverviewViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadTimetable() {
+    private suspend fun loadTimetable(forceRefresh: Boolean) {
         _timetableState.value = TimetableOverviewState.Loading
         try {
             val today = LocalDate.now()
@@ -131,13 +134,25 @@ class OverviewViewModel @Inject constructor(
                         lessons = cachedLessons,
                         isNextDay = false,
                     )
-                    if (cached?.second == false) return
+                    if (!forceRefresh && cached?.second == false) return
                 }
+            }
+
+            if (!forceRefresh && cachedLessons.isNotEmpty()) {
+                // If we are here, today might be done or empty, but we have cache.
+                // If not forced, we might still want to skip network if we already showed something.
+                // However, the user said "only on start", so we allow the very first load to hit network.
+            }
+            
+            if (!forceRefresh && _timetableState.value is TimetableOverviewState.Success) {
+                 // Already have some success state from cache, and not forced.
+                 return
             }
 
             val timetable = edupage.getMyTimetable(today)
             val lessons = timetable?.lessons ?: emptyList()
             timetableCache.save(today, lessons)
+            // ... (rest of loadTimetable)
 
             val lastEnd = lessons.mapNotNull { it.endTime }.maxOrNull()
             val todayDone = lastEnd != null && LocalTime.now() > lastEnd
@@ -169,7 +184,7 @@ class OverviewViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadGrades() {
+    private suspend fun loadGrades(forceRefresh: Boolean) {
         _gradesState.value = GradesOverviewState.Loading
         try {
             val year = edupage.getSchoolYear() ?: run {
@@ -178,7 +193,7 @@ class OverviewViewModel @Inject constructor(
             }
 
             val cached = gradesCache.load(Term.SECOND, year) ?: gradesCache.load(Term.FIRST, year)
-            if (cached != null) {
+            if (!forceRefresh && cached != null) {
                 val recent = cached.sortedByDescending { it.date }.take(10)
                 _gradesState.value = GradesOverviewState.Success(recent)
                 return
@@ -186,32 +201,50 @@ class OverviewViewModel @Inject constructor(
 
             val t2 = edupage.getGradesForTerm(year, Term.SECOND)
             val grades = t2.ifEmpty { edupage.getGradesForTerm(year, Term.FIRST) }
-            if (grades.isEmpty()) {
+            if (grades.isEmpty() && cached == null) {
                 _gradesState.value = GradesOverviewState.Unavailable
             } else {
-                val recent = grades.sortedByDescending { it.date }.take(10)
+                val finalGrades = grades.ifEmpty { cached ?: emptyList() }
+                val recent = finalGrades.sortedByDescending { it.date }.take(10)
                 _gradesState.value = GradesOverviewState.Success(recent)
+                if (grades.isNotEmpty()) {
+                    gradesCache.save(if (t2.isNotEmpty()) Term.SECOND else Term.FIRST, year, grades)
+                }
             }
             Log.i(TAG, "grades loaded: ${grades.size}")
         } catch (e: Exception) {
             Log.e(TAG, "grades load failed: ${e.message}", e)
-            _gradesState.value = GradesOverviewState.Unavailable
+            if (_gradesState.value !is GradesOverviewState.Success) {
+                _gradesState.value = GradesOverviewState.Unavailable
+            }
         }
     }
 
-    private suspend fun loadMessages() {
+    private suspend fun loadMessages(forceRefresh: Boolean) {
         _messagesState.value = MessagesOverviewState.Loading
         try {
+            if (forceRefresh) {
+                val events = edupage.getNotifications()
+                timelineCache.save(events)
+            }
+
             val cached = timelineCache.load()
             if (cached != null) {
                 val (events, _) = cached
                 val filtered = events
                     .filter { it.type?.lowercase() !in HIDDEN_TYPES }
-                    .sortedByDescending { it.timestamp }
+                
+                val mains = filtered.filter { it.reactionTo == null || it.reactionTo == 0 }
+                val replies = filtered.filter { it.reactionTo != null && it.reactionTo != 0 }
+                
+                val groups = mains.map { main ->
+                    main to replies.filter { it.reactionTo == main.timelineId }
+                }.sortedByDescending { it.first.timestamp ?: it.second.maxOfOrNull { r -> r.timestamp ?: java.time.LocalDateTime.MIN } ?: java.time.LocalDateTime.MIN }
+
                 val seenIds = prefs.getSeenTimelineIds()
                 val unread = filtered.count { it.timelineId !in seenIds }
                 _messagesState.value = MessagesOverviewState.Success(
-                    recentMessages = filtered.take(5),
+                    recentMessages = groups.map { it.first }.take(5),
                     unreadCount    = unread,
                 )
                 return
@@ -219,7 +252,9 @@ class OverviewViewModel @Inject constructor(
             _messagesState.value = MessagesOverviewState.Unavailable
         } catch (e: Exception) {
             Log.e(TAG, "messages load failed: ${e.message}", e)
-            _messagesState.value = MessagesOverviewState.Unavailable
+            if (_messagesState.value !is MessagesOverviewState.Success) {
+                _messagesState.value = MessagesOverviewState.Unavailable
+            }
         }
     }
 

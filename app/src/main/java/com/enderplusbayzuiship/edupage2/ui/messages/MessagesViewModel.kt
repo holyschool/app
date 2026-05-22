@@ -29,19 +29,20 @@ private val HIDDEN_TYPES = setOf(
     "h_clearcache", "h_cleardbi", "h_clearisicdata",
 )
 
+data class MessageGroup(
+    val main: TimelineEvent,
+    val replies: List<TimelineEvent> = emptyList()
+)
+
 sealed interface MessagesUiState {
     object Loading : MessagesUiState
     data class Error(val message: String) : MessagesUiState
     data class Success(
-        val items: List<TimelineEvent>,
+        val groups: List<MessageGroup>,
         val isRefreshing: Boolean = false,
-
         val isLoadingMore: Boolean = false,
-
         val canLoadMore: Boolean = true,
-
         val seenIds: Set<Int> = emptySet(),
-
         val isSending: Boolean = false,
         val sendError: String? = null,
     ) : MessagesUiState
@@ -119,7 +120,7 @@ class MessagesViewModel @Inject constructor(
                 val canLoadMore = newUnique.size >= PAGE_SIZE
                 Log.i(TAG, "loadMore: got ${newUnique.size} new items, canLoadMore=$canLoadMore")
                 _uiState.value = current.copy(
-                    items         = allEvents.filtered(),
+                    groups        = allEvents.toGroups(),
                     isLoadingMore = false,
                     canLoadMore   = canLoadMore,
                     seenIds       = prefs.getSeenTimelineIds(),
@@ -144,9 +145,12 @@ class MessagesViewModel @Inject constructor(
 
     fun markMessageSeen(timelineId: Int) {
         if (timelineId <= 0) return
-        val current = _uiState.value as? MessagesUiState.Success ?: return
         prefs.markTimelineIdsSeen(listOf(timelineId))
-        _uiState.value = current.copy(seenIds = prefs.getSeenTimelineIds())
+        if (timelineId > prefs.lastTimelineId) prefs.lastTimelineId = timelineId
+        val current = _uiState.value as? MessagesUiState.Success
+        if (current != null) {
+            _uiState.value = current.copy(seenIds = prefs.getSeenTimelineIds())
+        }
         viewModelScope.launch {
             backendRegistrationManager.markMessagesRead(listOf(timelineId))
         }
@@ -203,8 +207,19 @@ class MessagesViewModel @Inject constructor(
         _uiState.value = current.copy(sendError = null)
     }
 
-    private fun List<TimelineEvent>.filtered() =
-        filter { it.type?.lowercase() !in HIDDEN_TYPES }
+    private fun List<TimelineEvent>.toGroups(): List<MessageGroup> {
+        val filtered = filter { it.type?.lowercase() !in HIDDEN_TYPES }
+        val mains = filtered.filter { it.reactionTo == null || it.reactionTo == 0 }
+        val replies = filtered.filter { it.reactionTo != null && it.reactionTo != 0 }
+        
+        return mains.map { main ->
+            MessageGroup(
+                main = main,
+                replies = replies.filter { it.reactionTo == main.timelineId }
+                    .sortedBy { it.timestamp }
+            )
+        }.sortedByDescending { it.main.timestamp ?: it.replies.maxOfOrNull { r -> r.timestamp } }
+    }
 
     private fun loadInitial() {
         loadJob?.cancel()
@@ -213,11 +228,11 @@ class MessagesViewModel @Inject constructor(
             if (cached != null) {
                 val (events, isStale) = cached
                 allEvents = events.sortedByDescending { it.timestamp }
-                val displayed = allEvents.filtered()
+                val groups = allEvents.toGroups()
                 Log.i(TAG, "cache hit: ${events.size} events, stale=$isStale")
                 syncReadState()
                 _uiState.value = MessagesUiState.Success(
-                    items        = displayed,
+                    groups       = groups,
                     isRefreshing = isStale,
                     canLoadMore  = true,
                     seenIds      = prefs.getSeenTimelineIds(),
@@ -237,10 +252,10 @@ class MessagesViewModel @Inject constructor(
                 .sortedByDescending { it.timestamp }
             allEvents = events
             cache.save(events)
-            val displayed = events.filtered()
+            val groups = events.toGroups()
             Log.i(TAG, "fetchAndUpdate: ${events.size} events")
             _uiState.value = MessagesUiState.Success(
-                items        = displayed,
+                groups       = groups,
                 isRefreshing = false,
                 canLoadMore  = true,
                 seenIds      = prefs.getSeenTimelineIds(),

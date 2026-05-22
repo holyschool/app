@@ -104,6 +104,7 @@
     <string name="messages_detail_due">Termín</string>
     <string name="messages_detail_date">Dátum</string>
     <string name="messages_detail_close">Zavrieť</string>
+    <string name="messages_replies_label">%d odpovedí</string>
     <string name="messages_new_label">Nový</string>
     <string name="messages_mark_all_read">Označiť všetko ako prečítané</string>
     <string name="messages_sending">Odosielanie\u2026</string>

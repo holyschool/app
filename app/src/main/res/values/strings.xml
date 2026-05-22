@@ -104,6 +104,7 @@
     <string name="messages_detail_due">Due</string>
     <string name="messages_detail_date">Date</string>
     <string name="messages_detail_close">Close</string>
+    <string name="messages_replies_label">%d replies</string>
     <string name="messages_new_label">New</string>
     <string name="messages_mark_all_read">Mark all as read</string>
     <string name="messages_sending">Sending\u2026</string>
@@ -267,6 +268,16 @@
     <string name="notif_mark_read">Mark as read</string>
 
     <!-- Substitution notifications -->
+    <string name="notif_homework_title">New homework</string>
+    <string name="notif_homework_title_sender">New homework from %1$s</string>
+    <string name="notif_test_title">New test</string>
+    <string name="notif_test_title_sender">New test from %1$s</string>
+    <string name="notif_absence_title">Absence update</string>
+    <string name="notif_absence_title_sender">Absence update from %1$s</string>
+    <string name="notif_announcement_title">Announcement</string>
+    <string name="notif_announcement_title_sender">Announcement from %1$s</string>
+    <string name="notif_event_title">School event</string>
+    <string name="notif_event_title_sender">School event from %1$s</string>
     <string name="notif_substitution_title">Timetable Change</string>
     <string name="notif_substitution_new">New substitution or cancellation</string>
     <string name="notif_substitution_multiple">%1$d new timetable changes</string>
