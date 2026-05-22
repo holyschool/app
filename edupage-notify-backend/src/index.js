@@ -39,10 +39,7 @@ admin.initializeApp({
   projectId: FCM_PROJECT_ID,
 });
 
-let sessionCookie = null;
-let gsecHash = null;
-let lastTimelineId = -1;
-let lastGradeIds = new Set();
+const userSessions = new Map();
 
 function log(...args) {
   if (debug) console.log("[debug]", ...args);
@@ -266,7 +263,8 @@ const queries = {
   disableUser: db.prepare("UPDATE users SET enabled = 0, updated_at = ? WHERE id = ?"),
 };
 
-async function login({ subdomain, username, password }) {
+async function login(user) {
+  const { subdomain, username, password } = user;
   const loginPageUrl = `https://${subdomain}.edupage.org/login/?cmd=MainLogin`;
   const loginPageRes = await fetch(loginPageUrl, { method: "GET" });
   const loginPageBody = await loginPageRes.text();
@@ -290,7 +288,7 @@ async function login({ subdomain, username, password }) {
   const setCookie = loginRes.headers.get("set-cookie") || "";
   const sessionMatch = /PHPSESSID=([^;]+)/.exec(setCookie);
   if (!sessionMatch) throw new Error("Failed to extract PHPSESSID");
-  sessionCookie = sessionMatch[1];
+  const sessionCookie = sessionMatch[1];
 
   const body = await loginRes.text();
   if (
@@ -312,30 +310,42 @@ async function login({ subdomain, username, password }) {
     throw new Error("Two-factor required");
   }
 
-  gsecHash = extractGsecHash(body) || null;
+  const gsecHash = extractGsecHash(body) || null;
+  
+  userSessions.set(user.id || `${subdomain}:${username}`, { sessionCookie, gsecHash });
+  
   log("login ok", subdomain, username);
+  return { sessionCookie, gsecHash };
 }
 
-async function ensureSession({ subdomain, username, password }) {
-  if (sessionCookie && gsecHash) return;
-  await login({ subdomain, username, password });
+async function ensureSession(user) {
+  const key = user.id || `${user.subdomain}:${user.username}`;
+  const session = userSessions.get(key);
+  if (session?.sessionCookie && session?.gsecHash) return session;
+  return await login(user);
 }
 
-async function fetchUserPage({ subdomain, username, password }) {
-  await ensureSession({ subdomain, username, password });
-  const url = `https://${subdomain}.edupage.org/user`;
+async function fetchUserPage(user) {
+  const session = await ensureSession(user);
+  const url = `https://${user.subdomain}.edupage.org/user`;
   const res = await fetch(url, {
     headers: {
-      Cookie: `PHPSESSID=${sessionCookie}`,
+      Cookie: `PHPSESSID=${session.sessionCookie}`,
     },
   });
-  return await res.text();
+  const html = await res.text();
+  if (html.includes("login/?cmd=MainLogin") || html.includes("Bad credentials")) {
+    userSessions.delete(user.id || `${user.subdomain}:${user.username}`);
+    return await fetchUserPage(user);
+  }
+  return html;
 }
 
-async function fetchTimeline({ subdomain, username, password }) {
-  const html = await fetchUserPage({ subdomain, username, password });
-  if (!gsecHash) {
-    gsecHash = extractGsecHash(html) || null;
+async function fetchTimeline(user) {
+  const html = await fetchUserPage(user);
+  const session = await ensureSession(user);
+  if (!session.gsecHash) {
+    session.gsecHash = extractGsecHash(html) || null;
   }
   const data = parseUserHomeData(html);
   if (!data) throw new Error("Failed to extract session data");
@@ -415,23 +425,23 @@ function parseTimeline(items) {
     .filter(Boolean);
 }
 
-async function fetchGrades({ subdomain, username, password }) {
-  await ensureSession({ subdomain, username, password });
-  if (!gsecHash) {
-    const html = await fetchUserPage({ subdomain, username, password });
-    gsecHash = extractGsecHash(html) || null;
+async function fetchGrades(user) {
+  let session = await ensureSession(user);
+  if (!session.gsecHash) {
+    const html = await fetchUserPage(user);
+    session.gsecHash = extractGsecHash(html) || null;
   }
-  if (!gsecHash) throw new Error("Failed to extract gsecHash");
-  const url = `https://${subdomain}.edupage.org/grades/server/grades.js?__func=reload`;
+  if (!session.gsecHash) throw new Error("Failed to extract gsecHash");
+  const url = `https://${user.subdomain}.edupage.org/grades/server/grades.js?__func=reload`;
   const payload = {
     __args: [null, { from: 0, to: 0 }],
-    __gsh: gsecHash,
+    __gsh: session.gsecHash,
   };
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Cookie: `PHPSESSID=${sessionCookie}`,
+      Cookie: `PHPSESSID=${session.sessionCookie}`,
     },
     body: JSON.stringify(payload),
   });
@@ -576,8 +586,6 @@ async function seedInitialState(user, maxTimelineId) {
 
 async function pollUser(user) {
   try {
-    sessionCookie = null;
-    gsecHash = null;
     const items = await fetchTimeline(user);
     const events = parseTimeline(items);
     if (!events.length) return;
@@ -657,8 +665,6 @@ async function pollUser(user) {
     });
   } catch (e) {
     console.error("poll failed for user", user.id, e.message);
-    sessionCookie = null;
-    gsecHash = null;
   }
 }
 
@@ -685,13 +691,15 @@ async function start() {
       return res.status(400).json({ error: "Missing fields" });
     }
 
+    const credentials = {
+      subdomain: String(subdomain).trim(),
+      username: String(username).trim(),
+      password: String(password),
+    };
+
     try {
       try {
-        await login({
-          subdomain: String(subdomain).trim(),
-          username: String(username).trim(),
-          password: String(password),
-        });
+        await login(credentials);
       } catch (e) {
         const msg = String(e.message || "Login failed");
         if (msg.includes("Two-factor")) return res.status(409).json({ error: "Two-factor required" });
@@ -700,20 +708,17 @@ async function start() {
         return res.status(401).json({ error: "Login failed" });
       }
 
-      const existing = queries.getUserByCreds.get(String(subdomain).trim(), String(username).trim());
-      if (existing && existing.password !== String(password)) {
+      const existing = queries.getUserByCreds.get(credentials.subdomain, credentials.username);
+      if (existing && existing.password !== credentials.password) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      sessionCookie = null;
-      gsecHash = null;
+
       const userParams = {
-        subdomain: String(subdomain).trim(),
-        username: String(username).trim(),
-        password: String(password),
+        ...credentials,
         created_at: now(),
         updated_at: now(),
       };
-      const info = queries.upsertUser.run(userParams);
+      queries.upsertUser.run(userParams);
       const user = queries.getUserByCreds.get(userParams.subdomain, userParams.username);
       queries.upsertDevice.run({
         user_id: user.id,
@@ -835,17 +840,17 @@ async function start() {
     console.log(`API listening on ${PORT}`);
   });
 
-  const users = queries.listEnabledUsers.all();
-  if (!users.length) {
+  const activeUsers = queries.listEnabledUsers.all();
+  if (!activeUsers.length) {
     console.log("No users registered yet.");
   }
-  for (const user of users) {
+  for (const user of activeUsers) {
     await pollUser(user);
   }
   const intervalMs = Math.max(15, Number(POLL_INTERVAL_SECONDS)) * 1000;
   setInterval(async () => {
-    const activeUsers = queries.listEnabledUsers.all();
-    for (const user of activeUsers) {
+    const users = queries.listEnabledUsers.all();
+    for (const user of users) {
       await pollUser(user);
     }
   }, intervalMs);

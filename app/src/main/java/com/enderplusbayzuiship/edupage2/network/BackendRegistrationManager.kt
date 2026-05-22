@@ -25,8 +25,8 @@ class BackendRegistrationManager @Inject constructor(
 
     suspend fun registerIfPossible(fcmToken: String): Boolean = withContext(Dispatchers.IO) {
         val credentials = credentialStore.load() ?: return@withContext false
-        val baseUrl = appPreferences.backendBaseUrl.trim()
-        val apiKey = appPreferences.backendApiKey.trim()
+        val baseUrl = appPreferences.backendEffectiveUrl.trim()
+        val apiKey = appPreferences.backendEffectiveKey.trim()
         if (baseUrl.isBlank() || apiKey.isBlank()) return@withContext false
 
         val payload = gson.toJson(
@@ -54,8 +54,8 @@ class BackendRegistrationManager @Inject constructor(
 
     suspend fun fetchReadMessageIds(limit: Int = 1000): ReadSyncResult = withContext(Dispatchers.IO) {
     val credentials = credentialStore.load() ?: return@withContext ReadSyncResult(false, emptySet())
-    val baseUrl = appPreferences.backendBaseUrl.trim()
-        val apiKey = appPreferences.backendApiKey.trim()
+    val baseUrl = appPreferences.backendEffectiveUrl.trim()
+        val apiKey = appPreferences.backendEffectiveKey.trim()
         if (baseUrl.isBlank() || apiKey.isBlank()) return@withContext ReadSyncResult(false, emptySet())
 
         val payload = gson.toJson(
@@ -84,8 +84,8 @@ class BackendRegistrationManager @Inject constructor(
     suspend fun markMessagesRead(ids: Collection<Int>): Boolean = withContext(Dispatchers.IO) {
         if (ids.isEmpty()) return@withContext true
         val credentials = credentialStore.load() ?: return@withContext false
-        val baseUrl = appPreferences.backendBaseUrl.trim()
-        val apiKey = appPreferences.backendApiKey.trim()
+        val baseUrl = appPreferences.backendEffectiveUrl.trim()
+        val apiKey = appPreferences.backendEffectiveKey.trim()
         if (baseUrl.isBlank() || apiKey.isBlank()) return@withContext false
 
         val payload = gson.toJson(
@@ -103,8 +103,8 @@ class BackendRegistrationManager @Inject constructor(
 
     suspend fun syncReadState(ids: Collection<Int>, limit: Int = 1000): ReadSyncResult = withContext(Dispatchers.IO) {
         val credentials = credentialStore.load() ?: return@withContext ReadSyncResult(false, emptySet())
-        val baseUrl = appPreferences.backendBaseUrl.trim()
-        val apiKey = appPreferences.backendApiKey.trim()
+        val baseUrl = appPreferences.backendEffectiveUrl.trim()
+        val apiKey = appPreferences.backendEffectiveKey.trim()
         if (baseUrl.isBlank() || apiKey.isBlank()) return@withContext ReadSyncResult(false, emptySet())
 
         val payload = gson.toJson(

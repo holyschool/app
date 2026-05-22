@@ -67,14 +67,14 @@ class SettingsViewModel @Inject constructor(
     private val _appLanguage = MutableStateFlow(appPreferences.appLanguage)
     val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
 
-    private val _backendBaseUrl = MutableStateFlow(appPreferences.backendBaseUrl)
-    val backendBaseUrl: StateFlow<String> = _backendBaseUrl.asStateFlow()
-
-    private val _backendApiKey = MutableStateFlow(appPreferences.backendApiKey)
-    val backendApiKey: StateFlow<String> = _backendApiKey.asStateFlow()
-
     private val _backendMode = MutableStateFlow(appPreferences.backendMode)
     val backendMode: StateFlow<BackendMode> = _backendMode.asStateFlow()
+
+    private val _backendCustomUrl = MutableStateFlow(appPreferences.backendCustomUrl)
+    val backendCustomUrl: StateFlow<String> = _backendCustomUrl.asStateFlow()
+
+    private val _backendCustomKey = MutableStateFlow(appPreferences.backendCustomKey)
+    val backendCustomKey: StateFlow<String> = _backendCustomKey.asStateFlow()
 
     private val _backendRegisterStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val backendRegisterStatus: SharedFlow<Boolean> = _backendRegisterStatus.asSharedFlow()
@@ -169,12 +169,12 @@ class SettingsViewModel @Inject constructor(
 
     fun setBackendBaseUrl(value: String) {
         appPreferences.backendCustomUrl = value
-        _backendBaseUrl.value = value
+        _backendCustomUrl.value = value
     }
 
     fun setBackendApiKey(value: String) {
         appPreferences.backendCustomKey = value
-        _backendApiKey.value = value
+        _backendCustomKey.value = value
     }
 
     fun setBackendMode(value: BackendMode) {

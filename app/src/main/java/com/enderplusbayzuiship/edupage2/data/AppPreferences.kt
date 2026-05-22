@@ -58,7 +58,7 @@ enum class BackendMode(val key: String) {
     OWN("own");
 
     companion object {
-        val DEFAULT = OWN
+        val DEFAULT = OFFICIAL
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
 }
