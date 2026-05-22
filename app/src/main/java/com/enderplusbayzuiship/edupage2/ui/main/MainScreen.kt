@@ -94,7 +94,7 @@ fun MainScreen(onLogout: () -> Unit) {
             }
     }
 
-    var detailEvent by remember { mutableStateOf<com.edupage.api.model.TimelineEvent?>(null) }
+    var detailGroup by remember { mutableStateOf<com.enderplusbayzuiship.edupage2.ui.messages.MessageGroup?>(null) }
     var deepLinkDetail by remember { mutableStateOf<DeepLinkHelper.DeepLinkInfo?>(null) }
 
     LaunchedEffect(Unit) {
@@ -117,7 +117,7 @@ fun MainScreen(onLogout: () -> Unit) {
                 messagesVm.markMessageSeen(deepLinkInfo.timelineId)
                 val event = messagesVm.getEventById(deepLinkInfo.timelineId)
                 if (event != null) {
-                    detailEvent = event
+                    detailGroup = com.enderplusbayzuiship.edupage2.ui.messages.MessageGroup(event, emptyList())
                 } else {
                     deepLinkDetail = deepLinkInfo
                 }
@@ -138,10 +138,10 @@ fun MainScreen(onLogout: () -> Unit) {
         scope.launch { pagerState.scrollToPage(3) }
     }
 
-    detailEvent?.let { event ->
+    detailGroup?.let { group ->
         com.enderplusbayzuiship.edupage2.ui.messages.DetailSheet(
-            event = event,
-            onDismiss = { detailEvent = null },
+            group = group,
+            onDismiss = { detailGroup = null },
         )
     }
 

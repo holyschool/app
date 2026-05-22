@@ -131,6 +131,19 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.backendDeleteStatus.collect { ok ->
+            val msg = if (ok) {
+                context.getString(R.string.settings_backend_delete_success)
+            } else {
+                context.getString(R.string.settings_backend_delete_failed)
+            }
+            android.widget.Toast
+                .makeText(context, msg, android.widget.Toast.LENGTH_SHORT)
+                .show()
+        }
+    }
+
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -418,6 +431,7 @@ fun SettingsScreen(
                 onKeyChange = viewModel::setBackendApiKey,
                 onRegister = viewModel::registerDevice,
                 onSync = viewModel::syncReadNow,
+                onDelete = viewModel::deleteAllBackendData,
                 onDismiss = { showBackendSettings = false }
             )
         }
@@ -623,8 +637,11 @@ private fun BackendSettingsBottomSheet(
     onKeyChange: (String) -> Unit,
     onRegister: () -> Unit,
     onSync: () -> Unit,
+    onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -686,15 +703,51 @@ private fun BackendSettingsBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
             ) {
+                Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.settings_backend_register))
             }
             Spacer(modifier = Modifier.height(8.dp))
-            TextButton(
-                onClick = onSync,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.settings_backend_sync))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TextButton(
+                    onClick = onSync,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.settings_backend_sync))
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(stringResource(R.string.settings_backend_delete_data))
+                }
             }
+        }
+
+        if (showDeleteConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text(stringResource(R.string.settings_backend_delete_confirm_title)) },
+                text = { Text(stringResource(R.string.settings_backend_delete_confirm_msg)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onDelete()
+                            showDeleteConfirm = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(stringResource(R.string.settings_backend_delete_confirm_button))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            )
         }
     }
 }

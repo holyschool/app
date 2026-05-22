@@ -136,4 +136,22 @@ class BackendRegistrationManager @Inject constructor(
             ReadSyncResult(true, out)
         }.getOrDefault(ReadSyncResult(false, emptySet()))
     }
+
+    suspend fun deleteAllData(): Boolean = withContext(Dispatchers.IO) {
+        val credentials = credentialStore.load() ?: return@withContext false
+        val baseUrl = appPreferences.backendEffectiveUrl.trim()
+        val apiKey = appPreferences.backendEffectiveKey.trim()
+        if (baseUrl.isBlank() || apiKey.isBlank()) return@withContext false
+
+        val payload = gson.toJson(
+            mapOf(
+                "subdomain" to credentials.subdomain,
+                "username" to credentials.username,
+                "password" to credentials.password,
+            )
+        )
+        val result = runCatching { backendApi.deleteAllData(baseUrl, apiKey, payload) }
+            .getOrElse { return@withContext false }
+        result.ok
+    }
 }

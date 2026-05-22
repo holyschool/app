@@ -198,4 +198,30 @@
     <string name="about_open_source_licenses_desc">Zobraziť licencie knižníc tretích strán použitých v tejto aplikácii.</string>
     <string name="about_source_code">Zdrojový kód</string>
     <string name="about_source_code_desc">Zobraziť zdrojový kód na GitHube.</string>
+
+    <!-- Settings – Backend -->
+    <string name="settings_section_backend">Backend</string>
+    <string name="settings_backend_title">Push backend</string>
+    <string name="settings_backend_url">URL backendu</string>
+    <string name="settings_backend_key">API kľúč backendu</string>
+    <string name="settings_backend_save">Uložiť backend</string>
+    <string name="settings_backend_register">Zaregistrovať zariadenie</string>
+    <string name="settings_backend_register_success">Zariadenie zaregistrované</string>
+    <string name="settings_backend_register_failed">Registrácia zlyhala</string>
+    <string name="settings_backend_sync">Synchronizovať stav prečítania</string>
+    <string name="settings_backend_sync_success">Synchronizácia dokončená</string>
+    <string name="settings_backend_sync_failed">Synchronizácia zlyhala</string>
+    <string name="settings_backend_delete_data">Vymazať všetky moje dáta</string>
+    <string name="settings_backend_delete_data_desc">Natrvalo odstráni všetky vaše dáta z backendového servera.</string>
+    <string name="settings_backend_delete_confirm_title">Vymazať všetky dáta?</string>
+    <string name="settings_backend_delete_confirm_msg">Týmto natrvalo odstránite svoj účet, registráciu zariadenia a celú históriu oznámení z backendového servera. Túto akciu nie je možné vrátiť späť.</string>
+    <string name="settings_backend_delete_confirm_button">Vymazať všetko</string>
+    <string name="settings_backend_delete_success">Dáta boli úspešne vymazané</string>
+    <string name="settings_backend_delete_failed">Dáta sa nepodarilo vymazať</string>
+    <string name="settings_backend_settings">Nastavenia backendu</string>
+    <string name="settings_backend_mode">Režim backendu</string>
+    <string name="settings_backend_mode_official">Oficiálny</string>
+    <string name="settings_backend_mode_own">Vlastný server</string>
+    <string name="settings_backend_official_desc">Použiť oficiálny backend</string>
+    <string name="settings_backend_own_desc">Použiť vlastnú URL a kľúč backendu</string>
 </resources>

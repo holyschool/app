@@ -200,4 +200,30 @@
     <string name="about_open_source_licenses_desc">Zobrazit licence knihoven třetích stran použitých v této aplikaci.</string>
     <string name="about_source_code">Zdrojový kód</string>
     <string name="about_source_code_desc">Zobrazit zdrojový kód na GitHubu.</string>
+
+    <!-- Settings – Backend -->
+    <string name="settings_section_backend">Backend</string>
+    <string name="settings_backend_title">Push backend</string>
+    <string name="settings_backend_url">URL backendu</string>
+    <string name="settings_backend_key">API klíč backendu</string>
+    <string name="settings_backend_save">Uložit backend</string>
+    <string name="settings_backend_register">Zaregistrovat zařízení</string>
+    <string name="settings_backend_register_success">Zařízení zaregistrováno</string>
+    <string name="settings_backend_register_failed">Registrace selhala</string>
+    <string name="settings_backend_sync">Synchronizovat stav přečtení</string>
+    <string name="settings_backend_sync_success">Synchronizace dokončena</string>
+    <string name="settings_backend_sync_failed">Synchronizace selhala</string>
+    <string name="settings_backend_delete_data">Smazat všechna moje data</string>
+    <string name="settings_backend_delete_data_desc">Trvale odstraní všechna vaše data z backendového serveru.</string>
+    <string name="settings_backend_delete_confirm_title">Smazat všechna data?</string>
+    <string name="settings_backend_delete_confirm_msg">Tímto trvale odstraníte svůj účet, registraci zařízení a celou historii oznámení z backendového serveru. Tuto akci nelze vrátit zpět.</string>
+    <string name="settings_backend_delete_confirm_button">Smazat vše</string>
+    <string name="settings_backend_delete_success">Data byla úspěšně smazána</string>
+    <string name="settings_backend_delete_failed">Data se nepodařilo smazat</string>
+    <string name="settings_backend_settings">Nastavení backendu</string>
+    <string name="settings_backend_mode">Režim backendu</string>
+    <string name="settings_backend_mode_official">Oficiální</string>
+    <string name="settings_backend_mode_own">Vlastní server</string>
+    <string name="settings_backend_official_desc">Použít oficiální backend</string>
+    <string name="settings_backend_own_desc">Použít vlastní URL a klíč backendu</string>
 </resources>

@@ -395,6 +395,13 @@ const queries = {
   `),
   deleteDevice: db.prepare("UPDATE devices SET enabled = 0, updated_at = ? WHERE id = ?"),
   disableUser: db.prepare("UPDATE users SET enabled = 0, updated_at = ? WHERE id = ?"),
+  deleteAllUserData: db.transaction((userId) => {
+    db.prepare("DELETE FROM devices WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM user_state WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM grade_state WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM message_read_state WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  }),
 };
 
 function getEffectiveUser(user) {
@@ -1075,6 +1082,22 @@ async function start() {
     }
     queries.disableUser.run(now(), user.id);
     res.json({ ok: true });
+  });
+
+  app.post("/api/delete-all-data", (req, res) => {
+    const { userId, subdomain, username, password } = req.body || {};
+    const user = userId ? queries.getUserById.get(userId)
+      : queries.getUserByCreds.get(String(subdomain || "").trim(), String(username || "").trim());
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!userId && password && getEffectiveUser(user).password !== String(password)) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    try {
+      queries.deleteAllUserData(user.id);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to delete data" });
+    }
   });
 
   app.get("/api/health", (_req, res) => {

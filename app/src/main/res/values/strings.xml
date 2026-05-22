@@ -205,6 +205,13 @@
     <string name="settings_backend_sync">Sync read status</string>
     <string name="settings_backend_sync_success">Sync complete</string>
     <string name="settings_backend_sync_failed">Sync failed</string>
+    <string name="settings_backend_delete_data">Delete all my data</string>
+    <string name="settings_backend_delete_data_desc">Permanently remove all your data from the backend server.</string>
+    <string name="settings_backend_delete_confirm_title">Delete all data?</string>
+    <string name="settings_backend_delete_confirm_msg">This will permanently remove your account, device registration, and all notification history from the backend server. This cannot be undone.</string>
+    <string name="settings_backend_delete_confirm_button">Delete everything</string>
+    <string name="settings_backend_delete_success">Data deleted successfully</string>
+    <string name="settings_backend_delete_failed">Failed to delete data</string>
     <string name="settings_backend_settings">Backend settings</string>
     <string name="settings_backend_mode">Backend mode</string>
     <string name="settings_backend_mode_official">Official</string>

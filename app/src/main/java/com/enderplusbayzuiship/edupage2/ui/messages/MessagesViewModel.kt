@@ -218,7 +218,7 @@ class MessagesViewModel @Inject constructor(
                 replies = replies.filter { it.reactionTo == main.timelineId }
                     .sortedBy { it.timestamp }
             )
-        }.sortedByDescending { it.main.timestamp ?: it.replies.maxOfOrNull { r -> r.timestamp } }
+        }.sortedByDescending { it.main.timestamp ?: it.replies.maxOfOrNull { r -> r.timestamp ?: java.time.LocalDateTime.MIN } ?: java.time.LocalDateTime.MIN }
     }
 
     private fun loadInitial() {

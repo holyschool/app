@@ -82,6 +82,9 @@ class SettingsViewModel @Inject constructor(
     private val _backendSyncStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val backendSyncStatus: SharedFlow<Boolean> = _backendSyncStatus.asSharedFlow()
 
+    private val _backendDeleteStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val backendDeleteStatus: SharedFlow<Boolean> = _backendDeleteStatus.asSharedFlow()
+
     private val _recreateActivity = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val recreateActivity: SharedFlow<Unit> = _recreateActivity.asSharedFlow()
 
@@ -199,6 +202,13 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.markTimelineIdsSeen(result.ids)
             }
             _backendSyncStatus.emit(result.ok)
+        }
+    }
+
+    fun deleteAllBackendData() {
+        viewModelScope.launch {
+            val ok = backendRegistrationManager.deleteAllData()
+            _backendDeleteStatus.emit(ok)
         }
     }
 

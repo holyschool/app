@@ -202,7 +202,9 @@ fun MessagesScreen(
 
     val hasUnread = remember(uiState) {
         val s = uiState as? MessagesUiState.Success ?: return@remember false
-        s.items.any { it.timelineId !in s.seenIds }
+        s.groups.any { g ->
+            g.main.timelineId !in s.seenIds || g.replies.any { it.timelineId !in s.seenIds }
+        }
     }
 
     Scaffold(

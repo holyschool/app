@@ -95,4 +95,20 @@ class BackendApi @Inject constructor(
             return ApiResult(response.isSuccessful, response.code, body)
         }
     }
+
+    fun deleteAllData(
+        baseUrl: String,
+        apiKey: String,
+        payload: String,
+    ): ApiResult {
+        val request = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/api/delete-all-data")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .post(payload.toRequestBody(JSON))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            return ApiResult(response.isSuccessful, response.code, body)
+        }
+    }
 }
