@@ -80,6 +80,9 @@ class OverviewViewModel @Inject constructor(
     private val _messagesState = MutableStateFlow<MessagesOverviewState>(MessagesOverviewState.Loading)
     val messagesState: StateFlow<MessagesOverviewState> = _messagesState.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _currentTime = MutableStateFlow(LocalTime.now())
     val currentTime: StateFlow<LocalTime> = _currentTime.asStateFlow()
 
@@ -94,7 +97,10 @@ class OverviewViewModel @Inject constructor(
         }
     }
 
-    fun refresh() = load()
+    fun refresh() {
+        _isRefreshing.value = true
+        load()
+    }
 
     private fun load() {
         viewModelScope.launch {
@@ -104,6 +110,7 @@ class OverviewViewModel @Inject constructor(
             timetableDeferred.await()
             gradesDeferred.await()
             messagesDeferred.await()
+            _isRefreshing.value = false
         }
     }
 

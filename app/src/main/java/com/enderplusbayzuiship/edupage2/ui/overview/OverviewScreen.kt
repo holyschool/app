@@ -1,7 +1,9 @@
 package com.enderplusbayzuiship.edupage2.ui.overview
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -53,16 +55,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -100,13 +106,25 @@ fun OverviewScreen(
     val timetableState by viewModel.timetableState.collectAsState()
     val gradesState    by viewModel.gradesState.collectAsState()
     val messagesState  by viewModel.messagesState.collectAsState()
+    val isRefreshing   by viewModel.isRefreshing.collectAsState()
     val currentTime    by viewModel.currentTime.collectAsState()
     val haptics        = rememberAppHaptics()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+    val refreshState   = rememberPullToRefreshState()
 
     val isInitialLoading = timetableState is TimetableOverviewState.Loading &&
         gradesState is GradesOverviewState.Loading &&
         messagesState is MessagesOverviewState.Loading
+
+    val infiniteTransition = rememberInfiniteTransition(label = "refresh")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing)
+        ),
+        label = "rotation"
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -121,7 +139,11 @@ fun OverviewScreen(
                 },
                 actions = {
                     FilledTonalIconButton(onClick = { haptics.click(); viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.overview_refresh))
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = stringResource(R.string.overview_refresh),
+                            modifier = Modifier.rotate(if (isRefreshing) rotation else 0f)
+                        )
                     }
                     Spacer(Modifier.width(4.dp))
                     FilledTonalIconButton(onClick = { haptics.click(); onSettings() }) {
@@ -137,47 +159,54 @@ fun OverviewScreen(
             )
         },
     ) { paddingValues ->
-        if (isInitialLoading) {
-            OverviewSkeleton(
-                bottomPadding = bottomPadding,
-                modifier = Modifier.padding(paddingValues),
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-
-                TimetableCard(
-                    state = timetableState,
-                    currentTime = currentTime,
-                    onGoToTimetable = onGoToTimetable,
-                    haptics = haptics,
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = refreshState,
+            modifier = Modifier.padding(paddingValues)
+        ) {
+            if (isInitialLoading || isRefreshing) {
+                OverviewSkeleton(
+                    bottomPadding = bottomPadding,
+                    modifier = Modifier.fillMaxSize(),
                 )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Spacer(Modifier.height(8.dp))
 
-                GradesCard(
-                    state = gradesState,
-                    onGoToGrades = onGoToGrades,
-                    haptics = haptics,
-                )
+                    TimetableCard(
+                        state = timetableState,
+                        currentTime = currentTime,
+                        onGoToTimetable = onGoToTimetable,
+                        haptics = haptics,
+                    )
 
-                MessagesCard(
-                    state = messagesState,
-                    onGoToMessages = onGoToMessages,
-                    haptics = haptics,
-                )
+                    GradesCard(
+                        state = gradesState,
+                        onGoToGrades = onGoToGrades,
+                        haptics = haptics,
+                    )
 
-                QuickActionsCard(
-                    onCompose   = onGoToMessages,
-                    onTimetable = onGoToTimetable,
-                    onGrades    = onGoToGrades,
-                    haptics     = haptics,
-                )
+                    MessagesCard(
+                        state = messagesState,
+                        onGoToMessages = onGoToMessages,
+                        haptics = haptics,
+                    )
+
+                    QuickActionsCard(
+                        onCompose   = onGoToMessages,
+                        onTimetable = onGoToTimetable,
+                        onGrades    = onGoToGrades,
+                        haptics     = haptics,
+                    )
+                }
             }
         }
     }

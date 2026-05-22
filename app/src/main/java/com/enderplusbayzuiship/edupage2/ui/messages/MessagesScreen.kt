@@ -1,6 +1,9 @@
 package com.enderplusbayzuiship.edupage2.ui.messages
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -66,6 +69,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -82,6 +87,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
@@ -174,11 +180,24 @@ fun MessagesScreen(
     val haptics         = rememberAppHaptics()
     val scope           = rememberCoroutineScope()
     val scrollBehavior  = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+    val refreshState    = rememberPullToRefreshState()
 
     var showCompose    by remember { mutableStateOf(false) }
     var detailEvent    by remember { mutableStateOf<TimelineEvent?>(null) }
     var selectedFilter by remember { mutableStateOf<Int?>(null) }
     var showFilterRow  by remember { mutableStateOf(false) }
+
+    val isRefreshing = (uiState as? MessagesUiState.Success)?.isRefreshing == true
+
+    val infiniteTransition = rememberInfiniteTransition(label = "refresh")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing)
+        ),
+        label = "rotation"
+    )
 
     val hasUnread = remember(uiState) {
         val s = uiState as? MessagesUiState.Success ?: return@remember false
@@ -230,8 +249,9 @@ fun MessagesScreen(
                     }
                     FilledTonalIconButton(onClick = { haptics.click(); viewModel.refresh() }) {
                         Icon(
-                            Icons.Default.Refresh,
+                            imageVector = Icons.Default.Refresh,
                             contentDescription = stringResource(R.string.messages_refresh),
+                            modifier = Modifier.rotate(if (isRefreshing) rotation else 0f)
                         )
                     }
                     Spacer(Modifier.width(8.dp))
@@ -258,99 +278,95 @@ fun MessagesScreen(
             }
         },
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = refreshState,
+            modifier = Modifier.padding(paddingValues)
         ) {
-            val isRefreshing = (uiState as? MessagesUiState.Success)?.isRefreshing == true
-            AnimatedVisibility(visible = isRefreshing) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-            }
-
-            if (uiState is MessagesUiState.Success) {
-                AnimatedVisibility(
-                    visible = showFilterRow,
-                    enter = fadeIn(tween(150)) + androidx.compose.animation.expandVertically(tween(150)),
-                    exit = fadeOut(tween(150)) + androidx.compose.animation.shrinkVertically(tween(150)),
-                ) {
-                    FilterRow(
-                        selected = selectedFilter,
-                        onSelect = { filter ->
-                            selectedFilter = filter
-                            showFilterRow = false
-                        },
-                    )
-                }
-            }
-
-            when (val state = uiState) {
-                is MessagesUiState.Loading -> {
-                    MessagesSkeleton(
-                        bottomPadding = bottomPadding,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-
-                is MessagesUiState.Error -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp),
-                        ) {
-                            Text(
-                                text = state.message,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = { haptics.click(); viewModel.refresh() },
-                                shape = RoundedCornerShape(16.dp),
-                            ) {
-                                Text(stringResource(R.string.messages_retry))
-                            }
-                        }
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (uiState is MessagesUiState.Success) {
+                    AnimatedVisibility(
+                        visible = showFilterRow,
+                        enter = fadeIn(tween(150)) + androidx.compose.animation.expandVertically(tween(150)),
+                        exit = fadeOut(tween(150)) + androidx.compose.animation.shrinkVertically(tween(150)),
+                    ) {
+                        FilterRow(
+                            selected = selectedFilter,
+                            onSelect = { filter ->
+                                selectedFilter = filter
+                                showFilterRow = false
+                            },
+                        )
                     }
                 }
 
-                is MessagesUiState.Success -> {
-                    val filteredItems = if (selectedFilter == null) state.items
-                        else state.items.filter { typeInfoFor(it.type).labelRes == selectedFilter }
-                    if (filteredItems.isEmpty() && !state.canLoadMore) {
+                when (val state = uiState) {
+                    is MessagesUiState.Loading -> {
+                        MessagesSkeleton(
+                            bottomPadding = bottomPadding,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    is MessagesUiState.Error -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = stringResource(R.string.messages_no_messages),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(32.dp),
+                            ) {
+                                Text(
+                                    text = state.message,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = { haptics.click(); viewModel.refresh() },
+                                    shape = RoundedCornerShape(16.dp),
+                                ) {
+                                    Text(stringResource(R.string.messages_retry))
+                                }
+                            }
+                        }
+                    }
+
+                    is MessagesUiState.Success -> {
+                        val filteredItems = if (selectedFilter == null) state.items
+                        else state.items.filter { typeInfoFor(it.type).labelRes == selectedFilter }
+                        if (filteredItems.isEmpty() && !state.canLoadMore) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = stringResource(R.string.messages_no_messages),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            MessagesList(
+                                state = state.copy(items = filteredItems),
+                                bottomPadding = bottomPadding,
+                                onLoadMore = { viewModel.loadMore() },
+                                onItemClick = { event ->
+                                    haptics.tick()
+                                    viewModel.markMessageSeen(event.timelineId)
+                                    val type = event.type?.lowercase()
+                                    if (type == "znamka" || type == "znamkydoc" || type == "h_znamky" || type == "settings") {
+                                        val subject = extractSubjectFromGradeText(event.text)
+                                        if (subject != null) {
+                                            onGradeClick(subject)
+                                        } else {
+                                            onGradeClick("")
+                                        }
+                                    } else {
+                                        detailEvent = event
+                                    }
+                                },
                             )
                         }
-                    } else {
-                        MessagesList(
-                            state = state.copy(items = filteredItems),
-                            bottomPadding = bottomPadding,
-                            onLoadMore = { viewModel.loadMore() },
-                            onItemClick = { event ->
-                                haptics.tick()
-                                viewModel.markMessageSeen(event.timelineId)
-                                val type = event.type?.lowercase()
-                                if (type == "znamka" || type == "znamkydoc" || type == "h_znamky" || type == "settings") {
-                                    val subject = extractSubjectFromGradeText(event.text)
-                                    if (subject != null) {
-                                        onGradeClick(subject)
-                                    } else {
-                                        onGradeClick("")
-                                    }
-                                } else {
-                                    detailEvent = event
-                                }
-                            },
-                        )
                     }
                 }
             }
@@ -602,74 +618,36 @@ private fun MessageItem(event: TimelineEvent, isUnread: Boolean, onClick: () -> 
 @Composable
 private fun NewMessagesDivider() {
     val primary = MaterialTheme.colorScheme.primary
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 1.dp,
+            color = primary.copy(alpha = 0.3f)
+        )
+        Surface(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = primary.copy(alpha = 0.1f),
+            contentColor = primary
         ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(primary),
-            )
-            Spacer(Modifier.width(8.dp))
             Text(
-                text = "New",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = primary,
+                text = stringResource(R.string.messages_new_label),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
         }
-
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(16.dp),
-        ) {
-            val w = size.width
-            val h = size.height
-            val segments = 8
-            val segW = w / segments
-
-            val path = Path().apply {
-                moveTo(0f, h / 2f)
-                for (i in 0 until segments) {
-                    val x0 = i * segW
-                    val x2 = (i + 1) * segW
-                    val cp1x = x0 + segW * 0.25f
-                    val cp2x = x0 + segW * 0.75f
-                    val y = h / 2f + if (i % 2 == 0) -h * 0.4f else h * 0.4f
-                    cubicTo(cp1x, h / 2f, cp2x, y, x2, h / 2f)
-                }
-            }
-
-            drawPath(
-                path = path,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        primary.copy(alpha = 0.15f),
-                        primary.copy(alpha = 0.6f),
-                        primary.copy(alpha = 0.15f),
-                    ),
-                    start = Offset.Zero,
-                    end = Offset(w, 0f),
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 2.5f,
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round,
-                ),
-            )
-        }
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 1.dp,
+            color = primary.copy(alpha = 0.3f)
+        )
     }
 }
 

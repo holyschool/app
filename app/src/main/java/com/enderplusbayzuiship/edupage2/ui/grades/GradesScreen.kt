@@ -52,6 +52,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -89,6 +94,19 @@ fun GradesScreen(
     val pendingHighlight       by viewModel.pendingHighlightSubject.collectAsState()
     val haptics                = rememberAppHaptics()
     val scrollBehavior         = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+    val refreshState           = rememberPullToRefreshState()
+
+    val isRefreshing = (uiState as? GradesUiState.Success)?.isRefreshing == true
+
+    val infiniteTransition = rememberInfiniteTransition(label = "refresh")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing)
+        ),
+        label = "rotation"
+    )
 
     val hasAnyNew = (uiState as? GradesUiState.Success)?.hasAnyNew == true
 
@@ -117,7 +135,11 @@ fun GradesScreen(
                         Spacer(Modifier.width(4.dp))
                     }
                     FilledTonalIconButton(onClick = { haptics.click(); viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.grades_refresh))
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = stringResource(R.string.grades_refresh),
+                            modifier = Modifier.rotate(if (isRefreshing) rotation else 0f)
+                        )
                     }
                     Spacer(Modifier.width(8.dp))
                 },
@@ -129,108 +151,104 @@ fun GradesScreen(
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = refreshState,
+            modifier = Modifier.padding(paddingValues)
         ) {
-            TermSelector(
-                selected = selectedTerm,
-                onSelect = { haptics.tick(); viewModel.setTerm(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-
-            val isRefreshing = (uiState as? GradesUiState.Success)?.isRefreshing == true
-            AnimatedVisibility(visible = isRefreshing) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                TermSelector(
+                    selected = selectedTerm,
+                    onSelect = { haptics.tick(); viewModel.setTerm(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-            }
 
-            when (val state = uiState) {
-                is GradesUiState.Loading -> {
-                    GradesSkeleton(
-                        bottomPadding = bottomPadding,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                when (val state = uiState) {
+                    is GradesUiState.Loading -> {
+                        GradesSkeleton(
+                            bottomPadding = bottomPadding,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
-                is GradesUiState.Error -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp)
-                        ) {
-                            Text(
-                                text = state.message,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = { haptics.click(); viewModel.refresh() },
-                                shape = RoundedCornerShape(16.dp)
+                    is GradesUiState.Error -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(32.dp)
                             ) {
-                                Text(stringResource(R.string.grades_retry))
+                                Text(
+                                    text = state.message,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = { haptics.click(); viewModel.refresh() },
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Text(stringResource(R.string.grades_retry))
+                                }
                             }
                         }
                     }
-                }
 
-                is GradesUiState.Success -> {
-                    if (state.subjects.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = stringResource(R.string.grades_no_grades),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        val expandedMap = remember(state.subjects) {
-                            mutableStateMapOf(
-                                *state.subjects.map { it.subjectName to it.hasNewGrades }.toTypedArray()
-                            )
-                        }
-
-                        val listState = rememberLazyListState()
-
-                        LaunchedEffect(pendingHighlight, state.subjects) {
-                            val target = pendingHighlight ?: return@LaunchedEffect
-                            expandedMap[target] = true
-                            val index = state.subjects.indexOfFirst { it.subjectName == target }
-                            if (index >= 0) listState.animateScrollToItem(index)
-                            viewModel.consumeHighlight()
-                        }
-
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(
-                                start = 16.dp, end = 16.dp,
-                                top = 8.dp,
-                                bottom = 16.dp + bottomPadding.calculateBottomPadding()
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(state.subjects, key = { it.subjectName }) { group ->
-                                val expanded = expandedMap[group.subjectName] ?: group.hasNewGrades
-                                SubjectCard(
-                                    group = group,
-                                    expanded = expanded,
-                                    onToggle = {
-                                        haptics.tick()
-                                        val nowExpanded = !expanded
-                                        expandedMap[group.subjectName] = nowExpanded
-                                        if (!nowExpanded && group.hasNewGrades) {
-                                            viewModel.markSubjectRead(group.subjectName)
-                                        }
-                                    }
+                    is GradesUiState.Success -> {
+                        if (state.subjects.isEmpty()) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = stringResource(R.string.grades_no_grades),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                        } else {
+                            val expandedMap = remember(state.subjects) {
+                                mutableStateMapOf(
+                                    *state.subjects.map { it.subjectName to it.hasNewGrades }.toTypedArray()
+                                )
+                            }
+
+                            val listState = rememberLazyListState()
+
+                            LaunchedEffect(pendingHighlight, state.subjects) {
+                                val target = pendingHighlight ?: return@LaunchedEffect
+                                expandedMap[target] = true
+                                val index = state.subjects.indexOfFirst { it.subjectName == target }
+                                if (index >= 0) listState.animateScrollToItem(index)
+                                viewModel.consumeHighlight()
+                            }
+
+                            LazyColumn(
+                                state = listState,
+                                contentPadding = PaddingValues(
+                                    start = 16.dp, end = 16.dp,
+                                    top = 8.dp,
+                                    bottom = 16.dp + bottomPadding.calculateBottomPadding()
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(state.subjects, key = { it.subjectName }) { group ->
+                                    val expanded = expandedMap[group.subjectName] ?: group.hasNewGrades
+                                    SubjectCard(
+                                        group = group,
+                                        expanded = expanded,
+                                        onToggle = {
+                                            haptics.tick()
+                                            val nowExpanded = !expanded
+                                            expandedMap[group.subjectName] = nowExpanded
+                                            if (!nowExpanded && group.hasNewGrades) {
+                                                viewModel.markSubjectRead(group.subjectName)
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

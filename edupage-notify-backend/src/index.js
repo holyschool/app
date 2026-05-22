@@ -178,6 +178,40 @@ function buildHomeworkText(data) {
   return null;
 }
 
+function buildAbsenceText(data) {
+  if (!data || typeof data !== "object") return null;
+  const reason = stringOrNull(data.text) || stringOrNull(data.reason) || stringOrNull(data.poznamka);
+  const type = stringOrNull(data.typ_nazov);
+  const from = stringOrNull(data.date_from);
+  const to = stringOrNull(data.date_to);
+  
+  let result = type || "Absence";
+  if (from) result += ` from ${from}`;
+  if (to && to !== from) result += ` to ${to}`;
+  if (reason) result += `: ${reason}`;
+  return result;
+}
+
+function buildTestText(data) {
+  if (!data || typeof data !== "object") return null;
+  const name = stringOrNull(data.nazov) || stringOrNull(data.titulok);
+  const date = stringOrNull(data.date);
+  if (name && date) return `${name} on ${date}`;
+  return name || null;
+}
+
+function buildEventText(data) {
+  if (!data || typeof data !== "object") return null;
+  const name = stringOrNull(data.nazov) || stringOrNull(data.titulok);
+  const place = stringOrNull(data.miesto);
+  const date = stringOrNull(data.datum_od_txt) || stringOrNull(data.date);
+  
+  let result = name || "School event";
+  if (date) result += ` (${date})`;
+  if (place) result += ` at ${place}`;
+  return result;
+}
+
 function stripHtml(value) {
   return value ? value.replace(/<[^>]*>/g, "") : "";
 }
@@ -479,6 +513,9 @@ const MESSAGE_TYPE_MAP = {
   "absent": "absence",
   "student_absent": "absence",
   "ospravedlnenka": "absence",
+  "h_dochadzka": "absence",
+  "absence": "absence",
+  "dochadzka": "absence",
   "event": "event",
   "schoolevent": "event",
   "culture": "event",
@@ -515,8 +552,12 @@ function parseTimeline(items) {
         if (messageContent) text = messageContent;
       }
 
-      if (!text && (type === "homework")) {
-        text = buildHomeworkText(data);
+      if (!text || text.length < 5) {
+        if (type === "homework") text = buildHomeworkText(data);
+        else if (type === "absence") text = buildAbsenceText(data);
+        else if (type === "test") text = buildTestText(data);
+        else if (type === "event") text = buildEventText(data);
+        else if (data && data.text) text = stringOrNull(data.text);
       }
 
       return {
@@ -592,11 +633,19 @@ async function notifyMessages(events, { topic, token }) {
   const sorted = [...events].sort((a, b) => b.timelineId - a.timelineId);
   if (sorted.length === 1) {
     const msg = sorted[0];
-    const sender = msg.authorName || "New message";
+    const sender = msg.authorName || "EduPage";
+    
+    let title = `Message from ${sender}`;
+    if (msg.type === "absence") title = `Absence update: ${sender}`;
+    else if (msg.type === "homework") title = `New Homework: ${sender}`;
+    else if (msg.type === "test") title = `New Test: ${sender}`;
+    else if (msg.type === "event") title = `School Event: ${sender}`;
+    else if (msg.type === "announcement") title = `Announcement: ${sender}`;
+
     const preview = buildPreview(msg.text || msg.title || "", messagePreviewChars);
     await sendTopicNotification({
-      title: `Message from ${sender}`,
-      body: preview || "You have a new message",
+      title,
+      body: preview || "You have a new update",
       data: { type: msg.type, timelineId: msg.timelineId, sender, rawType: msg.rawType },
       topic,
       token,
