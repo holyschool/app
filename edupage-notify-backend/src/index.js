@@ -233,12 +233,6 @@ function toDataPayload(data) {
   return result;
 }
 
-function ensureDir(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-}
-
 ensureDir(path.dirname(DATABASE_PATH));
 const db = new Database(DATABASE_PATH);
 db.pragma("journal_mode = WAL");

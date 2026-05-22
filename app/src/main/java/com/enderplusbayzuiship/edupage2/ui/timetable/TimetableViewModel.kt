@@ -62,30 +62,53 @@ class TimetableViewModel @Inject constructor(
     val showWeekends: StateFlow<Boolean> = _showWeekends.asStateFlow()
 
     init {
-        Log.i(TAG, "init: loading timetable for ${_selectedDate.value}")
         viewModelScope.launch {
-            try {
-                val today = LocalDate.now()
-                val timetable = edupage.getMyTimetable(today)
-                val lessons = timetable?.lessons ?: emptyList()
-                if (lessons.isNotEmpty()) {
-                    val lastEnd = lessons.mapNotNull { it.endTime }.maxOrNull()
-                    if (lastEnd != null && LocalTime.now() > lastEnd) {
-                        _selectedDate.value = today.plusDays(1)
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-        loadTimetable(_selectedDate.value)
-        viewModelScope.launch {
-            while (true) {
-                   delay(30_000)
+            val resolvedInitialDate = determineInitialDate()
+            _selectedDate.value = resolvedInitialDate
+            loadTimetable(resolvedInitialDate)
+
+            // Periodic updates for time-dependent UI (current lesson highlight, etc.)
+            launch {
+                while (true) {
+                    delay(30_000)
                     _currentTime.value = LocalTime.now()
                     _breakVisibility.value = appPreferences.breakVisibility
                     _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
                     _showWeekends.value = appPreferences.showWeekends
+                }
             }
         }
+    }
+
+    private suspend fun determineInitialDate(): LocalDate {
+        val today = LocalDate.now()
+        val showWeekends = appPreferences.showWeekends
+        
+        // Check if today's school day is over
+        val lessons = try {
+            // Prefer cache for fast startup, fall back to API
+            val cached = timetableCache.loadWithStale(today)
+            cached?.first ?: edupage.getMyTimetable(today)?.lessons ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        var targetDate = today
+        if (lessons.isNotEmpty()) {
+            val lastEnd = lessons.mapNotNull { it.endTime }.maxOrNull()
+            if (lastEnd != null && LocalTime.now() > lastEnd) {
+                targetDate = today.plusDays(1)
+            }
+        }
+
+        // If today is weekend or we skipped to a weekend, and weekends are hidden, go to Monday
+        if (!showWeekends) {
+            while (targetDate.dayOfWeek == DayOfWeek.SATURDAY || targetDate.dayOfWeek == DayOfWeek.SUNDAY) {
+                targetDate = targetDate.plusDays(1)
+            }
+        }
+        
+        return targetDate
     }
 
     fun setDate(date: LocalDate) {
