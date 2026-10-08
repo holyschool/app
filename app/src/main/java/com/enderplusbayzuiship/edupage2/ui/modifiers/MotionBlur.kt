@@ -82,7 +82,7 @@ private fun TransitionBlurEffect(
     modifier: Modifier,
     progress01: Float,
 ): Modifier {
-    if (!MotionBlurGate.enabled) {
+    if (!MotionBlurGate.forChrome()) {
         return modifier
     }
     val shader = remember { RuntimeShader(SWIPE_BLUR_AGSL) }
@@ -184,9 +184,10 @@ private fun SwipeBlurEffect(
     val shader = remember { RuntimeShader(SWIPE_BLUR_AGSL) }
 
     return modifier.graphicsLayer {
-        if (abs(velocity) > 0.05f) {
+        val scaled = velocity * MotionBlurGate.scale
+        if (abs(scaled) > 0.05f) {
             shader.setFloatUniform("resolution", size.width, size.height)
-            shader.setFloatUniform("swipeVelocity", velocity)
+            shader.setFloatUniform("swipeVelocity", scaled)
             shader.setFloatUniform("horizontal", 1.0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "composable")
@@ -200,6 +201,20 @@ private fun SwipeBlurEffect(
 object MotionBlurGate {
     @Volatile
     var enabled: Boolean = true
+
+    @Volatile
+    var scope: com.enderplusbayzuiship.edupage2.data.MotionBlurScope =
+        com.enderplusbayzuiship.edupage2.data.MotionBlurScope.FULL
+
+    @Volatile
+    var scale: Float = 1.0f
+
+    fun forTabs(): Boolean =
+        enabled && (scope == com.enderplusbayzuiship.edupage2.data.MotionBlurScope.FULL ||
+            scope == com.enderplusbayzuiship.edupage2.data.MotionBlurScope.TABS)
+
+    fun forChrome(): Boolean =
+        enabled && scope == com.enderplusbayzuiship.edupage2.data.MotionBlurScope.FULL
 }
 
 fun Modifier.scrollMotionBlur(
@@ -307,7 +322,7 @@ private fun ScrollBlurEffect(
     val shader = remember { RuntimeShader(SWIPE_BLUR_AGSL) }
 
     return modifier.graphicsLayer {
-        val vel = animatedVelocity.value * if (horizontal) 1f else -1f
+        val vel = animatedVelocity.value * MotionBlurGate.scale * if (horizontal) 1f else -1f
         if (abs(vel) > 0.05f) {
             shader.setFloatUniform("resolution", size.width, size.height)
             shader.setFloatUniform("swipeVelocity", vel)

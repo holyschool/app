@@ -15,7 +15,7 @@ enum class BreakVisibility(val key: String) {
     ACTIVE_OR_LONG("active_or_long");
 
     companion object {
-        val DEFAULT = ALL
+        val DEFAULT = ACTIVE_OR_LONG
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
 }
@@ -87,6 +87,27 @@ enum class HapticIntensity(val key: String) {
 
     companion object {
         val DEFAULT = SUBTLE
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
+enum class MotionBlurScope(val key: String) {
+    FULL("full"),
+    TABS("tabs");
+
+    companion object {
+        val DEFAULT = FULL
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
+enum class MotionBlurStrength(val key: String, val scale: Float) {
+    SUBTLE("subtle", 0.5f),
+    NORMAL("normal", 1.0f),
+    STRONG("strong", 2.0f);
+
+    companion object {
+        val DEFAULT = NORMAL
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
 }
@@ -165,6 +186,12 @@ class AppPreferences @Inject constructor(
         private const val KEY_HAPTIC_INTENSITY = "haptic_intensity"
         private const val KEY_LAST_SEEN_VERSION = "last_seen_version"
         private const val KEY_MOTION_BLUR = "motion_blur"
+        private const val KEY_MOTION_BLUR_SCOPE = "motion_blur_scope"
+        private const val KEY_MOTION_BLUR_STRENGTH = "motion_blur_strength"
+        private const val KEY_LIVE_CLASS_SHOW_SUBJECT = "live_class_show_subject"
+        private const val KEY_LIVE_CLASS_SHOW_ROOM = "live_class_show_room"
+        private const val KEY_LIVE_CLASS_SHOW_TEACHER = "live_class_show_teacher"
+        private const val KEY_LIVE_CLASS_SHOW_PROGRESS = "live_class_show_progress"
 
         private const val KEY_COMPACT_TIMETABLE = "compact_timetable"
         private const val KEY_AUTO_REFRESH_MINS = "auto_refresh_mins"
@@ -374,6 +401,30 @@ class AppPreferences @Inject constructor(
     var motionBlurEnabled: Boolean
         get() = prefs.getBoolean(KEY_MOTION_BLUR, true)
         set(value) = prefs.edit().putBoolean(KEY_MOTION_BLUR, value).apply()
+
+    var motionBlurScope: MotionBlurScope
+        get() = MotionBlurScope.fromKey(prefs.getString(KEY_MOTION_BLUR_SCOPE, null))
+        set(value) = prefs.edit().putString(KEY_MOTION_BLUR_SCOPE, value.key).apply()
+
+    var motionBlurStrength: MotionBlurStrength
+        get() = MotionBlurStrength.fromKey(prefs.getString(KEY_MOTION_BLUR_STRENGTH, null))
+        set(value) = prefs.edit().putString(KEY_MOTION_BLUR_STRENGTH, value.key).apply()
+
+    var liveClassShowSubject: Boolean
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_SHOW_SUBJECT, true)
+        set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_SHOW_SUBJECT, value).apply()
+
+    var liveClassShowRoom: Boolean
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_SHOW_ROOM, true)
+        set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_SHOW_ROOM, value).apply()
+
+    var liveClassShowTeacher: Boolean
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_SHOW_TEACHER, false)
+        set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_SHOW_TEACHER, value).apply()
+
+    var liveClassShowProgress: Boolean
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_SHOW_PROGRESS, true)
+        set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_SHOW_PROGRESS, value).apply()
 
     val mealsEnabledFlow: Flow<Boolean> = prefFlow(
         key = KEY_MEALS_ENABLED,

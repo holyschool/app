@@ -209,7 +209,7 @@ fun OverviewScreen(
                         .fillMaxSize()
                         .scrollMotionBlur(
                             scrollState = overviewScroll,
-                            enabled = com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.enabled,
+                            enabled = com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.forTabs(),
                         )
                         .verticalScroll(overviewScroll)
                         .padding(horizontal = 16.dp)

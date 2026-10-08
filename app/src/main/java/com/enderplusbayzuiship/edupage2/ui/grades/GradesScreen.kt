@@ -312,7 +312,7 @@ fun GradesScreen(
                                     .fillMaxSize()
                                     .scrollMotionBlur(
                                         lazyListState = listState,
-                                        enabled = com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.enabled,
+                                        enabled = com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.forTabs(),
                                     ),
                                 contentPadding = PaddingValues(
                                     start = 16.dp, end = 16.dp,

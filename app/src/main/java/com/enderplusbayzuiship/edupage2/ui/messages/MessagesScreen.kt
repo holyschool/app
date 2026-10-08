@@ -924,7 +924,7 @@ private fun MessagesList(
             .fillMaxSize()
             .scrollMotionBlur(
                 lazyListState = listState,
-                enabled = MotionBlurGate.enabled,
+                enabled = MotionBlurGate.forTabs(),
             ),
         contentPadding = PaddingValues(
             start = 16.dp, end = 16.dp,

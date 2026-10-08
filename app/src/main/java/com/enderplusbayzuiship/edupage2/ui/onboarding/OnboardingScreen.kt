@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -353,6 +354,28 @@ private fun AcknowledgementStepContent(
     onBack: () -> Unit,
     onNext: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        onNotificationsChanged(granted)
+    }
+
+    fun requestNotificationsOrDisable(enable: Boolean) {
+        if (!enable) {
+            onNotificationsChanged(false)
+            return
+        }
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            onNotificationsChanged(true)
+        } else {
+            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -419,7 +442,7 @@ private fun AcknowledgementStepContent(
                 title = stringResource(R.string.settings_notif_label),
                 description = stringResource(R.string.settings_notif_desc_on),
                 checked = notificationsEnabled,
-                onCheckedChange = onNotificationsChanged,
+                onCheckedChange = { requestNotificationsOrDisable(it) },
             )
         }
 

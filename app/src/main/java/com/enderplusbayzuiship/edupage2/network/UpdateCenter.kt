@@ -22,4 +22,8 @@ object UpdateCenter {
     fun dismiss() {
         _pending.value = null
     }
+
+    fun post(info: AppUpdateInfo) {
+        _pending.value = info
+    }
 }
