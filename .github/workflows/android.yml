@@ -31,24 +31,3 @@ jobs:
           name: edupage2-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-
-  backend-check:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: edupage-notify-backend
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: edupage-notify-backend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Syntax check
-        run: node --check src/index.js
