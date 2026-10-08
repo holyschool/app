@@ -63,7 +63,9 @@ import com.enderplusbayzuiship.edupage2.notification.DeepLinkHelper
 import com.enderplusbayzuiship.edupage2.ui.core.cards.FeatureCard
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
+import com.enderplusbayzuiship.edupage2.network.AppUpdateInfo
 import com.enderplusbayzuiship.edupage2.ui.playground.UiPlaygroundScreen
+import com.enderplusbayzuiship.edupage2.ui.update.UpdateAvailableSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import kotlinx.coroutines.launch
 
@@ -118,6 +120,7 @@ fun DeveloperOptionsScreen(
     }
 
     var showPlayground by remember { mutableStateOf(false) }
+    var showUpdatePreview by remember { mutableStateOf(false) }
 
     androidx.activity.compose.BackHandler(enabled = showPlayground) {
         haptics.virtualKey()
@@ -149,6 +152,19 @@ fun DeveloperOptionsScreen(
             )
         }
     ) { innerPadding ->
+        if (showUpdatePreview) {
+            UpdateAvailableSheet(
+                info = AppUpdateInfo(
+                    versionName = "v9.9",
+                    releaseNotes = "• Fresh coat of paint\n• Bug fixes and polish",
+                    downloadUrl = "",
+                    pageUrl = "https://github.com/holyschool/app/releases",
+                ),
+                downloadProgress = null,
+                onDownload = { showUpdatePreview = false },
+                onDismiss = { showUpdatePreview = false },
+            )
+        }
         if (showPlayground) {
             UiPlaygroundScreen(onBack = { showPlayground = false })
         } else {
@@ -336,6 +352,12 @@ fun DeveloperOptionsScreen(
                     description = stringResource(R.string.dev_test_ui_desc),
                     icon = Icons.Rounded.Settings,
                     onClick = { haptics.virtualKey(); showPlayground = true }
+                )
+                FeatureCard(
+                    title = stringResource(R.string.dev_preview_update),
+                    description = stringResource(R.string.dev_preview_update_desc),
+                    icon = Icons.Rounded.FileDownload,
+                    onClick = { haptics.virtualKey(); showUpdatePreview = true }
                 )
             }
 

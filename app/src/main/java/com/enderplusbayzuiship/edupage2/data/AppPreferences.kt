@@ -160,6 +160,7 @@ class AppPreferences @Inject constructor(
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_MEALS_ENABLED = "meals_enabled"
         private const val KEY_LIVE_CLASS_NOTIF = "live_class_notif"
+        private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
         private const val KEY_HAPTIC_INTENSITY = "haptic_intensity"
         private const val KEY_LAST_SEEN_VERSION = "last_seen_version"
         private const val KEY_MOTION_BLUR = "motion_blur"
@@ -352,6 +353,10 @@ class AppPreferences @Inject constructor(
     var liveClassNotif: Boolean
         get() = prefs.getBoolean(KEY_LIVE_CLASS_NOTIF, false)
         set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_NOTIF, value).apply()
+
+    var autoCheckUpdates: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, value).apply()
 
     var hapticIntensity: HapticIntensity
         get() = HapticIntensity.fromKey(prefs.getString(KEY_HAPTIC_INTENSITY, null))

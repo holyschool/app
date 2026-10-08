@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -86,23 +87,62 @@ class SettingsViewModel @Inject constructor(
         _updateState.value = UpdateCheckState.Idle
     }
 
+    private val _downloadProgress = MutableStateFlow<Int?>(null)
+    val downloadProgress: StateFlow<Int?> = _downloadProgress.asStateFlow()
+
     fun downloadUpdate(info: com.enderplusbayzuiship.edupage2.network.AppUpdateInfo) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                val dm = context.getSystemService(android.app.DownloadManager::class.java) ?: return@launch
-                val request = android.app.DownloadManager.Request(android.net.Uri.parse(info.downloadUrl))
-                    .setTitle(context.getString(R.string.update_downloading, info.versionName))
-                    .setNotificationVisibility(
-                        android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-                    )
-                    .setDestinationInExternalPublicDir(
-                        android.os.Environment.DIRECTORY_DOWNLOADS,
-                        "Edupage2-${info.versionName}.apk"
-                    )
-                    .setMimeType("application/vnd.android.package-archive")
-                dm.enqueue(request)
+                _downloadProgress.value = 0
+                val cleanVersion = info.versionName.replace(Regex("[^a-zA-Z0-9]"), "_")
+                val dir = java.io.File(context.cacheDir, "updates").apply { mkdirs() }
+                val file = java.io.File(dir, "Edupage2-$cleanVersion.apk")
+                val url = java.net.URL(info.downloadUrl)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.connect()
+                if (connection.responseCode != java.net.HttpURLConnection.HTTP_OK) {
+                    throw IllegalStateException("Server returned ${connection.responseCode}")
+                }
+                val fileLength = connection.contentLength
+                connection.inputStream.use { input ->
+                    file.outputStream().use { output ->
+                        val data = ByteArray(8192)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(data)
+                            if (count == -1) break
+                            output.write(data, 0, count)
+                            total += count
+                            if (fileLength > 0) {
+                                _downloadProgress.value = ((total * 100) / fileLength).toInt().coerceIn(0, 100)
+                            }
+                        }
+                    }
+                }
+                _downloadProgress.value = 100
+                installApk(file)
             } catch (e: Exception) {
                 Log.e(TAG, "update download failed", e)
+                _downloadProgress.value = null
+            }
+        }
+    }
+
+    private suspend fun installApk(file: java.io.File) {
+        withContext(kotlinx.coroutines.Dispatchers.Main) {
+            _downloadProgress.value = null
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            runCatching { context.startActivity(intent) }.onFailure {
+                Log.e(TAG, "could not launch installer", it)
             }
         }
     }
@@ -152,6 +192,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _motionBlurEnabled = MutableStateFlow(appPreferences.motionBlurEnabled)
     val motionBlurEnabled: StateFlow<Boolean> = _motionBlurEnabled.asStateFlow()
+
+    private val _autoCheckUpdates = MutableStateFlow(appPreferences.autoCheckUpdates)
+    val autoCheckUpdates: StateFlow<Boolean> = _autoCheckUpdates.asStateFlow()
 
     private val _notificationsEnabled = MutableStateFlow(appPreferences.notificationsEnabled)
     val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
@@ -392,6 +435,13 @@ class SettingsViewModel @Inject constructor(
         _motionBlurEnabled.value = value
         com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.enabled = value
     }
+
+    fun setAutoCheckUpdates(value: Boolean) {
+        appPreferences.autoCheckUpdates = value
+        _autoCheckUpdates.value = value
+    }
+
+    fun shouldAutoCheckUpdates(): Boolean = appPreferences.autoCheckUpdates
 
     fun setNotifGradesEnabled(value: Boolean) {
         appPreferences.notifGradesEnabled = value
