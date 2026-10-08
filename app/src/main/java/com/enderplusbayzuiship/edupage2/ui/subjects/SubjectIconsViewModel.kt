@@ -24,7 +24,10 @@ data class SubjectInfo(
 
 sealed interface SubjectsState {
     object Loading : SubjectsState
-    data class Ready(val subjects: List<SubjectInfo>, val usedFallback: Boolean) : SubjectsState
+    data class Ready(
+        val mine: List<SubjectInfo>,
+        val others: List<SubjectInfo>,
+    ) : SubjectsState
     data class Error(val message: String) : SubjectsState
 }
 
@@ -54,8 +57,8 @@ class SubjectIconsViewModel @Inject constructor(
     fun setStyle(subject: String, style: SubjectStyle) = store.set(subject, style)
 
     /**
-     * Loads the subjects the user actually has (from grades + today's timetable),
-     * falling back to the full school subject list when none can be determined.
+     * Loads the subjects the user actually has (from grades + today's timetable)
+     * first, then the remaining school subjects, so the editor can offer both.
      */
     fun loadSubjects() {
         loadStarted = true
@@ -90,24 +93,23 @@ class SubjectIconsViewModel @Inject constructor(
 
                 mine.addAll(store.styles.value.keys)
 
-                val usedFallback = mine.isEmpty()
-                val names = if (usedFallback) {
-                    allSubjects.mapNotNull { it.name?.trim()?.takeIf { name -> name.isNotBlank() } }
-                        .distinct()
-                        .sorted()
-                } else {
-                    mine.sorted()
-                }
+                val mineNames = mine.sorted()
+                val mineSet = mineNames.toSet()
+                val otherNames = allSubjects
+                    .mapNotNull { it.name?.trim()?.takeIf { name -> name.isNotBlank() } }
+                    .distinct()
+                    .filter { it !in mineSet }
+                    .sorted()
+
+                fun infoFor(name: String) = SubjectInfo(
+                    name = name,
+                    shortName = shortByName[name],
+                    teachers = teachersBySubject[name]?.toList().orEmpty().sorted(),
+                )
 
                 _subjectsState.value = SubjectsState.Ready(
-                    subjects = names.map { name ->
-                        SubjectInfo(
-                            name = name,
-                            shortName = shortByName[name],
-                            teachers = teachersBySubject[name]?.toList().orEmpty().sorted(),
-                        )
-                    },
-                    usedFallback = usedFallback,
+                    mine = mineNames.map { infoFor(it) },
+                    others = otherNames.map { infoFor(it) },
                 )
             } catch (e: Exception) {
                 _subjectsState.value = SubjectsState.Error(e.message ?: "error")

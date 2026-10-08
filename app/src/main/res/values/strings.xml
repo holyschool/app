@@ -322,7 +322,9 @@
     <string name="subject_icons_error">Couldn\'t load subjects</string>
     <string name="subject_icons_step_select">Choose subjects</string>
     <string name="subject_icons_select_hint">Pick the subjects you want to customize.</string>
-    <string name="subject_icons_fallback_note">Showing all school subjects</string>
+    <string name="subject_icons_group_mine">My subjects</string>
+    <string name="subject_icons_group_more">Other subjects</string>
+    <string name="subject_icons_group_all">All subjects</string>
     <string name="subject_icons_select_all">Select all</string>
     <string name="subject_icons_clear_all">Clear</string>
     <string name="subject_icons_next">Next</string>

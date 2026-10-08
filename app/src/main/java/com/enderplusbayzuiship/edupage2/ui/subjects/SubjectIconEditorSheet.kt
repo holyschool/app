@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -115,11 +116,12 @@ fun SubjectIconEditorSheet(
             }
 
             is SubjectsState.Ready -> {
+                val allSubjects = state.mine + state.others
                 val current = selected.getOrNull(editingIndex)
                 if (editingIndex < 0 || current == null) {
                     SelectSubjectsStep(
-                        subjects = state.subjects,
-                        usedFallback = state.usedFallback,
+                        mine = state.mine,
+                        others = state.others,
                         selected = selected,
                         onToggle = { name ->
                             haptics.virtualKey()
@@ -127,10 +129,10 @@ fun SubjectIconEditorSheet(
                         },
                         onToggleAll = {
                             haptics.virtualKey()
-                            selected = if (selected.size == state.subjects.size) {
+                            selected = if (allSubjects.isNotEmpty() && selected.size == allSubjects.size) {
                                 emptyList()
                             } else {
-                                state.subjects.map { it.name }
+                                allSubjects.map { it.name }
                             }
                         },
                         onNext = {
@@ -139,7 +141,7 @@ fun SubjectIconEditorSheet(
                         },
                     )
                 } else {
-                    val info = state.subjects.firstOrNull { it.name == current }
+                    val info = allSubjects.firstOrNull { it.name == current }
                         ?: SubjectInfo(name = current)
                     val style = styles[current] ?: SubjectStyle()
                     EditSubjectStep(
@@ -169,13 +171,14 @@ fun SubjectIconEditorSheet(
 
 @Composable
 private fun SelectSubjectsStep(
-    subjects: List<SubjectInfo>,
-    usedFallback: Boolean,
+    mine: List<SubjectInfo>,
+    others: List<SubjectInfo>,
     selected: List<String>,
     onToggle: (String) -> Unit,
     onToggleAll: () -> Unit,
     onNext: () -> Unit,
 ) {
+    val allNames = (mine + others).map { it.name }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -193,21 +196,13 @@ private fun SelectSubjectsStep(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (usedFallback) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.subject_icons_fallback_note),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
 
         Spacer(Modifier.height(8.dp))
 
         TextButton(onClick = onToggleAll) {
             Text(
                 text = stringResource(
-                    if (selected.size == subjects.size) {
+                    if (allNames.isNotEmpty() && selected.size == allNames.size) {
                         R.string.subject_icons_clear_all
                     } else {
                         R.string.subject_icons_select_all
@@ -222,38 +217,29 @@ private fun SelectSubjectsStep(
                 .heightIn(max = 420.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            subjects.forEach { subject ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable { onToggle(subject.name) }
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
-                        checked = subject.name in selected,
-                        onCheckedChange = { onToggle(subject.name) },
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = subject.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        val subtitle = subject.teachers.firstOrNull() ?: subject.shortName
-                        if (!subtitle.isNullOrBlank()) {
-                            Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+            if (mine.isNotEmpty()) {
+                GroupHeader(text = stringResource(R.string.subject_icons_group_mine))
+                mine.forEach { subject ->
+                    SubjectSelectRow(subject = subject, checked = subject.name in selected, onToggle = onToggle)
+                }
+
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(8.dp))
+            }
+
+            if (others.isNotEmpty()) {
+                GroupHeader(
+                    text = stringResource(
+                        if (mine.isEmpty()) {
+                            R.string.subject_icons_group_all
+                        } else {
+                            R.string.subject_icons_group_more
                         }
-                    }
+                    ),
+                )
+                others.forEach { subject ->
+                    SubjectSelectRow(subject = subject, checked = subject.name in selected, onToggle = onToggle)
                 }
             }
         }
@@ -266,6 +252,56 @@ private fun SelectSubjectsStep(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.subject_icons_next))
+        }
+    }
+}
+
+@Composable
+private fun GroupHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun SubjectSelectRow(
+    subject: SubjectInfo,
+    checked: Boolean,
+    onToggle: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onToggle(subject.name) }
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = { onToggle(subject.name) },
+        )
+        Spacer(Modifier.width(4.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = subject.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val subtitle = subject.teachers.firstOrNull() ?: subject.shortName
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
