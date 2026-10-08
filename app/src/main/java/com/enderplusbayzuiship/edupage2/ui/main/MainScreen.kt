@@ -12,11 +12,7 @@ import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -47,7 +43,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -63,7 +58,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -298,13 +292,6 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                     NavigationBarItem(
                         selected = pagerState.currentPage == index,
                         onClick = { goToTab(index) },
-                        modifier = if (index == 0) {
-                            Modifier.overviewLongPress(
-                                onLongPress = { haptics.virtualKey(); showAccountSwitcher = true },
-                            )
-                        } else {
-                            Modifier
-                        },
                         icon = {
                             if (index == 1 && unreadMessages > 0) {
                                 BadgedBox(
@@ -583,18 +570,10 @@ private fun AccountSwitcherSheet(    onDismiss: () -> Unit,
     }
 }
 
-private fun Modifier.overviewLongPress(onLongPress: () -> Unit): Modifier =
-    pointerInput(onLongPress) {
-        awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            val longPress = awaitLongPressOrCancellation()
-            if (longPress != null) onLongPress()
-        }
-    }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OfflineBanner(modifier: Modifier = Modifier, onRetry: () -> Unit) {    Surface(
+private fun OfflineBanner(modifier: Modifier = Modifier, onRetry: () -> Unit) {
+    Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceBright,
         contentColor = MaterialTheme.colorScheme.onSurface,
