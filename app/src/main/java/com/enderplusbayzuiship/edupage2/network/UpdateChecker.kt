@@ -22,8 +22,8 @@ class UpdateChecker @Inject constructor() {
 
     companion object {
         private const val TAG = "UpdateChecker"
-        const val REPO_OWNER = "FoxyIsCoding"
-        const val REPO_NAME = "Edupage2-App"
+        const val REPO_OWNER = "holyschool"
+        const val REPO_NAME = "app"
         private const val API_URL = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
     }
 
