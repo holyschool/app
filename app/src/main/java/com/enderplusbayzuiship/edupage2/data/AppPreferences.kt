@@ -137,7 +137,7 @@ enum class MessagesViewMode(val key: String) {
     ALL("all");
 
     companion object {
-        val DEFAULT = CATEGORIES
+        val DEFAULT = ALL
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
 }

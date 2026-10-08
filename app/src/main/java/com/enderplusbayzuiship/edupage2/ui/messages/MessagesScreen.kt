@@ -215,7 +215,7 @@ fun MessagesScreen(
     val uiState         by viewModel.uiState.collectAsState()
     val recipientsState by viewModel.recipientsState.collectAsState()
     val importedHomework by viewModel.importedHomework.collectAsState()
-    val viewMode        by viewModel.viewModeFlow.collectAsState(initial = MessagesViewMode.CATEGORIES)
+    val viewMode        by viewModel.viewModeFlow.collectAsState(initial = MessagesViewMode.ALL)
     val priorityMessages by viewModel.priorityFlow.collectAsState(initial = false)
     val newMessagesOnTop by viewModel.newOnTopFlow.collectAsState(initial = false)
     val haptics         = rememberAppHaptics()
