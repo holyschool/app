@@ -51,5 +51,9 @@ class LocalHomeworkViewModel @Inject constructor(
             refreshWidgets()
         }
     }
+
+    fun reload() {
+        _items.update { store.getAll() }
+    }
 }
 

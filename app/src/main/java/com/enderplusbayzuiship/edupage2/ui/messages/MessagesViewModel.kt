@@ -10,6 +10,7 @@ import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.people.EduAccount
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.data.LocalHomeworkStore
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import com.enderplusbayzuiship.edupage2.ui.util.isNetworkError
@@ -64,6 +65,7 @@ class MessagesViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val cache: TimelineCache,
     private val backendRegistrationManager: BackendRegistrationManager,
+    private val homeworkStore: LocalHomeworkStore,
 ) : ViewModel() {
 
     companion object {
@@ -78,6 +80,13 @@ class MessagesViewModel @Inject constructor(
 
     private val _unreadCount = MutableStateFlow(0)
     val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    private val _importedHomework = MutableStateFlow(0)
+    val importedHomework: StateFlow<Int> = _importedHomework.asStateFlow()
+
+    fun consumeImportedHomework() {
+        _importedHomework.value = 0
+    }
 
     private var allEvents: List<TimelineEvent> = emptyList()
 
@@ -419,6 +428,8 @@ class MessagesViewModel @Inject constructor(
                 .sortedByDescending { it.timestamp }
             allEvents = events
             cache.save(events)
+            val imported = homeworkStore.importFromMessages(events)
+            if (imported > 0) _importedHomework.value = imported
             updateUnreadCount()
             val groups = events.toGroups()
             Log.i(TAG, "fetchAndUpdate: ${events.size} events")

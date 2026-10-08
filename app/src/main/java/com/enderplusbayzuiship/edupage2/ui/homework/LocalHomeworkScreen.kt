@@ -1,6 +1,7 @@
 package com.enderplusbayzuiship.edupage2.ui.homework
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,10 +27,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Button
@@ -41,12 +46,18 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,11 +65,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +87,7 @@ import com.enderplusbayzuiship.edupage2.data.HomeworkItem
 import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
+import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -100,6 +114,10 @@ fun LocalHomeworkScreen(
     var editing by remember { mutableStateOf<HomeworkItem?>(null) }
     val haptics = rememberAppHaptics()
     val editorOpen = creating || editing != null
+
+    LaunchedEffect(Unit) {
+        viewModel.reload()
+    }
 
     BackHandler(enabled = editorOpen) {
         creating = false
@@ -154,7 +172,29 @@ private fun HomeworkListScreen(
 ) {
     val haptics = rememberAppHaptics()
     val today = remember { LocalDate.now() }
-    val buckets = remember(items, today) { bucketize(items, today) }
+    var filterTab by rememberSaveable { mutableStateOf(HomeworkTab.ACTIVE) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var detailItem by remember { mutableStateOf<HomeworkItem?>(null) }
+
+    val visibleItems = remember(items, filterTab, searchQuery) {
+        val byTab = when (filterTab) {
+            HomeworkTab.ACTIVE -> items.filter { !it.done }
+            HomeworkTab.DONE -> items.filter { it.done }
+            HomeworkTab.ALL -> items
+        }
+        val q = searchQuery.trim().lowercase()
+        if (q.isBlank()) {
+            byTab
+        } else {
+            byTab.filter {
+                it.title.lowercase().contains(q) ||
+                    it.subject.lowercase().contains(q) ||
+                    it.notes.lowercase().contains(q)
+            }
+        }
+    }
+    val buckets = remember(visibleItems, today) { bucketize(visibleItems, today) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -176,6 +216,17 @@ private fun HomeworkListScreen(
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(onClick = {
+                        haptics.virtualKey()
+                        showSearch = !showSearch
+                        if (!showSearch) searchQuery = ""
+                    }) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = stringResource(R.string.messages_search),
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
                     FilledTonalIconButton(onClick = onCreate) {
                         Icon(
                             Icons.Rounded.Add,
@@ -219,33 +270,104 @@ private fun HomeworkListScreen(
                 }
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                HomeworkBucket.entries.forEach { bucket ->
-                    val bucketItems = buckets[bucket].orEmpty()
-                    if (bucketItems.isNotEmpty()) {
-                        item(key = "hw_header_${bucket.name}") {
-                            HomeworkGroupHeader(
-                                text = stringResource(bucket.titleRes),
-                                count = bucketItems.size,
-                            )
-                        }
-                        item(key = "hw_card_${bucket.name}") {
-                            RoundedCardContainer {
-                                bucketItems.forEach { item ->
-                                    key(item.id) {
-                                        HomeworkRow(
-                                            item = item,
-                                            dimmed = bucket == HomeworkBucket.DONE,
-                                            onToggle = { onToggle(item.id) },
-                                            onEdit = { onEdit(item) },
-                                            onDelete = { onDelete(item.id) },
-                                        )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    HomeworkTab.entries.forEachIndexed { index, tab ->
+                        SegmentedButton(
+                            selected = filterTab == tab,
+                            onClick = {
+                                haptics.virtualKey()
+                                filterTab = tab
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = HomeworkTab.entries.size,
+                            ),
+                            label = {
+                                Text(
+                                    text = stringResource(tab.labelRes),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            },
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = showSearch) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text(stringResource(R.string.messages_search_hint)) },
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotBlank()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = null)
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+
+                if (visibleItems.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.messages_no_results),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        HomeworkBucket.entries.forEach { bucket ->
+                            val bucketItems = buckets[bucket].orEmpty()
+                            if (bucketItems.isNotEmpty()) {
+                                item(key = "hw_header_${bucket.name}") {
+                                    HomeworkGroupHeader(
+                                        text = stringResource(bucket.titleRes),
+                                        count = bucketItems.size,
+                                        highlight = bucket == HomeworkBucket.OVERDUE,
+                                    )
+                                }
+                                item(key = "hw_card_${bucket.name}") {
+                                    RoundedCardContainer {
+                                        bucketItems.forEach { item ->
+                                            key(item.id) {
+                                                HomeworkRow(
+                                                    item = item,
+                                                    dimmed = bucket == HomeworkBucket.DONE,
+                                                    onToggle = { onToggle(item.id) },
+                                                    onOpen = { detailItem = item },
+                                                    onDelete = { onDelete(item.id) },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -255,6 +377,31 @@ private fun HomeworkListScreen(
             }
         }
     }
+
+    detailItem?.let { detail ->
+        HomeworkDetailSheet(
+            item = detail,
+            onDismiss = { detailItem = null },
+            onToggle = {
+                onToggle(detail.id)
+                detailItem = null
+            },
+            onEdit = {
+                detailItem = null
+                onEdit(detail)
+            },
+            onDelete = {
+                onDelete(detail.id)
+                detailItem = null
+            },
+        )
+    }
+}
+
+private enum class HomeworkTab(val labelRes: Int) {
+    ACTIVE(R.string.homework_pending),
+    DONE(R.string.homework_done),
+    ALL(R.string.messages_filter_all),
 }
 
 private fun bucketize(
@@ -284,6 +431,7 @@ private fun bucketize(
 private fun HomeworkGroupHeader(
     text: String,
     count: Int,
+    highlight: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -295,7 +443,9 @@ private fun HomeworkGroupHeader(
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
+            color = if (highlight) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(
             modifier = Modifier
@@ -318,7 +468,7 @@ private fun HomeworkRow(
     item: HomeworkItem,
     dimmed: Boolean,
     onToggle: () -> Unit,
-    onEdit: () -> Unit,
+    onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val haptics = rememberAppHaptics()
@@ -331,7 +481,7 @@ private fun HomeworkRow(
         },
         onClick = {
             haptics.virtualKey()
-            onEdit()
+            onOpen()
         },
     ) {
         Row(
@@ -406,6 +556,27 @@ private fun HomeworkRow(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                }
+                item.sourceLabel?.let { label ->
+                    Row(
+                        modifier = Modifier.padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Email,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
             IconButton(onClick = {
@@ -498,6 +669,9 @@ private fun HomeworkEditorScreen(
                             subject = subject.trim(),
                             notes = notes.trim(),
                             done = initial?.done ?: false,
+                            createdAtMs = initial?.createdAtMs ?: System.currentTimeMillis(),
+                            sourceTimelineId = initial?.sourceTimelineId,
+                            sourceLabel = initial?.sourceLabel,
                         )
                     )
                 },
@@ -727,6 +901,218 @@ private fun DateQuickChip(
         onClick = onClick,
         label = { Text(label) },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeworkDetailSheet(
+    item: HomeworkItem,
+    onDismiss: () -> Unit,
+    onToggle: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    val overdue = remember(item.date, item.done) { isOverdue(item.date) && !item.done }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                PastelIcon(
+                    icon = Icons.Rounded.MenuBook,
+                    key = item.subject.ifBlank { item.title },
+                    containerSize = 56.dp,
+                    iconSize = 28.dp,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = if (item.done) TextDecoration.LineThrough else null,
+                        color = if (item.done) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val (statusText, statusColor) = when {
+                            item.done -> stringResource(R.string.homework_done) to MaterialTheme.colorScheme.primary
+                            overdue -> stringResource(R.string.homework_overdue) to MaterialTheme.colorScheme.error
+                            else -> formatDate(item.date) to MaterialTheme.colorScheme.secondary
+                        }
+                        StatusPill(text = statusText, color = statusColor)
+                        if (item.done) {
+                            StatusPill(
+                                text = formatDate(item.date),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
+            RoundedCardContainer {
+                if (item.subject.isNotBlank()) {
+                    DetailInfoRow(
+                        icon = Icons.Rounded.MenuBook,
+                        label = stringResource(R.string.homework_detail_subject),
+                        value = item.subject,
+                    )
+                }
+                DetailInfoRow(
+                    icon = Icons.Rounded.CalendarMonth,
+                    label = stringResource(R.string.homework_detail_date),
+                    value = formatDate(item.date),
+                )
+                item.sourceLabel?.let { label ->
+                    DetailInfoRow(
+                        icon = Icons.Default.Search,
+                        label = stringResource(R.string.homework_detail_source),
+                        value = label,
+                    )
+                }
+            }
+
+            if (item.notes.isNotBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionLabel(
+                        text = stringResource(R.string.homework_detail_notes),
+                        modifier = Modifier.padding(bottom = 0.dp),
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceBright,
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = item.notes,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(
+                    onClick = {
+                        haptics.virtualKey()
+                        onToggle()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                ) {
+                    Icon(
+                        imageVector = if (item.done) {
+                            Icons.Rounded.RadioButtonUnchecked
+                        } else {
+                            Icons.Rounded.CheckCircle
+                        },
+                        contentDescription = null,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(
+                            if (item.done) R.string.homework_detail_mark_undone
+                            else R.string.homework_detail_mark_done
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                FilledTonalButton(
+                    onClick = {
+                        haptics.virtualKey()
+                        onEdit()
+                    },
+                    modifier = Modifier.height(52.dp),
+                ) {
+                    Icon(Icons.Rounded.Edit, contentDescription = null)
+                }
+                OutlinedButton(
+                    onClick = {
+                        haptics.virtualKey()
+                        onDelete()
+                    },
+                    modifier = Modifier.height(52.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.homework_delete))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(text: String, color: androidx.compose.ui.graphics.Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun DetailInfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceBright,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            PastelIcon(icon = icon, key = label, containerSize = 36.dp, iconSize = 18.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
 }
 
 private fun isOverdue(iso: String): Boolean {

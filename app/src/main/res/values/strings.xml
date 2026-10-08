@@ -601,6 +601,13 @@
     <string name="homework_cancel">Cancel</string>
     <string name="homework_untitled">Untitled</string>
     <string name="homework_overdue">Overdue</string>
+    <string name="homework_detail_subject">Subject</string>
+    <string name="homework_detail_date">Due date</string>
+    <string name="homework_detail_source">Source</string>
+    <string name="homework_detail_notes">Notes</string>
+    <string name="homework_detail_mark_done">Mark as done</string>
+    <string name="homework_detail_mark_undone">Mark as not done</string>
+    <string name="homework_imported_snackbar">Added %1$d homework from messages</string>
     <string name="homework_today">Today</string>
     <string name="homework_tomorrow">Tomorrow</string>
     <string name="homework_this_week">This week</string>

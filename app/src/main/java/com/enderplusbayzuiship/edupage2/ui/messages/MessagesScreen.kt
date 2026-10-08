@@ -85,6 +85,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -211,10 +213,24 @@ fun MessagesScreen(
 ) {
     val uiState         by viewModel.uiState.collectAsState()
     val recipientsState by viewModel.recipientsState.collectAsState()
+    val importedHomework by viewModel.importedHomework.collectAsState()
     val haptics         = rememberAppHaptics()
     val scope           = rememberCoroutineScope()
     val refreshState    = rememberPullToRefreshState()
     val messageListState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val importedText = if (importedHomework > 0) {
+        stringResource(R.string.homework_imported_snackbar, importedHomework)
+    } else {
+        ""
+    }
+
+    LaunchedEffect(importedText) {
+        if (importedText.isNotEmpty()) {
+            snackbarHostState.showSnackbar(importedText)
+            viewModel.consumeImportedHomework()
+        }
+    }
 
     val barHidden by remember {
         derivedStateOf {
@@ -251,6 +267,7 @@ fun MessagesScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AnimatedVisibility(
                 visible = !barHidden,

@@ -325,6 +325,8 @@ class OverviewViewModel @Inject constructor(
                 } else {
                     Log.w(TAG, "ignoring empty timeline result to preserve cache (stale session?)")
                 }
+                homeworkStore.importFromMessages(events)
+                refreshHomework()
                 emitMessagesCache()
                 return
             }
