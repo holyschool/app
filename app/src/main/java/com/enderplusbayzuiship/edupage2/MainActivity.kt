@@ -124,6 +124,11 @@ class MainActivity : FragmentActivity() {
             val fontScale by appPreferences.fontScaleFlow.collectAsState(
                 initial = appPreferences.fontScale
             )
+            val enhancedAppearance by appPreferences.enhancedAppearanceEnabledFlow.collectAsState(
+                initial = appPreferences.enhancedAppearanceEnabled
+            )
+            val effectiveAccentArgb = if (enhancedAppearance) customAccentArgb else null
+            val effectiveFontScale = if (enhancedAppearance) fontScale.multiplier else 1f
             val keepScreenAwake by appPreferences.keepScreenAwakeFlow.collectAsState(
                 initial = appPreferences.keepScreenAwake
             )
@@ -172,13 +177,13 @@ class MainActivity : FragmentActivity() {
                 darkTheme = darkTheme,
                 amoled = useAmoled,
                 accent = accentColor,
-                customAccentArgb = customAccentArgb,
+                customAccentArgb = effectiveAccentArgb,
             ) {
                 val density = LocalDensity.current
                 CompositionLocalProvider(
                     LocalDensity provides Density(
                         density = density.density,
-                        fontScale = density.fontScale * fontScale.multiplier,
+                        fontScale = density.fontScale * effectiveFontScale,
                     )
                 ) {
                 if (locked) {
