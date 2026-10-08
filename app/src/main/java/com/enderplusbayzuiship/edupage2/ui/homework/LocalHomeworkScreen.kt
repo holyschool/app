@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -101,6 +100,10 @@ import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
+import com.enderplusbayzuiship.edupage2.ui.subjects.ColorPickerRow
+import com.enderplusbayzuiship.edupage2.ui.subjects.IconPickerRow
+import com.enderplusbayzuiship.edupage2.ui.subjects.StyledAvatar
+import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconOption
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -522,9 +525,10 @@ private fun HomeworkRow(
                     tint = if (item.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            PastelIcon(
+            StyledAvatar(
+                label = item.subject.ifBlank { item.title },
                 icon = homeworkIconVector(item.iconKey),
-                key = item.subject.ifBlank { item.title },
+                colorArgb = item.colorArgb,
                 containerSize = 40.dp,
                 iconSize = 20.dp,
             )
@@ -637,47 +641,54 @@ private enum class HomeworkIcon(val key: String, val icon: ImageVector) {
 private fun homeworkIconVector(key: String?): ImageVector =
     HomeworkIcon.fromKey(key)?.icon ?: Icons.Rounded.MenuBook
 
+private val homeworkIconOptions: List<SubjectIconOption> =
+    HomeworkIcon.entries.map { SubjectIconOption(it.key, it.icon) }
+
 @Composable
-private fun HomeworkIconPicker(
-    selectedKey: String?,
-    onSelect: (String?) -> Unit,
-    modifier: Modifier = Modifier,
+private fun HomeworkStylePicker(
+    avatarLabel: String,
+    title: String,
+    iconKey: String?,
+    colorArgb: Int?,
+    onIconSelected: (String?) -> Unit,
+    onColorSelected: (Int?) -> Unit,
 ) {
-    val haptics = rememberAppHaptics()
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        HomeworkIcon.entries.forEach { option ->
-            val isSelected = selectedKey == option.key
-            Surface(
-                onClick = {
-                    haptics.virtualKey()
-                    onSelect(if (isSelected) null else option.key)
-                },
-                shape = CircleShape,
-                color = if (isSelected) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceBright
-                },
-                modifier = Modifier.size(52.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = option.icon,
-                        contentDescription = null,
-                        tint = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            StyledAvatar(
+                label = avatarLabel,
+                icon = homeworkIconVector(iconKey),
+                colorArgb = colorArgb,
+                containerSize = 72.dp,
+                iconSize = 36.dp,
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionLabel(text = stringResource(R.string.homework_step_icon))
+            IconPickerRow(
+                icons = homeworkIconOptions,
+                selectedKey = iconKey,
+                onSelect = onIconSelected,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionLabel(text = stringResource(R.string.subject_icons_color_label))
+            ColorPickerRow(
+                selectedArgb = colorArgb,
+                onSelect = onColorSelected,
+                defaultLabel = avatarLabel,
+            )
         }
     }
 }
@@ -707,6 +718,7 @@ private fun HomeworkCreateWizard(
     var date by remember { mutableStateOf(LocalDate.now().toString()) }
     var notes by remember { mutableStateOf("") }
     var iconKey by remember { mutableStateOf<String?>(null) }
+    var colorArgb by remember { mutableStateOf<Int?>(null) }
     var ownSubject by remember { mutableStateOf(existingSubjects.isEmpty()) }
     var subjectMenuExpanded by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -724,6 +736,7 @@ private fun HomeworkCreateWizard(
                 subject = subject.trim(),
                 notes = notes.trim(),
                 iconKey = iconKey,
+                colorArgb = colorArgb,
             )
         )
     }
@@ -904,31 +917,14 @@ private fun HomeworkCreateWizard(
                     }
                 }
 
-                CreateStep.ICON -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    HomeworkIconPicker(
-                        selectedKey = iconKey,
-                        onSelect = { iconKey = it },
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        PastelIcon(
-                            icon = homeworkIconVector(iconKey),
-                            key = subject.ifBlank { title },
-                            containerSize = 44.dp,
-                            iconSize = 22.dp,
-                        )
-                        Text(
-                            text = title.ifBlank { untitledLabel },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+                CreateStep.ICON -> HomeworkStylePicker(
+                    avatarLabel = subject.ifBlank { title }.ifBlank { untitledLabel },
+                    title = title.ifBlank { untitledLabel },
+                    iconKey = iconKey,
+                    colorArgb = colorArgb,
+                    onIconSelected = { iconKey = it },
+                    onColorSelected = { colorArgb = it },
+                )
 
                 CreateStep.NOTES -> OutlinedTextField(
                     value = notes,
@@ -1050,6 +1046,7 @@ private fun HomeworkEditorScreen(
     var subject by remember(initial?.id) { mutableStateOf(initial?.subject ?: "") }
     var notes by remember(initial?.id) { mutableStateOf(initial?.notes ?: "") }
     var iconKey by remember(initial?.id) { mutableStateOf(initial?.iconKey) }
+    var colorArgb by remember(initial?.id) { mutableStateOf(initial?.colorArgb) }
     val allSubjects = remember(existingSubjects, eduSubjects) {
         (eduSubjects + existingSubjects).distinct().sorted()
     }
@@ -1120,6 +1117,7 @@ private fun HomeworkEditorScreen(
                             sourceTimelineId = initial?.sourceTimelineId,
                             sourceLabel = initial?.sourceLabel,
                             iconKey = iconKey,
+                            colorArgb = colorArgb,
                         )
                     )
                 },
@@ -1298,13 +1296,13 @@ private fun HomeworkEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            SectionLabel(
-                text = stringResource(R.string.homework_step_icon),
-                modifier = Modifier.padding(bottom = 0.dp),
-            )
-            HomeworkIconPicker(
-                selectedKey = iconKey,
-                onSelect = { iconKey = it },
+            HomeworkStylePicker(
+                avatarLabel = subject.ifBlank { title }.ifBlank { stringResource(R.string.homework_untitled) },
+                title = title.ifBlank { stringResource(R.string.homework_untitled) },
+                iconKey = iconKey,
+                colorArgb = colorArgb,
+                onIconSelected = { iconKey = it },
+                onColorSelected = { colorArgb = it },
             )
         }
     }
@@ -1384,9 +1382,10 @@ private fun HomeworkDetailSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                PastelIcon(
+                StyledAvatar(
+                    label = item.subject.ifBlank { item.title },
                     icon = homeworkIconVector(item.iconKey),
-                    key = item.subject.ifBlank { item.title },
+                    colorArgb = item.colorArgb,
                     containerSize = 56.dp,
                     iconSize = 28.dp,
                 )

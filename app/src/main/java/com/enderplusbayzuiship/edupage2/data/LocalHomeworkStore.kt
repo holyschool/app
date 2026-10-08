@@ -22,6 +22,7 @@ data class HomeworkItem(
     val sourceTimelineId: Int? = null,
     val sourceLabel: String? = null,
     val iconKey: String? = null,
+    val colorArgb: Int? = null,
 )
 
 @Singleton
