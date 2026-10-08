@@ -338,7 +338,7 @@
     <string name="settings_ai_testing">Testing…</string>
     <string name="settings_ai_test_ok">Connection OK</string>
     <string name="settings_ai_test_failed">Connection failed: %1$s</string>
-    <string name="settings_ai_model_hint">gemini-2.0-flash</string>
+    <string name="settings_ai_model_hint">gemini-flash-latest</string>
     <string name="settings_ai_save">Save</string>
 
     <string name="settings_enhanced_custom_accent">Custom accent color</string>

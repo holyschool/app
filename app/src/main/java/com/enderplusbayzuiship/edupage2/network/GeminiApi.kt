@@ -45,7 +45,6 @@ class GeminiApi @Inject constructor(
                 })
             })
             add("generationConfig", JsonObject().apply {
-                addProperty("temperature", 0.85)
                 addProperty("responseMimeType", "application/json")
                 add("responseSchema", responseSchema())
             })

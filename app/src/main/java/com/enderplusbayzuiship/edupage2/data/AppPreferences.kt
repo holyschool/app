@@ -234,7 +234,7 @@ class AppPreferences @Inject constructor(
         private const val KEY_CUSTOM_ACCENT = "custom_accent_argb"
         private const val KEY_FONT_SCALE = "app_font_scale"
 
-        const val DEFAULT_AI_MODEL = "gemini-2.0-flash"
+        const val DEFAULT_AI_MODEL = "gemini-flash-latest"
 
         private const val OFFICIAL_BACKEND_URL = "https://edupage.stwupid.tech"
         private const val OFFICIAL_BACKEND_KEY = "change-this-long-random"
