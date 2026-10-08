@@ -188,6 +188,9 @@ class Edupage(timeoutSeconds: Long = 15L) {
     suspend fun cloudDelete(fileId: String): Boolean =
         Cloud(session).deleteCloudFile(fileId)
 
+    suspend fun cloudDownload(uploadPath: String, destination: File): File =
+        Cloud(session).downloadFile(uploadPath, destination)
+
     val children: List<EduAccount>?
         get() = session.children
 

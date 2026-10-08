@@ -12,6 +12,11 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.enderplusbayzuiship.edupage2.MainActivity
 import com.enderplusbayzuiship.edupage2.R
+import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconCatalog
+import com.enderplusbayzuiship.edupage2.ui.subjects.defaultSubjectColorArgb
+import com.enderplusbayzuiship.edupage2.ui.subjects.onColorFor
+import com.enderplusbayzuiship.edupage2.ui.subjects.rasterizeSubjectIcon
+import com.enderplusbayzuiship.edupage2.ui.subjects.subjectLetterAvatarBitmap
 import com.enderplusbayzuiship.edupage2.ui.widgets.readWidgetLessons
 import java.time.Duration
 import java.time.LocalDate
@@ -51,6 +56,9 @@ class ClassLiveService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val prefs by lazy { com.enderplusbayzuiship.edupage2.data.AppPreferences(this) }
+    private val subjectStyles by lazy {
+        com.enderplusbayzuiship.edupage2.data.SubjectStyleStore(this)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -176,7 +184,7 @@ class ClassLiveService : Service() {
             nextText?.let { add(it) }
         }.joinToString(" · ").ifBlank { title }
 
-        return NotificationCompat.Builder(this, CHANNEL_LIVE_CLASS)
+        val builder = NotificationCompat.Builder(this, CHANNEL_LIVE_CLASS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
@@ -184,7 +192,8 @@ class ClassLiveService : Service() {
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent())
             .apply { if (showProgress) setProgress(totalMin.toInt(), elapsed, false) }
-            .build()
+        applySubjectIcon(builder, current.subject)
+        return builder.build()
     }
 
     private fun describeLesson(lesson: com.enderplusbayzuiship.edupage2.ui.widgets.WidgetLesson): String {
@@ -221,7 +230,7 @@ class ClassLiveService : Service() {
             describeLesson(next)
         }
 
-        return NotificationCompat.Builder(this, CHANNEL_LIVE_CLASS)
+        val builder = NotificationCompat.Builder(this, CHANNEL_LIVE_CLASS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
@@ -229,7 +238,25 @@ class ClassLiveService : Service() {
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent())
             .apply { if (showProgress) setProgress(totalMin.toInt(), elapsed, false) }
-            .build()
+        applySubjectIcon(builder, next.subject)
+        return builder.build()
+    }
+
+    private fun applySubjectIcon(builder: NotificationCompat.Builder, subject: String) {
+        if (!prefs.subjectIconsEnabled) return
+        val style = subjectStyles.get(subject) ?: return
+        val background = style.colorArgb ?: defaultSubjectColorArgb(subject)
+        val foreground = onColorFor(background)
+        runCatching {
+            val icon = SubjectIconCatalog.vectorFor(style.iconKey)
+            val bitmap = if (icon != null) {
+                rasterizeSubjectIcon(icon, 128, background, foreground)
+            } else {
+                subjectLetterAvatarBitmap(subject, 128, background, foreground)
+            }
+            builder.setLargeIcon(bitmap)
+            style.colorArgb?.let { builder.setColor(it) }
+        }.onFailure { Log.w(TAG, "could not build subject icon: ${it.message}") }
     }
 
     private fun formatMinutes(minutes: Long): String = when {

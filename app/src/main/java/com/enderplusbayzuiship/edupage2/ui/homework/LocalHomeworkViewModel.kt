@@ -18,11 +18,32 @@ import javax.inject.Inject
 @HiltViewModel
 class LocalHomeworkViewModel @Inject constructor(
     private val store: LocalHomeworkStore,
+    private val edupage: com.edupage.api.Edupage,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _items = MutableStateFlow<List<HomeworkItem>>(store.getAll())
     val items: StateFlow<List<HomeworkItem>> = _items.asStateFlow()
+
+    private val _subjects = MutableStateFlow<List<String>>(emptyList())
+    val subjects: StateFlow<List<String>> = _subjects.asStateFlow()
+
+    init {
+        loadSubjects()
+    }
+
+    fun loadSubjects() {
+        viewModelScope.launch {
+            val fetched = runCatching { edupage.getSubjects() }
+                .getOrNull()
+                ?.mapNotNull { it.name?.trim() }
+                ?.filter { it.isNotBlank() }
+                ?.distinct()
+                ?.sorted()
+                .orEmpty()
+            if (fetched.isNotEmpty()) _subjects.value = fetched
+        }
+    }
 
     private fun refreshWidgets() {
         viewModelScope.launch { WidgetUpdater.refreshAll(context) }
@@ -50,6 +71,10 @@ class LocalHomeworkViewModel @Inject constructor(
             _items.update { store.getAll() }
             refreshWidgets()
         }
+    }
+
+    fun reload() {
+        _items.update { store.getAll() }
     }
 }
 

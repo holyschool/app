@@ -17,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-private fun pastelPair(key: String, darkTheme: Boolean): Pair<Color, Color> {
+internal fun pastelPair(key: String, darkTheme: Boolean): Pair<Color, Color> {
     val hue = (((key.hashCode() % 360) + 360) % 360).toFloat()
     return if (darkTheme) {
         Pair(

@@ -101,7 +101,6 @@ import com.edupage.api.model.grades.computeStats
 import com.edupage.api.model.grades.SubjectAverage
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
-import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelInitials
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
 import com.enderplusbayzuiship.edupage2.ui.modifiers.scrollMotionBlur
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
@@ -114,11 +113,14 @@ import kotlin.math.roundToInt
 @Composable
 fun GradesScreen(
     bottomPadding: PaddingValues,
-    viewModel: GradesViewModel = hiltViewModel()
+    viewModel: GradesViewModel = hiltViewModel(),
+    subjectIconsVm: com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconsViewModel = hiltViewModel(),
 ) {
     val uiState                by viewModel.uiState.collectAsState()
     val selectedTerm           by viewModel.selectedTerm.collectAsState()
     val pendingHighlight       by viewModel.pendingHighlightSubject.collectAsState()
+    val subjectIconsEnabled    by subjectIconsVm.enabled.collectAsState()
+    val subjectStyles          by subjectIconsVm.styles.collectAsState()
     val haptics                = rememberAppHaptics()
     val scrollBehavior         = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val refreshState           = rememberPullToRefreshState()
@@ -331,6 +333,8 @@ fun GradesScreen(
                                     SubjectCard(
                                         group = group,
                                         expanded = expanded,
+                                        subjectIconsEnabled = subjectIconsEnabled,
+                                        subjectStyle = subjectStyles[group.subjectName],
                                         onGradeClick = { selectedGrade = it },
                                         onToggle = {
                                             haptics.virtualKey()
@@ -488,6 +492,8 @@ private fun StatsStat(label: String, value: String) {
 private fun SubjectCard(
     group: GradeSubjectGroup,
     expanded: Boolean,
+    subjectIconsEnabled: Boolean = false,
+    subjectStyle: com.enderplusbayzuiship.edupage2.data.SubjectStyle? = null,
     onGradeClick: (EduGrade) -> Unit = {},
     onToggle: () -> Unit,
 ) {
@@ -504,7 +510,11 @@ private fun SubjectCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-            PastelInitials(text = group.subjectName)
+            com.enderplusbayzuiship.edupage2.ui.subjects.SubjectAvatar(
+                subjectName = group.subjectName,
+                style = subjectStyle,
+                enabled = subjectIconsEnabled,
+            )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

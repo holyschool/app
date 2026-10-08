@@ -85,6 +85,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -120,6 +122,7 @@ import com.edupage.api.model.PollAnswer
 import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.people.EduAccount
 import com.enderplusbayzuiship.edupage2.R
+import com.enderplusbayzuiship.edupage2.data.MessagesViewMode
 import com.enderplusbayzuiship.edupage2.ui.core.cards.IconToggleItem
 import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
 import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
@@ -211,10 +214,27 @@ fun MessagesScreen(
 ) {
     val uiState         by viewModel.uiState.collectAsState()
     val recipientsState by viewModel.recipientsState.collectAsState()
+    val importedHomework by viewModel.importedHomework.collectAsState()
+    val viewMode        by viewModel.viewModeFlow.collectAsState(initial = MessagesViewMode.ALL)
+    val priorityMessages by viewModel.priorityFlow.collectAsState(initial = false)
+    val newMessagesOnTop by viewModel.newOnTopFlow.collectAsState(initial = false)
     val haptics         = rememberAppHaptics()
     val scope           = rememberCoroutineScope()
     val refreshState    = rememberPullToRefreshState()
     val messageListState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val importedText = if (importedHomework > 0) {
+        stringResource(R.string.homework_imported_snackbar, importedHomework)
+    } else {
+        ""
+    }
+
+    LaunchedEffect(importedText) {
+        if (importedText.isNotEmpty()) {
+            snackbarHostState.showSnackbar(importedText)
+            viewModel.consumeImportedHomework()
+        }
+    }
 
     val barHidden by remember {
         derivedStateOf {
@@ -251,6 +271,7 @@ fun MessagesScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AnimatedVisibility(
                 visible = !barHidden,
@@ -430,6 +451,13 @@ fun MessagesScreen(
                         )
                     }
 
+                    if (uiState is MessagesUiState.Success) {
+                        MessagesViewModeRow(
+                            viewMode = viewMode,
+                            onSelect = { viewModel.setViewMode(it) },
+                        )
+                    }
+
                     when (val state = uiState) {
                         is MessagesUiState.Loading -> {
                             MessagesSkeleton(
@@ -530,6 +558,9 @@ fun MessagesScreen(
                                     state = state.copy(groups = searchGroups),
                                     bottomPadding = bottomPadding,
                                     selectedFilter = selectedFilter,
+                                    viewMode = viewMode,
+                                    priority = priorityMessages,
+                                    newOnTop = newMessagesOnTop,
                                     listState = messageListState,
                                     onLoadMore = { viewModel.loadMore() },
                                     onItemClick = { group ->
@@ -617,6 +648,40 @@ private fun RotatingRefreshIcon() {
         contentDescription = stringResource(R.string.messages_refresh),
         modifier = Modifier.rotate(rotation),
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MessagesViewModeRow(
+    viewMode: MessagesViewMode,
+    onSelect: (MessagesViewMode) -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val options = listOf(
+            MessagesViewMode.CATEGORIES to R.string.messages_view_categories,
+            MessagesViewMode.ALL to R.string.messages_view_all,
+        )
+        options.forEach { (mode, labelRes) ->
+            FilterChip(
+                selected = viewMode == mode,
+                onClick = {
+                    haptics.virtualKey()
+                    onSelect(mode)
+                },
+                label = { Text(stringResource(labelRes)) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -864,6 +929,9 @@ private fun MessagesList(
     state: MessagesUiState.Success,
     bottomPadding: PaddingValues,
     selectedFilter: Int?,
+    viewMode: MessagesViewMode,
+    priority: Boolean,
+    newOnTop: Boolean,
     listState: LazyListState,
     onLoadMore: () -> Unit,
     onItemClick: (MessageGroup) -> Unit,
@@ -888,13 +956,15 @@ private fun MessagesList(
             }
     }
 
-    val listItems = remember(state.groups, state.seenIds, selectedFilter) {
+    val mixed = priority || newOnTop
+    val listItems = remember(state.groups, state.seenIds, selectedFilter, viewMode, priority, newOnTop) {
         val seenIds = state.seenIds
         fun isUnread(group: MessageGroup) =
             group.main.timelineId !in seenIds || group.replies.any { it.timelineId !in seenIds }
 
         val items = mutableListOf<MessageListItem>()
-        if (selectedFilter == null) {
+        val showCategories = selectedFilter == null && viewMode == MessagesViewMode.CATEGORIES && !mixed
+        if (showCategories) {
             val byCategory = state.groups.groupBy { typeInfoFor(it.main.type).labelRes }
             val ordered = byCategory.toList().sortedBy { (labelRes, _) ->
                 val idx = CATEGORY_ORDER.indexOf(labelRes)
@@ -905,10 +975,16 @@ private fun MessagesList(
                 groups.forEach { items.add(MessageListItem.Group(it, isUnread(it))) }
             }
         } else {
-            val firstReadIdx = state.groups.indexOfFirst { g ->
-                g.main.timelineId in seenIds && g.replies.all { it.timelineId in seenIds }
+            var ordered = state.groups
+            if (priority) {
+                ordered = ordered.sortedByDescending { it.main.isImportant || it.main.isStarred }
             }
-            state.groups.forEachIndexed { index, group ->
+            if (newOnTop) {
+                ordered = ordered.sortedByDescending { isUnread(it) }
+            }
+            val insertDivider = selectedFilter != null || newOnTop
+            val firstReadIdx = if (insertDivider) ordered.indexOfFirst { !isUnread(it) } else -1
+            ordered.forEachIndexed { index, group ->
                 if (firstReadIdx > 0 && index == firstReadIdx) {
                     items.add(MessageListItem.NewDivider)
                 }

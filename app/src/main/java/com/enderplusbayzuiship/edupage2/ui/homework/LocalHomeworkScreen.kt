@@ -1,6 +1,7 @@
 package com.enderplusbayzuiship.edupage2.ui.homework
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,12 +27,26 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Calculate
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.HistoryEdu
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.SportsSoccer
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -41,12 +56,19 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,15 +76,18 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -74,6 +99,11 @@ import com.enderplusbayzuiship.edupage2.data.HomeworkItem
 import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
+import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
+import com.enderplusbayzuiship.edupage2.ui.subjects.ColorPickerRow
+import com.enderplusbayzuiship.edupage2.ui.subjects.IconPickerRow
+import com.enderplusbayzuiship.edupage2.ui.subjects.StyledAvatar
+import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconOption
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -99,46 +129,59 @@ fun LocalHomeworkScreen(
     var creating by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<HomeworkItem?>(null) }
     val haptics = rememberAppHaptics()
-    val editorOpen = creating || editing != null
 
-    BackHandler(enabled = editorOpen) {
-        creating = false
+    LaunchedEffect(Unit) {
+        viewModel.reload()
+    }
+
+    val existingSubjects = remember(items) {
+        items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+    val edupageSubjects by viewModel.subjects.collectAsState()
+
+    BackHandler(enabled = editing != null) {
         editing = null
     }
 
-    if (editorOpen) {
-        HomeworkEditorScreen(
+    when {
+        editing != null -> HomeworkEditorScreen(
             initial = editing,
-            existingSubjects = remember(items) {
-                items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
-            },
-            onDismiss = {
-                creating = false
-                editing = null
-            },
+            existingSubjects = existingSubjects,
+            eduSubjects = edupageSubjects,
+            onDismiss = { editing = null },
             onSave = { item ->
                 viewModel.addOrUpdate(item)
-                creating = false
                 editing = null
             },
             onDelete = { id ->
                 viewModel.remove(id)
-                creating = false
                 editing = null
             },
         )
-    } else {
-        HomeworkListScreen(
-            items = items,
-            onBack = onBack,
-            onCreate = {
-                haptics.virtualKey()
-                creating = true
-            },
-            onEdit = { editing = it },
-            onToggle = { viewModel.toggleDone(it) },
-            onDelete = { viewModel.remove(it) },
-        )
+
+        else -> {
+            HomeworkListScreen(
+                items = items,
+                onBack = onBack,
+                onCreate = {
+                    haptics.virtualKey()
+                    creating = true
+                },
+                onEdit = { editing = it },
+                onToggle = { viewModel.toggleDone(it) },
+                onDelete = { viewModel.remove(it) },
+            )
+            if (creating) {
+                HomeworkCreateWizard(
+                    existingSubjects = (edupageSubjects + existingSubjects).distinct().sorted(),
+                    onDismiss = { creating = false },
+                    onSave = { item ->
+                        viewModel.addOrUpdate(item)
+                        creating = false
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -154,7 +197,29 @@ private fun HomeworkListScreen(
 ) {
     val haptics = rememberAppHaptics()
     val today = remember { LocalDate.now() }
-    val buckets = remember(items, today) { bucketize(items, today) }
+    var filterTab by rememberSaveable { mutableStateOf(HomeworkTab.ACTIVE) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var detailItem by remember { mutableStateOf<HomeworkItem?>(null) }
+
+    val visibleItems = remember(items, filterTab, searchQuery) {
+        val byTab = when (filterTab) {
+            HomeworkTab.ACTIVE -> items.filter { !it.done }
+            HomeworkTab.DONE -> items.filter { it.done }
+            HomeworkTab.ALL -> items
+        }
+        val q = searchQuery.trim().lowercase()
+        if (q.isBlank()) {
+            byTab
+        } else {
+            byTab.filter {
+                it.title.lowercase().contains(q) ||
+                    it.subject.lowercase().contains(q) ||
+                    it.notes.lowercase().contains(q)
+            }
+        }
+    }
+    val buckets = remember(visibleItems, today) { bucketize(visibleItems, today) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -176,6 +241,17 @@ private fun HomeworkListScreen(
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(onClick = {
+                        haptics.virtualKey()
+                        showSearch = !showSearch
+                        if (!showSearch) searchQuery = ""
+                    }) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = stringResource(R.string.messages_search),
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
                     FilledTonalIconButton(onClick = onCreate) {
                         Icon(
                             Icons.Rounded.Add,
@@ -219,33 +295,104 @@ private fun HomeworkListScreen(
                 }
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                HomeworkBucket.entries.forEach { bucket ->
-                    val bucketItems = buckets[bucket].orEmpty()
-                    if (bucketItems.isNotEmpty()) {
-                        item(key = "hw_header_${bucket.name}") {
-                            HomeworkGroupHeader(
-                                text = stringResource(bucket.titleRes),
-                                count = bucketItems.size,
-                            )
-                        }
-                        item(key = "hw_card_${bucket.name}") {
-                            RoundedCardContainer {
-                                bucketItems.forEach { item ->
-                                    key(item.id) {
-                                        HomeworkRow(
-                                            item = item,
-                                            dimmed = bucket == HomeworkBucket.DONE,
-                                            onToggle = { onToggle(item.id) },
-                                            onEdit = { onEdit(item) },
-                                            onDelete = { onDelete(item.id) },
-                                        )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    HomeworkTab.entries.forEachIndexed { index, tab ->
+                        SegmentedButton(
+                            selected = filterTab == tab,
+                            onClick = {
+                                haptics.virtualKey()
+                                filterTab = tab
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = HomeworkTab.entries.size,
+                            ),
+                            label = {
+                                Text(
+                                    text = stringResource(tab.labelRes),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            },
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = showSearch) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text(stringResource(R.string.messages_search_hint)) },
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotBlank()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = null)
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+
+                if (visibleItems.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.messages_no_results),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        HomeworkBucket.entries.forEach { bucket ->
+                            val bucketItems = buckets[bucket].orEmpty()
+                            if (bucketItems.isNotEmpty()) {
+                                item(key = "hw_header_${bucket.name}") {
+                                    HomeworkGroupHeader(
+                                        text = stringResource(bucket.titleRes),
+                                        count = bucketItems.size,
+                                        highlight = bucket == HomeworkBucket.OVERDUE,
+                                    )
+                                }
+                                item(key = "hw_card_${bucket.name}") {
+                                    RoundedCardContainer {
+                                        bucketItems.forEach { item ->
+                                            key(item.id) {
+                                                HomeworkRow(
+                                                    item = item,
+                                                    dimmed = bucket == HomeworkBucket.DONE,
+                                                    onToggle = { onToggle(item.id) },
+                                                    onOpen = { detailItem = item },
+                                                    onDelete = { onDelete(item.id) },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -255,6 +402,31 @@ private fun HomeworkListScreen(
             }
         }
     }
+
+    detailItem?.let { detail ->
+        HomeworkDetailSheet(
+            item = detail,
+            onDismiss = { detailItem = null },
+            onToggle = {
+                onToggle(detail.id)
+                detailItem = null
+            },
+            onEdit = {
+                detailItem = null
+                onEdit(detail)
+            },
+            onDelete = {
+                onDelete(detail.id)
+                detailItem = null
+            },
+        )
+    }
+}
+
+private enum class HomeworkTab(val labelRes: Int) {
+    ACTIVE(R.string.homework_pending),
+    DONE(R.string.homework_done),
+    ALL(R.string.messages_filter_all),
 }
 
 private fun bucketize(
@@ -284,6 +456,7 @@ private fun bucketize(
 private fun HomeworkGroupHeader(
     text: String,
     count: Int,
+    highlight: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -295,7 +468,9 @@ private fun HomeworkGroupHeader(
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
+            color = if (highlight) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(
             modifier = Modifier
@@ -318,7 +493,7 @@ private fun HomeworkRow(
     item: HomeworkItem,
     dimmed: Boolean,
     onToggle: () -> Unit,
-    onEdit: () -> Unit,
+    onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val haptics = rememberAppHaptics()
@@ -331,7 +506,7 @@ private fun HomeworkRow(
         },
         onClick = {
             haptics.virtualKey()
-            onEdit()
+            onOpen()
         },
     ) {
         Row(
@@ -350,9 +525,10 @@ private fun HomeworkRow(
                     tint = if (item.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            PastelIcon(
-                icon = Icons.Rounded.MenuBook,
-                key = item.subject.ifBlank { item.title },
+            StyledAvatar(
+                label = item.subject.ifBlank { item.title },
+                icon = homeworkIconVector(item.iconKey),
+                colorArgb = item.colorArgb,
                 containerSize = 40.dp,
                 iconSize = 20.dp,
             )
@@ -407,6 +583,27 @@ private fun HomeworkRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                item.sourceLabel?.let { label ->
+                    Row(
+                        modifier = Modifier.padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Email,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
             IconButton(onClick = {
                 haptics.virtualKey()
@@ -422,11 +619,424 @@ private fun HomeworkRow(
     }
 }
 
+private enum class HomeworkIcon(val key: String, val icon: ImageVector) {
+    BOOK("book", Icons.Rounded.MenuBook),
+    READING("reading", Icons.Rounded.AutoStories),
+    MATH("math", Icons.Rounded.Calculate),
+    SCIENCE("science", Icons.Rounded.Science),
+    LANGUAGE("language", Icons.Rounded.Language),
+    HISTORY("history", Icons.Rounded.HistoryEdu),
+    ART("art", Icons.Rounded.Palette),
+    MUSIC("music", Icons.Rounded.MusicNote),
+    SPORT("sport", Icons.Rounded.SportsSoccer),
+    COMPUTER("computer", Icons.Rounded.Computer),
+    GEOGRAPHY("geography", Icons.Rounded.Public),
+    WRITING("writing", Icons.Rounded.Edit);
+
+    companion object {
+        fun fromKey(key: String?): HomeworkIcon? = entries.firstOrNull { it.key == key }
+    }
+}
+
+private fun homeworkIconVector(key: String?): ImageVector =
+    HomeworkIcon.fromKey(key)?.icon ?: Icons.Rounded.MenuBook
+
+private val homeworkIconOptions: List<SubjectIconOption> =
+    HomeworkIcon.entries.map { SubjectIconOption(it.key, it.icon) }
+
+@Composable
+private fun HomeworkStylePicker(
+    avatarLabel: String,
+    title: String,
+    iconKey: String?,
+    colorArgb: Int?,
+    onIconSelected: (String?) -> Unit,
+    onColorSelected: (Int?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            StyledAvatar(
+                label = avatarLabel,
+                icon = homeworkIconVector(iconKey),
+                colorArgb = colorArgb,
+                containerSize = 72.dp,
+                iconSize = 36.dp,
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionLabel(text = stringResource(R.string.homework_step_icon))
+            IconPickerRow(
+                icons = homeworkIconOptions,
+                selectedKey = iconKey,
+                onSelect = onIconSelected,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionLabel(text = stringResource(R.string.subject_icons_color_label))
+            ColorPickerRow(
+                selectedArgb = colorArgb,
+                onSelect = onColorSelected,
+                defaultLabel = avatarLabel,
+            )
+        }
+    }
+}
+
+private enum class CreateStep(val questionRes: Int) {
+    TITLE(R.string.homework_step_title),
+    SUBJECT(R.string.homework_step_subject),
+    DATE(R.string.homework_step_date),
+    ICON(R.string.homework_step_icon),
+    NOTES(R.string.homework_step_notes);
+
+    val optional: Boolean get() = this != TITLE
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeworkCreateWizard(
+    existingSubjects: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (HomeworkItem) -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    val steps = CreateStep.entries
+    var step by remember { mutableStateOf(CreateStep.TITLE) }
+    var title by remember { mutableStateOf("") }
+    var subject by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(LocalDate.now().toString()) }
+    var notes by remember { mutableStateOf("") }
+    var iconKey by remember { mutableStateOf<String?>(null) }
+    var colorArgb by remember { mutableStateOf<Int?>(null) }
+    var ownSubject by remember { mutableStateOf(existingSubjects.isEmpty()) }
+    var subjectMenuExpanded by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val untitledLabel = stringResource(R.string.homework_untitled)
+    val today = remember { LocalDate.now() }
+    val fieldShape = RoundedCornerShape(24.dp)
+    val stepIndex = steps.indexOf(step)
+    val isLast = stepIndex >= steps.lastIndex
+
+    fun save() {
+        onSave(
+            HomeworkItem(
+                title = title.trim().ifBlank { untitledLabel },
+                date = date.trim().ifBlank { today.toString() },
+                subject = subject.trim(),
+                notes = notes.trim(),
+                iconKey = iconKey,
+                colorArgb = colorArgb,
+            )
+        )
+    }
+
+    fun advance() {
+        if (isLast) save() else step = steps[stepIndex + 1]
+    }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(top = 4.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.homework_step_of, stepIndex + 1, steps.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                LinearProgressIndicator(
+                    progress = { (stepIndex + 1).toFloat() / steps.size },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(50)),
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+            }
+
+            Text(
+                text = stringResource(step.questionRes),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            when (step) {
+                CreateStep.TITLE -> OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    placeholder = { Text(stringResource(R.string.homework_step_title_hint)) },
+                    singleLine = true,
+                    shape = fieldShape,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                CreateStep.SUBJECT -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ExposedDropdownMenuBox(
+                        expanded = subjectMenuExpanded,
+                        onExpandedChange = { subjectMenuExpanded = !subjectMenuExpanded },
+                    ) {
+                        OutlinedTextField(
+                            value = when {
+                                ownSubject -> stringResource(R.string.homework_subject_own)
+                                else -> subject
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            placeholder = { Text(stringResource(R.string.homework_subject_label)) },
+                            singleLine = true,
+                            shape = fieldShape,
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = subjectMenuExpanded)
+                            },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = subjectMenuExpanded,
+                            onDismissRequest = { subjectMenuExpanded = false },
+                        ) {
+                            existingSubjects.forEach { suggestion ->
+                                DropdownMenuItem(
+                                    text = { Text(suggestion) },
+                                    onClick = {
+                                        haptics.virtualKey()
+                                        ownSubject = false
+                                        subject = suggestion
+                                        subjectMenuExpanded = false
+                                    },
+                                )
+                            }
+                            if (existingSubjects.isNotEmpty()) {
+                                HorizontalDivider()
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.homework_subject_own)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Edit,
+                                        contentDescription = null,
+                                    )
+                                },
+                                onClick = {
+                                    haptics.virtualKey()
+                                    ownSubject = true
+                                    subject = ""
+                                    subjectMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
+                    if (ownSubject) {
+                        OutlinedTextField(
+                            value = subject,
+                            onValueChange = { subject = it },
+                            placeholder = { Text(stringResource(R.string.homework_subject_label)) },
+                            singleLine = true,
+                            shape = fieldShape,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+
+                CreateStep.DATE -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DateQuickChip(
+                            label = stringResource(R.string.homework_today),
+                            selected = date == today.toString(),
+                            onClick = {
+                                haptics.virtualKey()
+                                date = today.toString()
+                            },
+                        )
+                        DateQuickChip(
+                            label = stringResource(R.string.homework_tomorrow),
+                            selected = date == today.plusDays(1).toString(),
+                            onClick = {
+                                haptics.virtualKey()
+                                date = today.plusDays(1).toString()
+                            },
+                        )
+                        DateQuickChip(
+                            label = stringResource(R.string.homework_next_week),
+                            selected = date == today.plusDays(7).toString(),
+                            onClick = {
+                                haptics.virtualKey()
+                                date = today.plusDays(7).toString()
+                            },
+                        )
+                    }
+                    Surface(
+                        onClick = {
+                            haptics.virtualKey()
+                            showDatePicker = true
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceBright,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        ) {
+                            PastelIcon(icon = Icons.Rounded.CalendarMonth, key = date)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.homework_date_label),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = formatDate(date),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                CreateStep.ICON -> HomeworkStylePicker(
+                    avatarLabel = subject.ifBlank { title }.ifBlank { untitledLabel },
+                    title = title.ifBlank { untitledLabel },
+                    iconKey = iconKey,
+                    colorArgb = colorArgb,
+                    onIconSelected = { iconKey = it },
+                    onColorSelected = { colorArgb = it },
+                )
+
+                CreateStep.NOTES -> OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    placeholder = { Text(stringResource(R.string.homework_step_notes_hint)) },
+                    shape = fieldShape,
+                    minLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (stepIndex > 0) {
+                    TextButton(onClick = {
+                        haptics.virtualKey()
+                        step = steps[stepIndex - 1]
+                    }) {
+                        Text(stringResource(R.string.homework_back))
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (step.optional) {
+                    TextButton(onClick = {
+                        haptics.virtualKey()
+                        when (step) {
+                            CreateStep.SUBJECT -> {
+                                subject = ""
+                                ownSubject = false
+                            }
+                            CreateStep.ICON -> iconKey = null
+                            CreateStep.NOTES -> notes = ""
+                            else -> Unit
+                        }
+                        advance()
+                    }) {
+                        Text(stringResource(R.string.homework_skip))
+                    }
+                }
+                Button(
+                    onClick = {
+                        haptics.virtualKey()
+                        advance()
+                    },
+                    enabled = step != CreateStep.TITLE || title.isNotBlank(),
+                    modifier = Modifier.height(52.dp),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (isLast) R.string.homework_finish else R.string.homework_next
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        imageVector = if (isLast) Icons.Rounded.CheckCircle
+                        else Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = remember(date) {
+                runCatching {
+                    LocalDate.parse(date.ifBlank { today.toString() })
+                        .atStartOfDay(java.time.ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli()
+                }.getOrNull()
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    haptics.virtualKey()
+                    pickerState.selectedDateMillis?.let { millis ->
+                        date = java.time.Instant.ofEpochMilli(millis)
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .toLocalDate()
+                            .toString()
+                    }
+                    showDatePicker = false
+                }) {
+                    Text(stringResource(R.string.homework_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text(stringResource(R.string.homework_cancel))
+                }
+            },
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeworkEditorScreen(
     initial: HomeworkItem?,
     existingSubjects: List<String>,
+    eduSubjects: List<String>,
     onDismiss: () -> Unit,
     onSave: (HomeworkItem) -> Unit,
     onDelete: (String) -> Unit,
@@ -435,6 +1045,11 @@ private fun HomeworkEditorScreen(
     var date by remember(initial?.id) { mutableStateOf(initial?.date ?: LocalDate.now().toString()) }
     var subject by remember(initial?.id) { mutableStateOf(initial?.subject ?: "") }
     var notes by remember(initial?.id) { mutableStateOf(initial?.notes ?: "") }
+    var iconKey by remember(initial?.id) { mutableStateOf(initial?.iconKey) }
+    var colorArgb by remember(initial?.id) { mutableStateOf(initial?.colorArgb) }
+    val allSubjects = remember(existingSubjects, eduSubjects) {
+        (eduSubjects + existingSubjects).distinct().sorted()
+    }
     var showDatePicker by remember { mutableStateOf(false) }
     var subjectExpanded by remember { mutableStateOf(false) }
     val untitledLabel = stringResource(R.string.homework_untitled)
@@ -498,6 +1113,11 @@ private fun HomeworkEditorScreen(
                             subject = subject.trim(),
                             notes = notes.trim(),
                             done = initial?.done ?: false,
+                            createdAtMs = initial?.createdAtMs ?: System.currentTimeMillis(),
+                            sourceTimelineId = initial?.sourceTimelineId,
+                            sourceLabel = initial?.sourceLabel,
+                            iconKey = iconKey,
+                            colorArgb = colorArgb,
                         )
                     )
                 },
@@ -546,7 +1166,7 @@ private fun HomeworkEditorScreen(
                 text = stringResource(R.string.homework_subject_label),
                 modifier = Modifier.padding(bottom = 0.dp),
             )
-            if (existingSubjects.isNotEmpty()) {
+            if (allSubjects.isNotEmpty()) {
                 ExposedDropdownMenuBox(
                     expanded = subjectExpanded,
                     onExpandedChange = { subjectExpanded = !subjectExpanded },
@@ -571,7 +1191,7 @@ private fun HomeworkEditorScreen(
                         expanded = subjectExpanded,
                         onDismissRequest = { subjectExpanded = false },
                     ) {
-                        existingSubjects
+                        allSubjects
                             .filter { it.contains(subject, ignoreCase = true) }
                             .take(6)
                             .forEach { suggestion ->
@@ -675,6 +1295,15 @@ private fun HomeworkEditorScreen(
                 minLines = 3,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            HomeworkStylePicker(
+                avatarLabel = subject.ifBlank { title }.ifBlank { stringResource(R.string.homework_untitled) },
+                title = title.ifBlank { stringResource(R.string.homework_untitled) },
+                iconKey = iconKey,
+                colorArgb = colorArgb,
+                onIconSelected = { iconKey = it },
+                onColorSelected = { colorArgb = it },
+            )
         }
     }
 
@@ -727,6 +1356,219 @@ private fun DateQuickChip(
         onClick = onClick,
         label = { Text(label) },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeworkDetailSheet(
+    item: HomeworkItem,
+    onDismiss: () -> Unit,
+    onToggle: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    val overdue = remember(item.date, item.done) { isOverdue(item.date) && !item.done }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                StyledAvatar(
+                    label = item.subject.ifBlank { item.title },
+                    icon = homeworkIconVector(item.iconKey),
+                    colorArgb = item.colorArgb,
+                    containerSize = 56.dp,
+                    iconSize = 28.dp,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = if (item.done) TextDecoration.LineThrough else null,
+                        color = if (item.done) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val (statusText, statusColor) = when {
+                            item.done -> stringResource(R.string.homework_done) to MaterialTheme.colorScheme.primary
+                            overdue -> stringResource(R.string.homework_overdue) to MaterialTheme.colorScheme.error
+                            else -> formatDate(item.date) to MaterialTheme.colorScheme.secondary
+                        }
+                        StatusPill(text = statusText, color = statusColor)
+                        if (item.done) {
+                            StatusPill(
+                                text = formatDate(item.date),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
+            RoundedCardContainer {
+                if (item.subject.isNotBlank()) {
+                    DetailInfoRow(
+                        icon = Icons.Rounded.MenuBook,
+                        label = stringResource(R.string.homework_detail_subject),
+                        value = item.subject,
+                    )
+                }
+                DetailInfoRow(
+                    icon = Icons.Rounded.CalendarMonth,
+                    label = stringResource(R.string.homework_detail_date),
+                    value = formatDate(item.date),
+                )
+                item.sourceLabel?.let { label ->
+                    DetailInfoRow(
+                        icon = Icons.Default.Search,
+                        label = stringResource(R.string.homework_detail_source),
+                        value = label,
+                    )
+                }
+            }
+
+            if (item.notes.isNotBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionLabel(
+                        text = stringResource(R.string.homework_detail_notes),
+                        modifier = Modifier.padding(bottom = 0.dp),
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceBright,
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = item.notes,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(
+                    onClick = {
+                        haptics.virtualKey()
+                        onToggle()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                ) {
+                    Icon(
+                        imageVector = if (item.done) {
+                            Icons.Rounded.RadioButtonUnchecked
+                        } else {
+                            Icons.Rounded.CheckCircle
+                        },
+                        contentDescription = null,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(
+                            if (item.done) R.string.homework_detail_mark_undone
+                            else R.string.homework_detail_mark_done
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                FilledTonalButton(
+                    onClick = {
+                        haptics.virtualKey()
+                        onEdit()
+                    },
+                    modifier = Modifier.height(52.dp),
+                ) {
+                    Icon(Icons.Rounded.Edit, contentDescription = null)
+                }
+                OutlinedButton(
+                    onClick = {
+                        haptics.virtualKey()
+                        onDelete()
+                    },
+                    modifier = Modifier.height(52.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.homework_delete))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(text: String, color: androidx.compose.ui.graphics.Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun DetailInfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceBright,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            PastelIcon(icon = icon, key = label, containerSize = 36.dp, iconSize = 18.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
 }
 
 private fun isOverdue(iso: String): Boolean {

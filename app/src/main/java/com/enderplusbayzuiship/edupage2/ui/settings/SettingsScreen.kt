@@ -10,6 +10,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -41,12 +43,14 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.EventNote
 import androidx.compose.material.icons.rounded.FileDownload
@@ -54,6 +58,7 @@ import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Grade
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.List
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.MenuBook
@@ -63,11 +68,14 @@ import androidx.compose.material.icons.rounded.Password
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VerticalAlignTop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -112,6 +120,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AccentColor
+import com.enderplusbayzuiship.edupage2.data.AppFontScale
 import com.enderplusbayzuiship.edupage2.data.AppLanguage
 import kotlinx.coroutines.launch
 import com.enderplusbayzuiship.edupage2.data.BackendMode
@@ -135,6 +144,8 @@ import com.enderplusbayzuiship.edupage2.ui.update.UpdateAvailableSheet
 import com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate
 import com.enderplusbayzuiship.edupage2.ui.modifiers.scrollMotionBlur
 import com.enderplusbayzuiship.edupage2.ui.modifiers.transitionMotionBlur
+import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconEditorSheet
+import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconsOverviewSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
 private enum class SettingsSection {
@@ -143,6 +154,7 @@ private enum class SettingsSection {
     APPEARANCE,
     SECURITY,
     NOTIFICATIONS,
+    EXPERIMENTAL,
     ACCOUNTS,
     DATA_ABOUT,
 }
@@ -160,12 +172,17 @@ fun SettingsScreen(
     onAssignments: () -> Unit = {},
     onAcademics: () -> Unit = {},
     onCloud: () -> Unit = {},
+    onOpenAiQuiz: () -> Unit = {},
     onSwitchAccount: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     var openSection by remember { mutableStateOf<SettingsSection?>(null) }
     var showBackendSettings by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
+    var showSubjectIconsEditor by remember { mutableStateOf(false) }
+    var showSubjectIconsOverview by remember { mutableStateOf(false) }
+    var showAiKeySheet by remember { mutableStateOf(false) }
+    var showAccentSheet by remember { mutableStateOf(false) }
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showDisablePinDialog by remember { mutableStateOf(false) }
     var showChangePinDialog by remember { mutableStateOf(false) }
@@ -310,6 +327,23 @@ fun SettingsScreen(
                         Log.e("SettingsScreen", "unable to launch export", it)
                     }
                 },
+                onEditSubjectIcons = {
+                    haptics.virtualKey()
+                    showSubjectIconsEditor = true
+                },
+                onViewSubjects = {
+                    haptics.virtualKey()
+                    showSubjectIconsOverview = true
+                },
+                onOpenAiQuiz = onOpenAiQuiz,
+                onEditAiKey = {
+                    haptics.virtualKey()
+                    showAiKeySheet = true
+                },
+                onEditAccent = {
+                    haptics.virtualKey()
+                    showAccentSheet = true
+                },
                 viewModel = viewModel,
             )
             }
@@ -327,6 +361,32 @@ fun SettingsScreen(
         BackendSettingsBottomSheet(
             viewModel = viewModel,
             onDismiss = { showBackendSettings = false }
+        )
+    }
+
+    if (showSubjectIconsEditor) {
+        SubjectIconEditorSheet(
+            onDismiss = { showSubjectIconsEditor = false },
+        )
+    }
+
+    if (showSubjectIconsOverview) {
+        SubjectIconsOverviewSheet(
+            onDismiss = { showSubjectIconsOverview = false },
+        )
+    }
+
+    if (showAiKeySheet) {
+        AiKeySheet(
+            viewModel = viewModel,
+            onDismiss = { showAiKeySheet = false },
+        )
+    }
+
+    if (showAccentSheet) {
+        CustomAccentSheet(
+            viewModel = viewModel,
+            onDismiss = { showAccentSheet = false },
         )
     }
 
@@ -578,6 +638,19 @@ private fun SettingsHub(
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
+                SettingsSectionHeader(text = stringResource(R.string.settings_section_experimental_features))
+                RoundedCardContainer {
+                    FeatureCard(
+                        title = stringResource(R.string.settings_section_experimental_features),
+                        description = stringResource(R.string.settings_hub_experimental_desc),
+                        icon = Icons.Rounded.Science,
+                        onClick = { onOpenSection(SettingsSection.EXPERIMENTAL) },
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsSectionHeader(text = stringResource(R.string.settings_section_about))
                 RoundedCardContainer {
                     FeatureCard(
@@ -643,6 +716,11 @@ private fun SettingsDetail(
     onDisablePin: () -> Unit,
     onChangePin: () -> Unit,
     onExport: () -> Unit,
+    onEditSubjectIcons: () -> Unit,
+    onViewSubjects: () -> Unit,
+    onOpenAiQuiz: () -> Unit,
+    onEditAiKey: () -> Unit,
+    onEditAccent: () -> Unit,
     viewModel: SettingsViewModel,
 ) {
     val title = when (section) {
@@ -651,6 +729,7 @@ private fun SettingsDetail(
         SettingsSection.APPEARANCE -> stringResource(R.string.settings_section_appearance)
         SettingsSection.SECURITY -> stringResource(R.string.settings_section_security)
         SettingsSection.NOTIFICATIONS -> stringResource(R.string.settings_section_notifications)
+        SettingsSection.EXPERIMENTAL -> stringResource(R.string.settings_section_experimental_features)
         SettingsSection.ACCOUNTS -> stringResource(R.string.settings_section_accounts)
         SettingsSection.DATA_ABOUT -> stringResource(R.string.settings_section_about)
     }
@@ -709,6 +788,15 @@ private fun SettingsDetail(
                     onChangePin = onChangePin,
                 )
                 SettingsSection.NOTIFICATIONS -> notificationsDetail(viewModel)
+                SettingsSection.EXPERIMENTAL -> experimentalDetail(
+                    viewModel = viewModel,
+                    onEditSubjectIcons = onEditSubjectIcons,
+                    onViewSubjects = onViewSubjects,
+                    onOpenAiQuiz = onOpenAiQuiz,
+                    onEditAiKey = onEditAiKey,
+                    onEditAccent = onEditAccent,
+                    onCloud = onCloud,
+                )
                 SettingsSection.ACCOUNTS -> accountsDetail(viewModel, onLogout)
                 SettingsSection.DATA_ABOUT -> dataAboutDetail(
                     onHomework = onHomework,
@@ -1171,6 +1259,405 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
             )
         }
         RoundedCardContainer { TypeRows() }
+    }
+    item {
+        Spacer(modifier = Modifier.height(20.dp))
+        SettingsSectionHeader(text = stringResource(R.string.settings_section_messages))
+        @Composable
+        fun MessagesRows() {
+            val messagesPriority by viewModel.messagesPriority.collectAsState()
+            val messagesNewOnTop by viewModel.messagesNewOnTop.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.PriorityHigh,
+                title = stringResource(R.string.settings_messages_priority),
+                description = stringResource(R.string.settings_messages_priority_desc),
+                checked = messagesPriority,
+                onCheckedChange = { viewModel.setMessagesPriority(it) },
+            )
+            IconToggleItem(
+                icon = Icons.Rounded.VerticalAlignTop,
+                title = stringResource(R.string.settings_messages_new_on_top),
+                description = stringResource(R.string.settings_messages_new_on_top_desc),
+                checked = messagesNewOnTop,
+                onCheckedChange = { viewModel.setMessagesNewOnTop(it) },
+            )
+        }
+        RoundedCardContainer { MessagesRows() }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
+    viewModel: SettingsViewModel,
+    onEditSubjectIcons: () -> Unit,
+    onViewSubjects: () -> Unit,
+    onOpenAiQuiz: () -> Unit,
+    onEditAiKey: () -> Unit,
+    onEditAccent: () -> Unit,
+    onCloud: () -> Unit = {},
+) {
+    item {
+        SettingsSectionHeader(text = stringResource(R.string.settings_section_experimental_features))
+        @Composable
+        fun Rows() {
+            val subjectIconsEnabled by viewModel.subjectIconsEnabled.collectAsState()
+            val subjectStyles by viewModel.subjectStyles.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.Category,
+                title = stringResource(R.string.settings_subject_icons),
+                description = stringResource(R.string.settings_subject_icons_desc),
+                checked = subjectIconsEnabled,
+                onCheckedChange = { viewModel.setSubjectIconsEnabled(it) },
+            )
+            AnimatedVisibility(visible = subjectIconsEnabled) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_subject_icons_edit),
+                        description = stringResource(R.string.settings_subject_icons_edit_desc),
+                        icon = Icons.Rounded.Edit,
+                        onClick = onEditSubjectIcons,
+                    )
+                    if (subjectStyles.isNotEmpty()) {
+                        SettingsNavigationRow(
+                            title = stringResource(R.string.subject_icons_view),
+                            description = stringResource(R.string.subject_icons_view_desc),
+                            icon = Icons.Rounded.List,
+                            onClick = onViewSubjects,
+                        )
+                    }
+                }
+            }
+        }
+        RoundedCardContainer { Rows() }
+    }
+
+    item {
+        SettingsSectionHeader(text = stringResource(R.string.settings_experimental_ai_quiz))
+        @Composable
+        fun AiRows() {
+            val enabled by viewModel.aiQuizEnabled.collectAsState()
+            val apiKey by viewModel.aiApiKey.collectAsState()
+            val model by viewModel.aiModel.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.School,
+                title = stringResource(R.string.settings_experimental_ai_quiz),
+                description = stringResource(R.string.settings_experimental_ai_quiz_desc),
+                checked = enabled,
+                onCheckedChange = { viewModel.setAiQuizEnabled(it) },
+            )
+            AnimatedVisibility(visible = enabled) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_ai_api_key),
+                        description = if (apiKey.isBlank()) {
+                            stringResource(R.string.settings_ai_api_key_desc)
+                        } else {
+                            "••••" + apiKey.takeLast(4) + " · " + model
+                        },
+                        icon = Icons.Rounded.Password,
+                        onClick = onEditAiKey,
+                    )
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_ai_open),
+                        description = stringResource(R.string.settings_ai_open_desc),
+                        icon = Icons.Rounded.PlayArrow,
+                        onClick = onOpenAiQuiz,
+                    )
+                }
+            }
+        }
+        RoundedCardContainer { AiRows() }
+    }
+
+    item {
+        SettingsSectionHeader(text = stringResource(R.string.settings_experimental_cloud))
+        @Composable
+        fun CloudRows() {
+            val enabled by viewModel.cloudEnabled.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.Cloud,
+                title = stringResource(R.string.settings_experimental_cloud),
+                description = stringResource(R.string.settings_experimental_cloud_desc),
+                checked = enabled,
+                onCheckedChange = { viewModel.setCloudEnabled(it) },
+            )
+            AnimatedVisibility(visible = enabled) {
+                SettingsNavigationRow(
+                    title = stringResource(R.string.settings_cloud),
+                    description = stringResource(R.string.settings_cloud_desc),
+                    icon = Icons.Rounded.Cloud,
+                    onClick = onCloud,
+                )
+            }
+        }
+        RoundedCardContainer { CloudRows() }
+    }
+
+    item {
+        SettingsSectionHeader(text = stringResource(R.string.settings_experimental_appearance))
+        @Composable
+        fun AppearanceRows() {
+            val enabled by viewModel.enhancedAppearanceEnabled.collectAsState()
+            val customAccent by viewModel.customAccentArgb.collectAsState()
+            val fontScale by viewModel.fontScale.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.Palette,
+                title = stringResource(R.string.settings_experimental_appearance),
+                description = stringResource(R.string.settings_experimental_appearance_desc),
+                checked = enabled,
+                onCheckedChange = { viewModel.setEnhancedAppearanceEnabled(it) },
+            )
+            AnimatedVisibility(visible = enabled) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_enhanced_custom_accent),
+                        description = customAccent?.let { String.format("#%06X", it and 0xFFFFFF) }
+                            ?: stringResource(R.string.settings_enhanced_custom_accent_desc),
+                        icon = Icons.Rounded.ColorLens,
+                        onClick = onEditAccent,
+                    )
+                    SettingsSelectRow(
+                        title = stringResource(R.string.settings_enhanced_font_size),
+                        icon = Icons.Rounded.Tune,
+                        options = listOf(
+                            AppFontScale.SMALL to stringResource(R.string.settings_font_scale_small),
+                            AppFontScale.DEFAULT to stringResource(R.string.settings_font_scale_default),
+                            AppFontScale.LARGE to stringResource(R.string.settings_font_scale_large),
+                            AppFontScale.XLARGE to stringResource(R.string.settings_font_scale_xlarge),
+                        ),
+                        selectedOption = fontScale,
+                        onOptionSelected = { viewModel.setFontScale(it) },
+                    )
+                }
+            }
+        }
+        RoundedCardContainer { AppearanceRows() }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AiKeySheet(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val haptics = rememberAppHaptics()
+    val savedKey by viewModel.aiApiKey.collectAsState()
+    val savedModel by viewModel.aiModel.collectAsState()
+    val testState by viewModel.aiTestState.collectAsState()
+
+    var key by remember { mutableStateOf(savedKey) }
+    var model by remember { mutableStateOf(savedModel) }
+
+    LaunchedEffect(testState) {
+        when (val state = testState) {
+            is SettingsViewModel.AiTestState.Ok -> {
+                android.widget.Toast.makeText(context, context.getString(R.string.settings_ai_test_ok), android.widget.Toast.LENGTH_SHORT).show()
+                viewModel.consumeAiTestState()
+            }
+            is SettingsViewModel.AiTestState.Failed -> {
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.settings_ai_test_failed, state.message),
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                viewModel.consumeAiTestState()
+            }
+            else -> Unit
+        }
+    }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_experimental_ai_quiz),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            OutlinedTextField(
+                value = key,
+                onValueChange = { key = it },
+                label = { Text(stringResource(R.string.settings_ai_api_key)) },
+                placeholder = { Text(stringResource(R.string.settings_ai_api_key_hint)) },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = model,
+                onValueChange = { model = it },
+                label = { Text(stringResource(R.string.settings_ai_model)) },
+                placeholder = { Text(stringResource(R.string.settings_ai_model_hint)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(R.string.settings_ai_byok_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = {
+                    haptics.virtualKey()
+                    viewModel.setAiApiKey(key)
+                    viewModel.setAiModel(model)
+                    viewModel.testAiConnection()
+                },
+                enabled = testState !is SettingsViewModel.AiTestState.Testing,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                if (testState is SettingsViewModel.AiTestState.Testing) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text(stringResource(R.string.settings_ai_test))
+                }
+            }
+            Button(
+                onClick = {
+                    haptics.virtualKey()
+                    viewModel.setAiApiKey(key)
+                    viewModel.setAiModel(model)
+                    android.widget.Toast.makeText(context, context.getString(R.string.settings_ai_key_saved), android.widget.Toast.LENGTH_SHORT).show()
+                    onDismiss()
+                },
+                enabled = key.isNotBlank(),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+            ) {
+                Text(stringResource(R.string.settings_ai_save), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+private val customAccentSwatches: List<Int> = listOf(
+    0xFF1A6DB5, 0xFF6A4FBF, 0xFF2E7D32, 0xFFB35A00,
+    0xFFB3261E, 0xFF00796B, 0xFFC2185B, 0xFF455A64,
+    0xFF3949AB, 0xFF8E24AA, 0xFF00897B, 0xFFF4511E,
+    0xFF6D4C41, 0xFF00ACC1, 0xFF7CB342, 0xFFEF6C00,
+).map { it.toInt() }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CustomAccentSheet(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    val customAccent by viewModel.customAccentArgb.collectAsState()
+    var hex by remember {
+        mutableStateOf(customAccent?.let { String.format("#%06X", it and 0xFFFFFF) } ?: "")
+    }
+    var error by remember { mutableStateOf(false) }
+
+    fun applyHex() {
+        val cleaned = hex.trim().removePrefix("#")
+        val parsed = cleaned.toLongOrNull(16)
+        if (cleaned.length == 6 && parsed != null) {
+            viewModel.setCustomAccentArgb((0xFF000000L or parsed).toInt())
+            onDismiss()
+        } else {
+            error = true
+        }
+    }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_enhanced_custom_accent),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+
+            customAccentSwatches.chunked(8).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    row.forEach { argb ->
+                        val selected = customAccent == argb
+                        Surface(
+                            onClick = {
+                                haptics.virtualKey()
+                                viewModel.setCustomAccentArgb(argb)
+                            },
+                            shape = CircleShape,
+                            color = androidx.compose.ui.graphics.Color(argb),
+                            border = if (selected) {
+                                BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface)
+                            } else {
+                                null
+                            },
+                            modifier = Modifier.size(38.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                if (selected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = androidx.compose.ui.graphics.Color.White,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = hex,
+                onValueChange = { hex = it; error = false },
+                label = { Text(stringResource(R.string.settings_custom_accent_hex)) },
+                singleLine = true,
+                isError = error,
+                supportingText = if (error) {
+                    { Text(stringResource(R.string.settings_custom_accent_invalid)) }
+                } else null,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Button(
+                onClick = { haptics.virtualKey(); applyHex() },
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+            ) {
+                Text(stringResource(R.string.settings_custom_accent_apply), fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+                onClick = {
+                    haptics.virtualKey()
+                    viewModel.setCustomAccentArgb(null)
+                    onDismiss()
+                },
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                Text(stringResource(R.string.settings_enhanced_clear_accent))
+            }
+        }
     }
 }
 

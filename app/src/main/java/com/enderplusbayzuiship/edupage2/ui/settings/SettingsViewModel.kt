@@ -10,6 +10,7 @@ import com.enderplusbayzuiship.edupage2.data.AccountProfile
 import com.enderplusbayzuiship.edupage2.data.AccountProfileStore
 import com.enderplusbayzuiship.edupage2.data.AppLanguage
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.data.AppFontScale
 import com.enderplusbayzuiship.edupage2.data.AccentColor
 import com.enderplusbayzuiship.edupage2.data.BackendMode
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
@@ -24,9 +25,12 @@ import com.enderplusbayzuiship.edupage2.data.DataExporter
 import com.enderplusbayzuiship.edupage2.data.LockStore
 import com.enderplusbayzuiship.edupage2.data.GradesCache
 import com.enderplusbayzuiship.edupage2.data.MealsCache
+import com.enderplusbayzuiship.edupage2.data.SubjectStyle
+import com.enderplusbayzuiship.edupage2.data.SubjectStyleStore
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
+import com.enderplusbayzuiship.edupage2.network.GeminiApi
 import com.enderplusbayzuiship.edupage2.network.UpdateCenter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.enderplusbayzuiship.edupage2.notification.NotificationScheduler
@@ -53,9 +57,11 @@ class SettingsViewModel @Inject constructor(
     private val gradesCache: GradesCache,
     private val timelineCache: TimelineCache,
     private val mealsCache: MealsCache,
+    private val subjectStyleStore: SubjectStyleStore,
     private val backendRegistrationManager: BackendRegistrationManager,
     private val dataExporter: DataExporter,
     private val updateChecker: com.enderplusbayzuiship.edupage2.network.UpdateChecker,
+    private val geminiApi: GeminiApi,
     @ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
@@ -174,6 +180,48 @@ class SettingsViewModel @Inject constructor(
 
     private val _keepScreenAwake = MutableStateFlow(appPreferences.keepScreenAwake)
     val keepScreenAwake: StateFlow<Boolean> = _keepScreenAwake.asStateFlow()
+
+    private val _messagesPriority = MutableStateFlow(appPreferences.messagesPriority)
+    val messagesPriority: StateFlow<Boolean> = _messagesPriority.asStateFlow()
+
+    private val _messagesNewOnTop = MutableStateFlow(appPreferences.messagesNewOnTop)
+    val messagesNewOnTop: StateFlow<Boolean> = _messagesNewOnTop.asStateFlow()
+
+    private val _subjectIconsEnabled = MutableStateFlow(appPreferences.subjectIconsEnabled)
+    val subjectIconsEnabled: StateFlow<Boolean> = _subjectIconsEnabled.asStateFlow()
+
+    val subjectStyles: StateFlow<Map<String, SubjectStyle>> = subjectStyleStore.styles
+
+    private val _aiQuizEnabled = MutableStateFlow(appPreferences.aiQuizEnabled)
+    val aiQuizEnabled: StateFlow<Boolean> = _aiQuizEnabled.asStateFlow()
+
+    private val _aiApiKey = MutableStateFlow(appPreferences.aiApiKey)
+    val aiApiKey: StateFlow<String> = _aiApiKey.asStateFlow()
+
+    private val _aiModel = MutableStateFlow(appPreferences.aiModel)
+    val aiModel: StateFlow<String> = _aiModel.asStateFlow()
+
+    sealed interface AiTestState {
+        data object Idle : AiTestState
+        data object Testing : AiTestState
+        data object Ok : AiTestState
+        data class Failed(val message: String) : AiTestState
+    }
+
+    private val _aiTestState = MutableStateFlow<AiTestState>(AiTestState.Idle)
+    val aiTestState: StateFlow<AiTestState> = _aiTestState.asStateFlow()
+
+    private val _cloudEnabled = MutableStateFlow(appPreferences.cloudEnabled)
+    val cloudEnabled: StateFlow<Boolean> = _cloudEnabled.asStateFlow()
+
+    private val _enhancedAppearanceEnabled = MutableStateFlow(appPreferences.enhancedAppearanceEnabled)
+    val enhancedAppearanceEnabled: StateFlow<Boolean> = _enhancedAppearanceEnabled.asStateFlow()
+
+    private val _customAccentArgb = MutableStateFlow(appPreferences.customAccentArgb)
+    val customAccentArgb: StateFlow<Int?> = _customAccentArgb.asStateFlow()
+
+    private val _fontScale = MutableStateFlow(appPreferences.fontScale)
+    val fontScale: StateFlow<AppFontScale> = _fontScale.asStateFlow()
 
     private val _defaultTab = MutableStateFlow(appPreferences.defaultTab)
     val defaultTab: StateFlow<Int> = _defaultTab.asStateFlow()
@@ -401,6 +449,78 @@ class SettingsViewModel @Inject constructor(
     fun setKeepScreenAwake(value: Boolean) {
         appPreferences.keepScreenAwake = value
         _keepScreenAwake.value = value
+    }
+
+    fun setMessagesPriority(value: Boolean) {
+        appPreferences.messagesPriority = value
+        _messagesPriority.value = value
+    }
+
+    fun setMessagesNewOnTop(value: Boolean) {
+        appPreferences.messagesNewOnTop = value
+        _messagesNewOnTop.value = value
+    }
+
+    fun setSubjectIconsEnabled(value: Boolean) {
+        appPreferences.subjectIconsEnabled = value
+        _subjectIconsEnabled.value = value
+    }
+
+    fun setAiQuizEnabled(value: Boolean) {
+        appPreferences.aiQuizEnabled = value
+        _aiQuizEnabled.value = value
+    }
+
+    fun setAiApiKey(value: String) {
+        appPreferences.aiApiKey = value.trim()
+        _aiApiKey.value = value.trim()
+    }
+
+    fun setAiModel(value: String) {
+        val model = value.trim().ifBlank { AppPreferences.DEFAULT_AI_MODEL }
+        appPreferences.aiModel = model
+        _aiModel.value = model
+    }
+
+    fun testAiConnection() {
+        val key = _aiApiKey.value.trim()
+        if (key.isBlank()) {
+            _aiTestState.value = AiTestState.Failed(context.getString(R.string.settings_ai_key_empty))
+            return
+        }
+        if (_aiTestState.value is AiTestState.Testing) return
+        viewModelScope.launch {
+            _aiTestState.value = AiTestState.Testing
+            val result = geminiApi.testKey(key, _aiModel.value)
+            _aiTestState.value = result.fold(
+                onSuccess = { AiTestState.Ok },
+                onFailure = { AiTestState.Failed(it.message ?: "Unknown error") },
+            )
+        }
+    }
+
+    fun consumeAiTestState() {
+        if (_aiTestState.value !is AiTestState.Testing) _aiTestState.value = AiTestState.Idle
+    }
+
+    fun setCloudEnabled(value: Boolean) {
+        appPreferences.cloudEnabled = value
+        _cloudEnabled.value = value
+    }
+
+    fun setEnhancedAppearanceEnabled(value: Boolean) {
+        appPreferences.enhancedAppearanceEnabled = value
+        _enhancedAppearanceEnabled.value = value
+    }
+
+    fun setCustomAccentArgb(value: Int?) {
+        appPreferences.customAccentArgb = value
+        _customAccentArgb.value = value
+    }
+
+    fun setFontScale(value: AppFontScale) {
+        appPreferences.fontScale = value
+        _fontScale.value = value
     }
 
     fun setDefaultTab(value: Int) {

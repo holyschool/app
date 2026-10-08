@@ -96,5 +96,24 @@ internal class Cloud(private val session: EdupageSession) {
         val responseStr = response.body?.string() ?: return@withContext false
         responseStr != "0" && responseStr.isNotBlank()
     }
+
+    /** Downloads a cloud file (using the authenticated session) into [destination]. */
+    suspend fun downloadFile(uploadPath: String, destination: File): File = withContext(Dispatchers.IO) {
+        if (!session.isLoggedIn) throw NotLoggedInException()
+        if (uploadPath.isBlank()) throw RuntimeException("Missing file path")
+        val url = if (uploadPath.startsWith("http")) {
+            uploadPath
+        } else {
+            "https://${session.subdomain}.edupage.org$uploadPath"
+        }
+        val request = Request.Builder().url(url).get().build()
+        val response = session.httpClient.newCall(request).execute()
+        if (!response.isSuccessful) throw RuntimeException("HTTP ${response.code}")
+        destination.parentFile?.mkdirs()
+        response.body?.byteStream()?.use { input ->
+            destination.outputStream().use { output -> input.copyTo(output) }
+        } ?: throw RuntimeException("Empty download response")
+        destination
+    }
 }
 

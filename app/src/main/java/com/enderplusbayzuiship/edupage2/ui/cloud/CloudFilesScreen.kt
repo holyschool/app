@@ -1,5 +1,8 @@
 package com.enderplusbayzuiship.edupage2.ui.cloud
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -44,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,6 +71,19 @@ fun CloudFilesScreen(
     val uiState by viewModel.uiState.collectAsState()
     var confirmDelete by remember { mutableStateOf<EduCloudFile?>(null) }
     val haptics = rememberAppHaptics()
+    val context = LocalContext.current
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            viewModel.upload(uri, queryFileName(context, uri))
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { res ->
+            android.widget.Toast.makeText(context, context.getString(res), android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -83,6 +102,10 @@ fun CloudFilesScreen(
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(onClick = { haptics.virtualKey(); picker.launch(arrayOf("*/*")) }) {
+                        Icon(Icons.Rounded.Upload, contentDescription = stringResource(R.string.cloud_upload_action))
+                    }
+                    Spacer(Modifier.width(8.dp))
                     FilledTonalIconButton(onClick = { haptics.virtualKey(); viewModel.refresh() }) {
                         Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.cloud_refresh))
                     }
@@ -117,6 +140,19 @@ fun CloudFilesScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        if (state.uploading) {
+                            item(key = "cloud-uploading") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(stringResource(R.string.cloud_upload), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
                         item(key = "cloud-files-${state.files.size}") {
                             RoundedCardContainer {
                                 state.files.forEach { file ->
@@ -124,6 +160,8 @@ fun CloudFilesScreen(
                                         CloudFileRow(
                                             file = file,
                                             deleting = state.deletingId == file.fileId,
+                                            opening = state.openingId == file.fileId,
+                                            onOpen = { viewModel.open(file) },
                                             onDelete = { confirmDelete = file }
                                         )
                                     }
@@ -155,14 +193,24 @@ fun CloudFilesScreen(
 }
 
 @Composable
-private fun CloudFileRow(file: EduCloudFile, deleting: Boolean, onDelete: () -> Unit) {
+private fun CloudFileRow(
+    file: EduCloudFile,
+    deleting: Boolean,
+    opening: Boolean,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val haptics = rememberAppHaptics()
+    val busy = deleting || opening
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceBright,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !busy) { haptics.virtualKey(); onOpen() }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -176,16 +224,28 @@ private fun CloudFileRow(file: EduCloudFile, deleting: Boolean, onDelete: () -> 
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            if (deleting) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                IconButton(onClick = { haptics.virtualKey(); onDelete() }) {
-                    Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.cloud_delete_action),
-                        tint = MaterialTheme.colorScheme.error)
+            when {
+                deleting || opening -> {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                }
+                else -> {
+                    IconButton(onClick = { haptics.virtualKey(); onDelete() }) {
+                        Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.cloud_delete_action),
+                            tint = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }
     }
+}
+
+private fun queryFileName(context: android.content.Context, uri: android.net.Uri): String? {
+    return runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()
 }
 
 @Composable

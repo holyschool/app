@@ -558,19 +558,19 @@ private fun TimetableCardContent(
                 currentTime < it.startTime!! }
         else null
 
-        if (!state.isNextDay) {
-            val nextTransition = currentLesson?.endTime
-                ?: nextLesson?.startTime
-            if (nextTransition != null) {
-                val secondsTo = Duration.between(currentTime, nextTransition).toSeconds()
+        if (!state.isNextDay && currentLesson == null) {
+            val next = nextLesson
+            val start = next?.startTime
+            if (next != null && start != null) {
+                val secondsTo = Duration.between(currentTime, start).toSeconds()
                 if (secondsTo in 0..(180 * 60)) {
-                    val label = if (currentLesson != null) {
-                        stringResource(R.string.overview_ends_in, formatTimeLeft(secondsTo, showSeconds))
-                    } else {
-                        val name = getDisplayName(nextLesson!!)
-                        stringResource(R.string.overview_next_starts_in, name, formatTimeLeft(secondsTo, showSeconds))
-                    }
-                    NextBellBar(label = label)
+                    NextBellBar(
+                        label = stringResource(
+                            R.string.overview_next_starts_in,
+                            getDisplayName(next),
+                            formatTimeLeft(secondsTo, showSeconds)
+                        )
+                    )
                 }
             }
         }

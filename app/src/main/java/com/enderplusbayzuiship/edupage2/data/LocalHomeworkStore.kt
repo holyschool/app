@@ -19,6 +19,10 @@ data class HomeworkItem(
     val notes: String = "",
     val done: Boolean = false,
     val createdAtMs: Long = System.currentTimeMillis(),
+    val sourceTimelineId: Int? = null,
+    val sourceLabel: String? = null,
+    val iconKey: String? = null,
+    val colorArgb: Int? = null,
 )
 
 @Singleton
@@ -62,6 +66,52 @@ class LocalHomeworkStore @Inject constructor(
             items[idx] = items[idx].copy(done = !items[idx].done)
             persist()
         }
+    }
+
+    private val importableTypes = setOf(
+        "hw", "homework", "h_homework",
+        "test", "bexam", "oexam", "sexam", "rexam", "pexam",
+        "testing", "testpridelenie",
+    )
+
+    fun importFromMessages(events: List<com.edupage.api.model.TimelineEvent>): Int {
+        val knownIds = items.mapNotNull { it.sourceTimelineId }.toSet()
+        var added = 0
+        for (event in events) {
+            val type = event.type?.lowercase() ?: continue
+            if (type !in importableTypes) continue
+            if (event.reactionTo != null && event.reactionTo != 0) continue
+            if (event.timelineId in knownIds) continue
+            val rawTitle = event.text?.ifBlank { null } ?: event.title ?: continue
+            val title = rawTitle
+                .replace(Regex("<[^>]*>"), "")
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .trim()
+                .take(140)
+            if (title.isBlank()) continue
+            val date = try {
+                event.timestamp?.toLocalDate()?.toString()
+            } catch (_: Exception) {
+                null
+            } ?: java.time.LocalDate.now().toString()
+            val kindLabel = if (type in setOf("hw", "homework", "h_homework")) "Homework" else "Test"
+            val sourceLabel = buildString {
+                append(kindLabel)
+                event.authorName?.takeIf { it.isNotBlank() }?.let { append(" · $it") }
+            }
+            items.add(
+                HomeworkItem(
+                    title = title,
+                    date = date,
+                    sourceTimelineId = event.timelineId,
+                    sourceLabel = sourceLabel,
+                )
+            )
+            added++
+        }
+        if (added > 0) persist()
+        return added
     }
 
     fun clear() {

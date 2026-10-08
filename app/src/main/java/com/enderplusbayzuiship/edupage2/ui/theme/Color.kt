@@ -1,6 +1,8 @@
 package com.enderplusbayzuiship.edupage2.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import com.enderplusbayzuiship.edupage2.data.AccentColor
 
 val Primary40          = Color(0xFF1A6DB5)
@@ -108,5 +110,29 @@ fun accentDarkPrimary(accent: AccentColor): TonalRoles = when (accent) {
     AccentColor.TEAL   -> accent(Color(0xFF74D7C8), Color(0xFF003733), Color(0xFF005049), Color(0xFFB2F3E9))
     AccentColor.PINK   -> accent(Color(0xFFFFB1C8), Color(0xFF660033), Color(0xFF8C0046), Color(0xFFFFD9E2))
     AccentColor.SLATE  -> accent(Color(0xFFA9CCDB), Color(0xFF0E3442), Color(0xFF2E4753), Color(0xFFCFE8F3))
+}
+
+/**
+ * Builds [TonalRoles] from an arbitrary accent ARGB, used by the
+ * "custom accent color" experimental appearance option.
+ */
+fun accentRolesFromArgb(argb: Int, dark: Boolean): TonalRoles {
+    val base = Color(argb)
+    val darkContent = base.luminance() > 0.55f
+    return if (dark) {
+        TonalRoles(
+            primary = lerp(base, Color.White, 0.32f),
+            onPrimary = if (darkContent) Color(0xFF1A1A1A) else Color.White,
+            container = lerp(base, Color.Black, 0.48f),
+            onContainer = lerp(base, Color.White, 0.60f),
+        )
+    } else {
+        TonalRoles(
+            primary = base,
+            onPrimary = if (darkContent) Color(0xFF1A1A1A) else Color.White,
+            container = lerp(base, Color.White, 0.74f),
+            onContainer = lerp(base, Color.Black, 0.58f),
+        )
+    }
 }
 
