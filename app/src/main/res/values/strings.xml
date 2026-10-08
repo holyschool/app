@@ -614,6 +614,8 @@
     <string name="homework_step_subject">Which subject?</string>
     <string name="homework_step_date">When is it due?</string>
     <string name="homework_step_notes">Any notes?</string>
+    <string name="homework_step_icon">Pick an icon</string>
+    <string name="homework_subject_own">Own</string>
     <string name="homework_step_notes_hint">Optional — page numbers, links, anything useful</string>
     <string name="homework_next">Next</string>
     <string name="homework_back">Back</string>

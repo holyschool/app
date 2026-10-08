@@ -21,6 +21,7 @@ data class HomeworkItem(
     val createdAtMs: Long = System.currentTimeMillis(),
     val sourceTimelineId: Int? = null,
     val sourceLabel: String? = null,
+    val iconKey: String? = null,
 )
 
 @Singleton

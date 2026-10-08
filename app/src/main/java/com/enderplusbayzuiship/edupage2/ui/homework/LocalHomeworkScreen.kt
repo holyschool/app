@@ -8,12 +8,15 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -31,13 +34,23 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Calculate
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.HistoryEdu
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.SportsSoccer
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -78,6 +91,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -123,24 +137,17 @@ fun LocalHomeworkScreen(
     val existingSubjects = remember(items) {
         items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
     }
+    val edupageSubjects by viewModel.subjects.collectAsState()
 
     BackHandler(enabled = editing != null) {
         editing = null
     }
 
     when {
-        creating -> HomeworkCreateWizard(
-            existingSubjects = existingSubjects,
-            onDismiss = { creating = false },
-            onSave = { item ->
-                viewModel.addOrUpdate(item)
-                creating = false
-            },
-        )
-
         editing != null -> HomeworkEditorScreen(
             initial = editing,
             existingSubjects = existingSubjects,
+            eduSubjects = edupageSubjects,
             onDismiss = { editing = null },
             onSave = { item ->
                 viewModel.addOrUpdate(item)
@@ -152,17 +159,29 @@ fun LocalHomeworkScreen(
             },
         )
 
-        else -> HomeworkListScreen(
-            items = items,
-            onBack = onBack,
-            onCreate = {
-                haptics.virtualKey()
-                creating = true
-            },
-            onEdit = { editing = it },
-            onToggle = { viewModel.toggleDone(it) },
-            onDelete = { viewModel.remove(it) },
-        )
+        else -> {
+            HomeworkListScreen(
+                items = items,
+                onBack = onBack,
+                onCreate = {
+                    haptics.virtualKey()
+                    creating = true
+                },
+                onEdit = { editing = it },
+                onToggle = { viewModel.toggleDone(it) },
+                onDelete = { viewModel.remove(it) },
+            )
+            if (creating) {
+                HomeworkCreateWizard(
+                    existingSubjects = (edupageSubjects + existingSubjects).distinct().sorted(),
+                    onDismiss = { creating = false },
+                    onSave = { item ->
+                        viewModel.addOrUpdate(item)
+                        creating = false
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -507,7 +526,7 @@ private fun HomeworkRow(
                 )
             }
             PastelIcon(
-                icon = Icons.Rounded.MenuBook,
+                icon = homeworkIconVector(item.iconKey),
                 key = item.subject.ifBlank { item.title },
                 containerSize = 40.dp,
                 iconSize = 20.dp,
@@ -599,16 +618,84 @@ private fun HomeworkRow(
     }
 }
 
+private enum class HomeworkIcon(val key: String, val icon: ImageVector) {
+    BOOK("book", Icons.Rounded.MenuBook),
+    READING("reading", Icons.Rounded.AutoStories),
+    MATH("math", Icons.Rounded.Calculate),
+    SCIENCE("science", Icons.Rounded.Science),
+    LANGUAGE("language", Icons.Rounded.Language),
+    HISTORY("history", Icons.Rounded.HistoryEdu),
+    ART("art", Icons.Rounded.Palette),
+    MUSIC("music", Icons.Rounded.MusicNote),
+    SPORT("sport", Icons.Rounded.SportsSoccer),
+    COMPUTER("computer", Icons.Rounded.Computer),
+    GEOGRAPHY("geography", Icons.Rounded.Public),
+    WRITING("writing", Icons.Rounded.Edit);
+
+    companion object {
+        fun fromKey(key: String?): HomeworkIcon? = entries.firstOrNull { it.key == key }
+    }
+}
+
+private fun homeworkIconVector(key: String?): ImageVector =
+    HomeworkIcon.fromKey(key)?.icon ?: Icons.Rounded.MenuBook
+
+@Composable
+private fun HomeworkIconPicker(
+    selectedKey: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val haptics = rememberAppHaptics()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        HomeworkIcon.entries.forEach { option ->
+            val isSelected = selectedKey == option.key
+            Surface(
+                onClick = {
+                    haptics.virtualKey()
+                    onSelect(if (isSelected) null else option.key)
+                },
+                shape = CircleShape,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceBright
+                },
+                modifier = Modifier.size(52.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = option.icon,
+                        contentDescription = null,
+                        tint = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 private enum class CreateStep(val questionRes: Int) {
     TITLE(R.string.homework_step_title),
     SUBJECT(R.string.homework_step_subject),
     DATE(R.string.homework_step_date),
+    ICON(R.string.homework_step_icon),
     NOTES(R.string.homework_step_notes);
 
-    val optional: Boolean get() = this == SUBJECT || this == NOTES
+    val optional: Boolean get() = this != TITLE
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun HomeworkCreateWizard(
     existingSubjects: List<String>,
@@ -622,6 +709,8 @@ private fun HomeworkCreateWizard(
     var subject by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(LocalDate.now().toString()) }
     var notes by remember { mutableStateOf("") }
+    var iconKey by remember { mutableStateOf<String?>(null) }
+    var ownSubject by remember { mutableStateOf(existingSubjects.isEmpty()) }
     var showDatePicker by remember { mutableStateOf(false) }
     val untitledLabel = stringResource(R.string.homework_untitled)
     val today = remember { LocalDate.now() }
@@ -636,6 +725,7 @@ private fun HomeworkCreateWizard(
                 date = date.trim().ifBlank { today.toString() },
                 subject = subject.trim(),
                 notes = notes.trim(),
+                iconKey = iconKey,
             )
         )
     }
@@ -687,32 +777,51 @@ private fun HomeworkCreateWizard(
                 )
 
                 CreateStep.SUBJECT -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = subject,
-                        onValueChange = { subject = it },
-                        placeholder = { Text(stringResource(R.string.homework_subject_label)) },
-                        singleLine = true,
-                        shape = fieldShape,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (existingSubjects.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            existingSubjects.forEach { suggestion ->
-                                FilterChip(
-                                    selected = subject.equals(suggestion, ignoreCase = true),
-                                    onClick = {
-                                        haptics.virtualKey()
-                                        subject = suggestion
-                                    },
-                                    label = { Text(suggestion) },
-                                )
-                            }
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 200.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        existingSubjects.forEach { suggestion ->
+                            FilterChip(
+                                selected = !ownSubject && subject.equals(suggestion, ignoreCase = true),
+                                onClick = {
+                                    haptics.virtualKey()
+                                    ownSubject = false
+                                    subject = suggestion
+                                },
+                                label = { Text(suggestion) },
+                            )
                         }
+                        FilterChip(
+                            selected = ownSubject,
+                            onClick = {
+                                haptics.virtualKey()
+                                ownSubject = true
+                                subject = ""
+                            },
+                            label = { Text(stringResource(R.string.homework_subject_own)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            },
+                        )
+                    }
+                    if (ownSubject) {
+                        OutlinedTextField(
+                            value = subject,
+                            onValueChange = { subject = it },
+                            placeholder = { Text(stringResource(R.string.homework_subject_label)) },
+                            singleLine = true,
+                            shape = fieldShape,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
 
@@ -777,6 +886,32 @@ private fun HomeworkCreateWizard(
                     }
                 }
 
+                CreateStep.ICON -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    HomeworkIconPicker(
+                        selectedKey = iconKey,
+                        onSelect = { iconKey = it },
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        PastelIcon(
+                            icon = homeworkIconVector(iconKey),
+                            key = subject.ifBlank { title },
+                            containerSize = 44.dp,
+                            iconSize = 22.dp,
+                        )
+                        Text(
+                            text = title.ifBlank { untitledLabel },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
                 CreateStep.NOTES -> OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
@@ -805,7 +940,11 @@ private fun HomeworkCreateWizard(
                     TextButton(onClick = {
                         haptics.virtualKey()
                         when (step) {
-                            CreateStep.SUBJECT -> subject = ""
+                            CreateStep.SUBJECT -> {
+                                subject = ""
+                                ownSubject = false
+                            }
+                            CreateStep.ICON -> iconKey = null
                             CreateStep.NOTES -> notes = ""
                             else -> Unit
                         }
@@ -883,6 +1022,7 @@ private fun HomeworkCreateWizard(
 private fun HomeworkEditorScreen(
     initial: HomeworkItem?,
     existingSubjects: List<String>,
+    eduSubjects: List<String>,
     onDismiss: () -> Unit,
     onSave: (HomeworkItem) -> Unit,
     onDelete: (String) -> Unit,
@@ -891,6 +1031,10 @@ private fun HomeworkEditorScreen(
     var date by remember(initial?.id) { mutableStateOf(initial?.date ?: LocalDate.now().toString()) }
     var subject by remember(initial?.id) { mutableStateOf(initial?.subject ?: "") }
     var notes by remember(initial?.id) { mutableStateOf(initial?.notes ?: "") }
+    var iconKey by remember(initial?.id) { mutableStateOf(initial?.iconKey) }
+    val allSubjects = remember(existingSubjects, eduSubjects) {
+        (eduSubjects + existingSubjects).distinct().sorted()
+    }
     var showDatePicker by remember { mutableStateOf(false) }
     var subjectExpanded by remember { mutableStateOf(false) }
     val untitledLabel = stringResource(R.string.homework_untitled)
@@ -957,6 +1101,7 @@ private fun HomeworkEditorScreen(
                             createdAtMs = initial?.createdAtMs ?: System.currentTimeMillis(),
                             sourceTimelineId = initial?.sourceTimelineId,
                             sourceLabel = initial?.sourceLabel,
+                            iconKey = iconKey,
                         )
                     )
                 },
@@ -1005,7 +1150,7 @@ private fun HomeworkEditorScreen(
                 text = stringResource(R.string.homework_subject_label),
                 modifier = Modifier.padding(bottom = 0.dp),
             )
-            if (existingSubjects.isNotEmpty()) {
+            if (allSubjects.isNotEmpty()) {
                 ExposedDropdownMenuBox(
                     expanded = subjectExpanded,
                     onExpandedChange = { subjectExpanded = !subjectExpanded },
@@ -1030,7 +1175,7 @@ private fun HomeworkEditorScreen(
                         expanded = subjectExpanded,
                         onDismissRequest = { subjectExpanded = false },
                     ) {
-                        existingSubjects
+                        allSubjects
                             .filter { it.contains(subject, ignoreCase = true) }
                             .take(6)
                             .forEach { suggestion ->
@@ -1134,6 +1279,15 @@ private fun HomeworkEditorScreen(
                 minLines = 3,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            SectionLabel(
+                text = stringResource(R.string.homework_step_icon),
+                modifier = Modifier.padding(bottom = 0.dp),
+            )
+            HomeworkIconPicker(
+                selectedKey = iconKey,
+                onSelect = { iconKey = it },
+            )
         }
     }
 
@@ -1213,7 +1367,7 @@ private fun HomeworkDetailSheet(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 PastelIcon(
-                    icon = Icons.Rounded.MenuBook,
+                    icon = homeworkIconVector(item.iconKey),
                     key = item.subject.ifBlank { item.title },
                     containerSize = 56.dp,
                     iconSize = 28.dp,
