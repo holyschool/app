@@ -47,8 +47,10 @@ class EdupageApp : Application(), Configuration.Provider {
 
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
             CoroutineScope(Dispatchers.IO).launch {
-                backendRegistrationManager.registerIfPossible(token)
+                runCatching { backendRegistrationManager.registerIfPossible(token) }
             }
+        }.addOnFailureListener {
+            Log.w(TAG, "FCM not configured, push features disabled")
         }
         WidgetUpdater.schedulePeriodic(this)
         if (appPreferences.liveClassNotif) {
