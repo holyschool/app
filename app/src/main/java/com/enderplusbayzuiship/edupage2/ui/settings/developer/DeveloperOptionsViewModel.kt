@@ -221,6 +221,11 @@ class DeveloperOptionsViewModel @Inject constructor(
     }
 
     fun fetchPushToken(onResult: (String?) -> Unit) {
+        val pushReady = runCatching { com.google.firebase.FirebaseApp.getInstance() }.isSuccess
+        if (!pushReady) {
+            onResult(null)
+            return
+        }
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             onResult(if (task.isSuccessful) task.result else null)
         }
