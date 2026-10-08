@@ -1,5 +1,6 @@
 package com.enderplusbayzuiship.edupage2.ui.settings
 
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.PredictiveBackHandler
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.DarkMode
@@ -72,10 +74,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -97,7 +101,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.net.toUri
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -120,6 +126,7 @@ import com.enderplusbayzuiship.edupage2.ui.core.cards.SettingsSelectRow
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
+import com.enderplusbayzuiship.edupage2.ui.update.UpdateAvailableSheet
 import com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate
 import com.enderplusbayzuiship.edupage2.ui.modifiers.scrollMotionBlur
 import com.enderplusbayzuiship.edupage2.ui.modifiers.transitionMotionBlur
@@ -192,6 +199,34 @@ fun SettingsScreen(
         viewModel.switchAccountEvent.collect { onSwitchAccount() }
     }
 
+    val updateState by viewModel.updateState.collectAsState()
+    var showUpdateSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(updateState) {
+        when (val state = updateState) {
+            is SettingsViewModel.UpdateCheckState.UpToDate -> {
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.update_up_to_date),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                viewModel.consumeUpdateState()
+            }
+            is SettingsViewModel.UpdateCheckState.Failed -> {
+                android.widget.Toast.makeText(
+                    context,
+                    state.message ?: context.getString(R.string.update_check_failed),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                viewModel.consumeUpdateState()
+            }
+            is SettingsViewModel.UpdateCheckState.Available -> {
+                showUpdateSheet = true
+            }
+            else -> Unit
+        }
+    }
+
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
@@ -256,6 +291,15 @@ fun SettingsScreen(
             },
             onDeveloperOptions = onDeveloperOptions,
             onLogout = onLogout,
+            onHomework = onHomework,
+            onAssignments = onAssignments,
+            onAcademics = onAcademics,
+            onCloud = onCloud,
+            onExport = {
+                runCatching { exportLauncher.launch("edupage2-export.json") }.onFailure {
+                    Log.e("SettingsScreen", "unable to launch export", it)
+                }
+            },
             viewModel = viewModel,
         )
 
@@ -300,6 +344,24 @@ fun SettingsScreen(
             viewModel = viewModel,
             onDismiss = { showLanguageSheet = false }
         )
+    }
+
+    if (showUpdateSheet) {
+        val info = (updateState as? SettingsViewModel.UpdateCheckState.Available)?.info
+        val downloadProgress by viewModel.downloadProgress.collectAsState()
+        if (info != null) {
+            UpdateAvailableSheet(
+                info = info,
+                downloadProgress = downloadProgress,
+                onDownload = { viewModel.downloadUpdate(info) },
+                onDismiss = {
+                    showUpdateSheet = false
+                    viewModel.consumeUpdateState()
+                },
+            )
+        } else {
+            showUpdateSheet = false
+        }
     }
 
     if (showBackendSettings) {
@@ -367,6 +429,11 @@ private fun SettingsHub(
     onBackendClick: () -> Unit,
     onDeveloperOptions: () -> Unit,
     onLogout: () -> Unit,
+    onHomework: () -> Unit,
+    onAssignments: () -> Unit,
+    onAcademics: () -> Unit,
+    onCloud: () -> Unit,
+    onExport: () -> Unit,
     viewModel: SettingsViewModel,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -499,6 +566,43 @@ private fun SettingsHub(
                         },
                         icon = Icons.Rounded.Dns,
                         onClick = onBackendClick,
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsSectionHeader(text = stringResource(R.string.settings_section_experimental))
+                RoundedCardContainer {
+                    FeatureCard(
+                        title = stringResource(R.string.settings_my_homework),
+                        description = stringResource(R.string.settings_my_homework_desc),
+                        icon = Icons.Rounded.MenuBook,
+                        onClick = onHomework,
+                    )
+                    FeatureCard(
+                        title = stringResource(R.string.settings_assignments),
+                        description = stringResource(R.string.settings_assignments_desc),
+                        icon = Icons.Rounded.Assignment,
+                        onClick = onAssignments,
+                    )
+                    FeatureCard(
+                        title = stringResource(R.string.settings_academics),
+                        description = stringResource(R.string.settings_academics_desc),
+                        icon = Icons.Rounded.School,
+                        onClick = onAcademics,
+                    )
+                    FeatureCard(
+                        title = stringResource(R.string.settings_cloud),
+                        description = stringResource(R.string.settings_cloud_desc),
+                        icon = Icons.Rounded.Cloud,
+                        onClick = onCloud,
+                    )
+                    FeatureCard(
+                        title = stringResource(R.string.settings_export_data),
+                        description = stringResource(R.string.settings_export_data_desc),
+                        icon = Icons.Rounded.FileDownload,
+                        onClick = onExport,
                     )
                 }
             }
@@ -1184,39 +1288,19 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dataAboutDetail(
     viewModel: SettingsViewModel,
 ) {
     item {
-        @OptIn(ExperimentalMaterial3Api::class)
         @Composable
         fun UpdateRows() {
-            val context = LocalContext.current
-            val updateState by viewModel.updateState.collectAsState()
-            var showUpdateSheet by remember { mutableStateOf(false) }
+            val autoCheckUpdates by viewModel.autoCheckUpdates.collectAsState()
+            val updateStateLocal by viewModel.updateState.collectAsState()
+            val checking = updateStateLocal is SettingsViewModel.UpdateCheckState.Checking
 
-            LaunchedEffect(updateState) {
-                when (val state = updateState) {
-                    is SettingsViewModel.UpdateCheckState.UpToDate -> {
-                        android.widget.Toast.makeText(
-                            context,
-                            context.getString(R.string.update_up_to_date),
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                        viewModel.consumeUpdateState()
-                    }
-                    is SettingsViewModel.UpdateCheckState.Failed -> {
-                        android.widget.Toast.makeText(
-                            context,
-                            state.message ?: context.getString(R.string.update_check_failed),
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                        viewModel.consumeUpdateState()
-                    }
-                    is SettingsViewModel.UpdateCheckState.Available -> {
-                        showUpdateSheet = true
-                    }
-                    else -> Unit
-                }
-            }
-
-            val checking = updateState is SettingsViewModel.UpdateCheckState.Checking
+            IconToggleItem(
+                icon = Icons.Filled.Refresh,
+                title = stringResource(R.string.update_auto_check),
+                description = stringResource(R.string.update_auto_check_desc),
+                checked = autoCheckUpdates,
+                onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
+            )
             SettingsNavigationRow(
                 title = stringResource(R.string.settings_check_updates),
                 description = if (checking) {
@@ -1227,137 +1311,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dataAboutDetail(
                 icon = Icons.Filled.Refresh,
                 onClick = { viewModel.checkForUpdates() },
             )
-
-            if (showUpdateSheet) {
-                val info = (updateState as? SettingsViewModel.UpdateCheckState.Available)?.info
-                if (info != null) {
-                    UpdateAvailableSheet(
-                        versionName = info.versionName,
-                        releaseNotes = info.releaseNotes,
-                        onDownload = {
-                            viewModel.downloadUpdate(info)
-                            showUpdateSheet = false
-                            viewModel.consumeUpdateState()
-                            android.widget.Toast.makeText(
-                                context,
-                                context.getString(R.string.update_download_started),
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        onDismiss = {
-                            showUpdateSheet = false
-                            viewModel.consumeUpdateState()
-                        },
-                    )
-                } else {
-                    showUpdateSheet = false
-                }
-            }
         }
         RoundedCardContainer { UpdateRows() }
     }
     item {
         RoundedCardContainer {
             SettingsNavigationRow(
-                title = stringResource(R.string.settings_my_homework),
-                description = stringResource(R.string.settings_my_homework_desc),
-                icon = Icons.Rounded.MenuBook,
-                onClick = onHomework
-            )
-            SettingsNavigationRow(
-                title = stringResource(R.string.settings_assignments),
-                description = stringResource(R.string.settings_assignments_desc),
-                icon = Icons.Rounded.Assignment,
-                onClick = onAssignments
-            )
-            SettingsNavigationRow(
-                title = stringResource(R.string.settings_academics),
-                description = stringResource(R.string.settings_academics_desc),
-                icon = Icons.Rounded.School,
-                onClick = onAcademics
-            )
-            SettingsNavigationRow(
-                title = stringResource(R.string.settings_cloud),
-                description = stringResource(R.string.settings_cloud_desc),
-                icon = Icons.Rounded.Cloud,
-                onClick = onCloud
-            )
-            SettingsNavigationRow(
-                title = stringResource(R.string.settings_export_data),
-                description = stringResource(R.string.settings_export_data_desc),
-                icon = Icons.Rounded.FileDownload,
-                onClick = onExport
-            )
-            SettingsNavigationRow(
                 title = stringResource(R.string.about_title),
                 icon = Icons.Rounded.Info,
                 onClick = onAbout
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun UpdateAvailableSheet(
-    versionName: String,
-    releaseNotes: String,
-    onDownload: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val haptics = rememberAppHaptics()
-    AppBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.update_available_title, versionName),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            if (releaseNotes.isNotBlank()) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceBright,
-                ) {
-                    Text(
-                        text = releaseNotes,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState()),
-                    )
-                }
-            }
-            Button(
-                onClick = {
-                    haptics.virtualKey()
-                    onDownload()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp)
-                    .height(56.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.update_download),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Icon(
-                    imageVector = Icons.Rounded.FileDownload,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
         }
     }
 }

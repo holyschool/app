@@ -12,6 +12,11 @@ import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +34,7 @@ import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Star
@@ -41,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -56,6 +63,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -68,6 +76,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.enderplusbayzuiship.edupage2.notification.DeepLinkHelper
 import com.enderplusbayzuiship.edupage2.ui.about.AboutScreen
 import com.enderplusbayzuiship.edupage2.ui.grades.GradesScreen
+import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
+import com.enderplusbayzuiship.edupage2.ui.core.cards.SettingsNavigationRow
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
 import com.enderplusbayzuiship.edupage2.ui.grades.GradesViewModel
 import com.enderplusbayzuiship.edupage2.ui.homework.LocalHomeworkScreen
@@ -102,6 +112,7 @@ private fun tabList(mealsEnabled: Boolean): List<TabItem> = buildList {
 
 private const val PUSH_DURATION = 320
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     val haptics       = rememberAppHaptics()
@@ -187,6 +198,12 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
         consumePendingDeepLink()
     }
 
+    LaunchedEffect(Unit) {
+        if (settingsVm.shouldAutoCheckUpdates()) {
+            settingsVm.checkForUpdates()
+        }
+    }
+
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -213,8 +230,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     }
 
     detailGroup?.let { group ->
-        com.enderplusbayzuiship.edupage2.ui.messages.DetailSheet(
-            group = group,
+        com.enderplusbayzuiship.edupage2.ui.messages.DetailSheet(            group = group,
             onDismiss = { detailGroup = null },
             onDelete = { },
             onReply = { },
@@ -224,12 +240,40 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
         )
     }
 
+    var showAccountSwitcher by remember { mutableStateOf(false) }
+
+    fun closeAllOverlays() {
+        showAbout = false
+        showSettings = false
+        showDeveloperOptions = false
+        showHomework = false
+        showAssignments = false
+        showAcademics = false
+        showCloud = false
+    }
+
+    fun goToTab(index: Int) {
+        haptics.tick()
+        closeAllOverlays()
+        scope.launch { pagerState.animateScrollToPage(index) }
+    }
+
     val backEnabled = showAbout || showSettings || showDeveloperOptions || showHomework ||
         showAssignments || showAcademics || showCloud || pagerState.currentPage != 0
     deepLinkDetail?.let { detail ->
         DeepLinkSheet(
             detail = detail,
             onDismiss = { deepLinkDetail = null },
+        )
+    }
+
+    if (showAccountSwitcher) {
+        AccountSwitcherSheet(
+            onDismiss = { showAccountSwitcher = false },
+            onAddAccount = {
+                showAccountSwitcher = false
+                onLogout()
+            },
         )
     }
 
@@ -253,9 +297,13 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                     val label = stringResource(item.labelRes)
                     NavigationBarItem(
                         selected = pagerState.currentPage == index,
-                        onClick = {
-                            haptics.tick()
-                            scope.launch { pagerState.animateScrollToPage(index) }
+                        onClick = { goToTab(index) },
+                        modifier = if (index == 0) {
+                            Modifier.overviewLongPress(
+                                onLongPress = { haptics.virtualKey(); showAccountSwitcher = true },
+                            )
+                        } else {
+                            Modifier
                         },
                         icon = {
                             if (index == 1 && unreadMessages > 0) {
@@ -469,6 +517,82 @@ private fun DeepLinkSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AccountSwitcherSheet(    onDismiss: () -> Unit,
+    onAddAccount: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val profiles by viewModel.profiles.collectAsState()
+    val activeProfile by viewModel.activeProfile.collectAsState()
+    val haptics = rememberAppHaptics()
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_section_accounts),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
+            RoundedCardContainer {
+                if (profiles.isEmpty()) {
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_accounts_empty),
+                        icon = Icons.Rounded.Person,
+                        onClick = onAddAccount,
+                    )
+                } else {
+                    profiles.forEach { profile ->
+                        val isActive = profile.id == activeProfile?.id
+                        SettingsNavigationRow(
+                            title = "${profile.username}@${profile.subdomain}.edupage.org",
+                            description = if (isActive) {
+                                stringResource(R.string.settings_accounts_active)
+                            } else {
+                                stringResource(R.string.settings_accounts_switch)
+                            },
+                            icon = if (isActive) Icons.Rounded.Check else Icons.Rounded.Person,
+                            onClick = {
+                                haptics.virtualKey()
+                                if (!isActive) viewModel.switchToAccount(profile.id)
+                                onDismiss()
+                            },
+                            titleColor = if (isActive) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_accounts_add),
+                        icon = Icons.Rounded.Person,
+                        onClick = onAddAccount,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+private fun Modifier.overviewLongPress(onLongPress: () -> Unit): Modifier =
+    pointerInput(onLongPress) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            val longPress = awaitLongPressOrCancellation()
+            if (longPress != null) onLongPress()
+        }
+    }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OfflineBanner(modifier: Modifier = Modifier, onRetry: () -> Unit) {    Surface(
         modifier = modifier.fillMaxWidth(),

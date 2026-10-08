@@ -149,7 +149,7 @@ fun AboutScreen(
                         Log.i(TAG, "opening GitHub source")
                         val intent = Intent(
                             android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://github.com/holyschool/Edupage2")
+                            android.net.Uri.parse("https://github.com/holyschool/app")
                         )
                         runCatching { context.startActivity(intent) }.onFailure {
                             Log.w(TAG, "no browser to open source link")

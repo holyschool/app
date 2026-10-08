@@ -389,7 +389,9 @@
     <string name="dev_section_onboarding">Onboarding</string>
     <string name="dev_section_playground">Playground</string>
     <string name="dev_test_ui">Test UI</string>
-    <string name="dev_test_ui_desc">Preview of every UI component</string>    <string name="dev_reset_onboarding">Reset onboarding tutorial</string>
+    <string name="dev_test_ui_desc">Preview of every UI component</string>
+    <string name="dev_preview_update">Preview update sheet</string>
+    <string name="dev_preview_update_desc">Show the update sheet with mock data</string>    <string name="dev_reset_onboarding">Reset onboarding tutorial</string>
     <string name="dev_onboarding_reset">Onboarding will show again on next launch</string>
 
     <string name="splash_signing_in">Signing you in\u2026</string>
@@ -510,6 +512,12 @@
     <string name="update_up_to_date">You\'re on the latest version</string>
     <string name="update_check_failed">Update check failed</string>
     <string name="update_available_title">Update available: %1$s</string>
+    <string name="update_release_notes">Release notes · %1$s</string>
+    <string name="action_view_on_github">View on GitHub</string>
+    <string name="update_install">Download &amp; install</string>
+    <string name="update_downloading_progress">Downloading… %1$d%%</string>
+    <string name="update_auto_check">Automatically check for updates</string>
+    <string name="update_auto_check_desc">Check GitHub releases when the app opens.</string>
     <string name="update_download">Download</string>
     <string name="update_downloading">Downloading update…</string>
     <string name="update_download_started">Download started — tap the notification to install</string>
@@ -544,6 +552,9 @@
     <string name="about_open_source_licenses_desc">View licenses for third-party libraries used in this app.</string>
     <string name="about_source_code">Source code</string>
     <string name="about_source_code_desc">View the source code on GitHub.</string>
+    <string name="about_made_title">Edupage2 by holyschool</string>
+    <string name="about_made_desc">An unofficial EduPage client built with Jetpack Compose. Tap to visit the project, star it, report bugs and contribute.</string>
+    <string name="settings_section_experimental">Experimental</string>
 
     <string name="settings_my_homework">My homework</string>
     <string name="settings_my_homework_desc">Add local homework assignments</string>
