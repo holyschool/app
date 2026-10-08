@@ -515,9 +515,11 @@
     <string name="update_release_notes">Release notes · %1$s</string>
     <string name="action_view_on_github">View on GitHub</string>
     <string name="update_install">Download &amp; install</string>
+    <string name="update_skip_version">Skip %1$s</string>
+    <string name="update_more_options">More options</string>
     <string name="update_downloading_progress">Downloading… %1$d%%</string>
     <string name="update_auto_check">Automatically check for updates</string>
-    <string name="update_auto_check_desc">Check GitHub releases when the app opens.</string>
+    <string name="update_auto_check_desc">Check GitHub releases on boot. Current: %1$s.</string>
     <string name="update_download">Download</string>
     <string name="update_downloading">Downloading update…</string>
     <string name="update_download_started">Download started — tap the notification to install</string>
@@ -584,6 +586,11 @@
     <string name="homework_save">Save</string>
     <string name="homework_cancel">Cancel</string>
     <string name="homework_untitled">Untitled</string>
+    <string name="homework_overdue">Overdue</string>
+    <string name="homework_today">Today</string>
+    <string name="homework_tomorrow">Tomorrow</string>
+    <string name="homework_this_week">This week</string>
+    <string name="homework_later">Later</string>
 
     <string name="assignments_title">Assignments</string>
     <string name="assignments_refresh">Refresh</string>

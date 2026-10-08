@@ -199,34 +199,6 @@ fun SettingsScreen(
         viewModel.switchAccountEvent.collect { onSwitchAccount() }
     }
 
-    val updateState by viewModel.updateState.collectAsState()
-    var showUpdateSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(updateState) {
-        when (val state = updateState) {
-            is SettingsViewModel.UpdateCheckState.UpToDate -> {
-                android.widget.Toast.makeText(
-                    context,
-                    context.getString(R.string.update_up_to_date),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-                viewModel.consumeUpdateState()
-            }
-            is SettingsViewModel.UpdateCheckState.Failed -> {
-                android.widget.Toast.makeText(
-                    context,
-                    state.message ?: context.getString(R.string.update_check_failed),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-                viewModel.consumeUpdateState()
-            }
-            is SettingsViewModel.UpdateCheckState.Available -> {
-                showUpdateSheet = true
-            }
-            else -> Unit
-        }
-    }
-
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
@@ -344,24 +316,6 @@ fun SettingsScreen(
             viewModel = viewModel,
             onDismiss = { showLanguageSheet = false }
         )
-    }
-
-    if (showUpdateSheet) {
-        val info = (updateState as? SettingsViewModel.UpdateCheckState.Available)?.info
-        val downloadProgress by viewModel.downloadProgress.collectAsState()
-        if (info != null) {
-            UpdateAvailableSheet(
-                info = info,
-                downloadProgress = downloadProgress,
-                onDownload = { viewModel.downloadUpdate(info) },
-                onDismiss = {
-                    showUpdateSheet = false
-                    viewModel.consumeUpdateState()
-                },
-            )
-        } else {
-            showUpdateSheet = false
-        }
     }
 
     if (showBackendSettings) {
@@ -1291,25 +1245,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dataAboutDetail(
         @Composable
         fun UpdateRows() {
             val autoCheckUpdates by viewModel.autoCheckUpdates.collectAsState()
-            val updateStateLocal by viewModel.updateState.collectAsState()
-            val checking = updateStateLocal is SettingsViewModel.UpdateCheckState.Checking
 
             IconToggleItem(
                 icon = Icons.Filled.Refresh,
                 title = stringResource(R.string.update_auto_check),
-                description = stringResource(R.string.update_auto_check_desc),
+                description = stringResource(
+                    R.string.update_auto_check_desc,
+                    viewModel.appVersionName(),
+                ),
                 checked = autoCheckUpdates,
                 onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
-            )
-            SettingsNavigationRow(
-                title = stringResource(R.string.settings_check_updates),
-                description = if (checking) {
-                    stringResource(R.string.settings_checking_updates)
-                } else {
-                    stringResource(R.string.about_version, viewModel.appVersionName())
-                },
-                icon = Icons.Filled.Refresh,
-                onClick = { viewModel.checkForUpdates() },
             )
         }
         RoundedCardContainer { UpdateRows() }

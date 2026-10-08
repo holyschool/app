@@ -25,6 +25,7 @@ import com.enderplusbayzuiship.edupage2.data.MealsCache
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
+import com.enderplusbayzuiship.edupage2.network.UpdateCenter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.enderplusbayzuiship.edupage2.notification.NotificationScheduler
 import com.google.firebase.messaging.FirebaseMessaging
@@ -439,6 +440,12 @@ class SettingsViewModel @Inject constructor(
     fun setAutoCheckUpdates(value: Boolean) {
         appPreferences.autoCheckUpdates = value
         _autoCheckUpdates.value = value
+    }
+
+    fun skipUpdate(versionName: String) {
+        appPreferences.skippedUpdateVersion = versionName
+        UpdateCenter.dismiss()
+        _updateState.value = UpdateCheckState.Idle
     }
 
     fun shouldAutoCheckUpdates(): Boolean = appPreferences.autoCheckUpdates

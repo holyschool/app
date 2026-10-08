@@ -162,6 +162,7 @@ fun DeveloperOptionsScreen(
                 ),
                 downloadProgress = null,
                 onDownload = { showUpdatePreview = false },
+                onSkip = { showUpdatePreview = false },
                 onDismiss = { showUpdatePreview = false },
             )
         }
