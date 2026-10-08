@@ -45,11 +45,14 @@ class EdupageApp : Application(), Configuration.Provider {
             packageManager.getPackageInfo(packageName, 0).versionName
         }.getOrNull().orEmpty()
 
-        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            CoroutineScope(Dispatchers.IO).launch {
-                runCatching { backendRegistrationManager.registerIfPossible(token) }
+        val pushReady = runCatching { com.google.firebase.FirebaseApp.getInstance() }.isSuccess
+        if (pushReady) {
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    runCatching { backendRegistrationManager.registerIfPossible(token) }
+                }
             }
-        }.addOnFailureListener {
+        } else {
             Log.w(TAG, "FCM not configured, push features disabled")
         }
         WidgetUpdater.schedulePeriodic(this)

@@ -163,14 +163,15 @@ class LoginViewModel @Inject constructor(
         "${subdomain}|$username"
 
     private fun registerBackendDevice() {
-        runCatching {
-            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                viewModelScope.launch {
-                    backendRegistrationManager.registerIfPossible(token)
-                }
-            }
-        }.onFailure {
+        val pushReady = runCatching { com.google.firebase.FirebaseApp.getInstance() }.isSuccess
+        if (!pushReady) {
             Log.w(TAG, "FCM not configured, skipping backend registration")
+            return
+        }
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            viewModelScope.launch {
+                backendRegistrationManager.registerIfPossible(token)
+            }
         }
     }
 }

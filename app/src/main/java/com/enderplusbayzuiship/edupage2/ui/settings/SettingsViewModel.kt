@@ -532,15 +532,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun registerDevice() {
-        runCatching {
-            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                viewModelScope.launch {
-                    val ok = backendRegistrationManager.registerIfPossible(token)
-                    _backendRegisterStatus.emit(ok)
-                }
-            }
-        }.onFailure {
+        val pushReady = runCatching { com.google.firebase.FirebaseApp.getInstance() }.isSuccess
+        if (!pushReady) {
             Log.w(TAG, "FCM not configured, cannot register device")
+            return
+        }
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            viewModelScope.launch {
+                val ok = backendRegistrationManager.registerIfPossible(token)
+                _backendRegisterStatus.emit(ok)
+            }
         }
     }
 
