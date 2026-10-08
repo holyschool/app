@@ -6,6 +6,8 @@ import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AiQuiz
 import com.enderplusbayzuiship.edupage2.data.AiQuizStore
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.data.HomeworkItem
+import com.enderplusbayzuiship.edupage2.data.LocalHomeworkStore
 import com.enderplusbayzuiship.edupage2.network.GeminiApi
 import com.enderplusbayzuiship.edupage2.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +25,7 @@ class AiQuizViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val geminiApi: GeminiApi,
     private val quizStore: AiQuizStore,
+    private val homeworkStore: LocalHomeworkStore,
 ) : ViewModel() {
 
     sealed interface GenerateState {
@@ -38,10 +41,15 @@ class AiQuizViewModel @Inject constructor(
 
     fun hasApiKey(): Boolean = appPreferences.aiApiKey.isNotBlank()
 
+    /** Local homework entries that can be used as study material. */
+    fun homeworkMaterials(): List<HomeworkItem> = homeworkStore.getAll()
+        .filter { it.title.isNotBlank() || it.notes.isNotBlank() }
+
     fun generate(
         topic: String,
         count: Int,
         difficulty: String,
+        material: String? = null,
         onCreated: (AiQuiz) -> Unit,
     ) {
         if (topic.isBlank()) return
@@ -54,7 +62,7 @@ class AiQuizViewModel @Inject constructor(
         viewModelScope.launch {
             _generateState.value = GenerateState.Generating
             try {
-                val questions = geminiApi.generateQuiz(apiKey, model, topic.trim(), count, difficulty)
+                val questions = geminiApi.generateQuiz(apiKey, model, topic.trim(), count, difficulty, material)
                 val quiz = AiQuiz(
                     topic = topic.trim(),
                     difficulty = difficulty,

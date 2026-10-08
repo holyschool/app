@@ -34,8 +34,9 @@ class GeminiApi @Inject constructor(
         topic: String,
         count: Int,
         difficulty: String,
+        material: String? = null,
     ): List<QuizQuestion> = withContext(Dispatchers.IO) {
-        val prompt = buildPrompt(topic, count, difficulty)
+        val prompt = buildPrompt(topic, count, difficulty, material)
         val body = JsonObject().apply {
             add("contents", JsonArray().apply {
                 add(JsonObject().apply {
@@ -146,12 +147,23 @@ class GeminiApi @Inject constructor(
         return if (expected in 1..questions.size) questions.take(expected) else questions
     }
 
-    private fun buildPrompt(topic: String, count: Int, difficulty: String): String = buildString {
+    private fun buildPrompt(
+        topic: String,
+        count: Int,
+        difficulty: String,
+        material: String?,
+    ): String = buildString {
         append("Create a multiple-choice quiz with exactly ")
         append(count)
         append(" questions about: \"")
         append(topic.trim())
         append("\".\n")
+        if (!material.isNullOrBlank()) {
+            append("Base the questions strictly on the following study material:\n")
+            append("---\n")
+            append(material.trim().take(8000))
+            append("\n---\n")
+        }
         append("Difficulty: ")
         append(difficulty)
         append(".\n")

@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Psychology
@@ -36,6 +37,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -62,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AiQuiz
+import com.enderplusbayzuiship.edupage2.data.HomeworkItem
 import com.enderplusbayzuiship.edupage2.data.QuizQuestion
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
@@ -150,12 +153,13 @@ fun AiQuizScreen(
         NewQuizSheet(
             generating = genState is AiQuizViewModel.GenerateState.Generating,
             error = (genState as? AiQuizViewModel.GenerateState.Error)?.message,
+            materialsProvider = { viewModel.homeworkMaterials() },
             onDismiss = {
                 viewModel.consumeError()
                 showNewSheet = false
             },
-            onGenerate = { topic, count, difficulty ->
-                viewModel.generate(topic, count, difficulty) { created ->
+            onGenerate = { topic, count, difficulty, material ->
+                viewModel.generate(topic, count, difficulty, material) { created ->
                     showNewSheet = false
                     activeQuiz = created
                 }
@@ -238,12 +242,17 @@ private fun QuizRow(quiz: AiQuiz, onStart: () -> Unit, onDelete: () -> Unit) {
 private fun NewQuizSheet(
     generating: Boolean,
     error: String?,
+    materialsProvider: () -> List<HomeworkItem>,
     onDismiss: () -> Unit,
-    onGenerate: (String, Int, String) -> Unit,
+    onGenerate: (String, Int, String, String?) -> Unit,
 ) {
     var topic by remember { mutableStateOf("") }
     var count by remember { mutableIntStateOf(10) }
     var difficulty by remember { mutableStateOf("medium") }
+    var material by remember { mutableStateOf<String?>(null) }
+    var materialLabel by remember { mutableStateOf<String?>(null) }
+    var showPicker by remember { mutableStateOf(false) }
+    var materials by remember { mutableStateOf(emptyList<HomeworkItem>()) }
     val haptics = rememberAppHaptics()
 
     AppBottomSheet(onDismissRequest = { if (!generating) onDismiss() }) {
@@ -256,6 +265,72 @@ private fun NewQuizSheet(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (showPicker) {
+                Text(
+                    text = stringResource(R.string.quiz_materials_pick_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (materials.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.quiz_materials_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    materials.forEach { item ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceBright,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        haptics.virtualKey()
+                                        val body = buildString {
+                                            append(item.title)
+                                            if (item.notes.isNotBlank()) {
+                                                append("\n\n")
+                                                append(item.notes)
+                                            }
+                                        }
+                                        material = body
+                                        materialLabel = item.title
+                                        if (topic.isBlank()) topic = item.title
+                                        showPicker = false
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                            ) {
+                                Text(
+                                    text = item.title.ifBlank { item.subject.ifBlank { "Homework" } },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
+                                )
+                                if (item.notes.isNotBlank()) {
+                                    Text(
+                                        text = item.notes,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 3,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = { haptics.virtualKey(); showPicker = false },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.quiz_back))
+                }
+                return@Column
+            }
+
             Text(
                 text = stringResource(R.string.quiz_new),
                 style = MaterialTheme.typography.headlineSmall,
@@ -270,6 +345,43 @@ private fun NewQuizSheet(
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (materialLabel != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.Assignment,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = materialLabel.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                    )
+                    TextButton(onClick = { material = null; materialLabel = null }) {
+                        Text(stringResource(R.string.quiz_clear_materials))
+                    }
+                }
+            } else {
+                OutlinedButton(
+                    onClick = {
+                        haptics.virtualKey()
+                        materials = materialsProvider()
+                        showPicker = true
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) {
+                    Icon(Icons.Rounded.Assignment, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.quiz_source_homework))
+                }
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = stringResource(R.string.quiz_count),
@@ -318,7 +430,7 @@ private fun NewQuizSheet(
             Button(
                 onClick = {
                     haptics.virtualKey()
-                    onGenerate(topic, count, difficulty)
+                    onGenerate(topic, count, difficulty, material)
                 },
                 enabled = topic.isNotBlank() && !generating,
                 shape = RoundedCornerShape(20.dp),

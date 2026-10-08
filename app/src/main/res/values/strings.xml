@@ -391,6 +391,10 @@
     <string name="quiz_questions_count">%1$d questions</string>
     <string name="quiz_cancel">Cancel</string>
     <string name="quiz_back">Back</string>
+    <string name="quiz_source_homework">Use my homework</string>
+    <string name="quiz_clear_materials">Remove</string>
+    <string name="quiz_materials_pick_title">Pick homework</string>
+    <string name="quiz_materials_empty">No homework available to use yet.</string>
 
     <string name="subject_icons_loading">Loading subjects…</string>
     <string name="subject_icons_error">Couldn\'t load subjects</string>
