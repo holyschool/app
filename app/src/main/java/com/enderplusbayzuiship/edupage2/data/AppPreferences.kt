@@ -142,6 +142,18 @@ enum class MessagesViewMode(val key: String) {
     }
 }
 
+enum class AppFontScale(val key: String, val multiplier: Float) {
+    SMALL("small", 0.90f),
+    DEFAULT("default", 1.00f),
+    LARGE("large", 1.12f),
+    XLARGE("xlarge", 1.25f);
+
+    companion object {
+        val DEFAULT = AppFontScale.DEFAULT
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
 @Singleton
 class AppPreferences @Inject constructor(
     @ApplicationContext private val context: Context
@@ -214,6 +226,15 @@ class AppPreferences @Inject constructor(
         private const val KEY_MESSAGES_NEW_ON_TOP = "messages_new_on_top"
 
         private const val KEY_SUBJECT_ICONS_ENABLED = "subject_icons_enabled"
+        private const val KEY_AI_QUIZ_ENABLED = "ai_quiz_enabled"
+        private const val KEY_AI_API_KEY = "ai_api_key"
+        private const val KEY_AI_MODEL = "ai_model"
+        private const val KEY_CLOUD_ENABLED = "cloud_enabled"
+        private const val KEY_ENHANCED_APPEARANCE_ENABLED = "enhanced_appearance_enabled"
+        private const val KEY_CUSTOM_ACCENT = "custom_accent_argb"
+        private const val KEY_FONT_SCALE = "app_font_scale"
+
+        const val DEFAULT_AI_MODEL = "gemini-2.0-flash"
 
         private const val OFFICIAL_BACKEND_URL = "https://edupage.stwupid.tech"
         private const val OFFICIAL_BACKEND_KEY = "change-this-long-random"
@@ -521,6 +542,71 @@ class AppPreferences @Inject constructor(
     val subjectIconsEnabledFlow: Flow<Boolean> = prefFlow(
         key = KEY_SUBJECT_ICONS_ENABLED,
         current = { subjectIconsEnabled },
+    )
+
+    var aiQuizEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AI_QUIZ_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_AI_QUIZ_ENABLED, value).apply()
+
+    val aiQuizEnabledFlow: Flow<Boolean> = prefFlow(
+        key = KEY_AI_QUIZ_ENABLED,
+        current = { aiQuizEnabled },
+    )
+
+    var aiApiKey: String
+        get() = prefs.getString(KEY_AI_API_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_AI_API_KEY, value).apply()
+
+    val aiApiKeyFlow: Flow<String> = prefFlow(
+        key = KEY_AI_API_KEY,
+        current = { aiApiKey },
+    )
+
+    var aiModel: String
+        get() = prefs.getString(KEY_AI_MODEL, DEFAULT_AI_MODEL)?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_AI_MODEL
+        set(value) = prefs.edit().putString(KEY_AI_MODEL, value.trim()).apply()
+
+    val aiModelFlow: Flow<String> = prefFlow(
+        key = KEY_AI_MODEL,
+        current = { aiModel },
+    )
+
+    var cloudEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CLOUD_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CLOUD_ENABLED, value).apply()
+
+    val cloudEnabledFlow: Flow<Boolean> = prefFlow(
+        key = KEY_CLOUD_ENABLED,
+        current = { cloudEnabled },
+    )
+
+    var enhancedAppearanceEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ENHANCED_APPEARANCE_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_ENHANCED_APPEARANCE_ENABLED, value).apply()
+
+    val enhancedAppearanceEnabledFlow: Flow<Boolean> = prefFlow(
+        key = KEY_ENHANCED_APPEARANCE_ENABLED,
+        current = { enhancedAppearanceEnabled },
+    )
+
+    /** Custom accent color as ARGB, or null to use the preset [accentColor]. */
+    var customAccentArgb: Int?
+        get() = prefs.getInt(KEY_CUSTOM_ACCENT, -1).takeIf { it != -1 }
+        set(value) = prefs.edit().putInt(KEY_CUSTOM_ACCENT, value ?: -1).apply()
+
+    val customAccentArgbFlow: Flow<Int?> = prefFlow(
+        key = KEY_CUSTOM_ACCENT,
+        current = { customAccentArgb },
+    )
+
+    var fontScale: AppFontScale
+        get() = AppFontScale.fromKey(prefs.getString(KEY_FONT_SCALE, null))
+        set(value) = prefs.edit().putString(KEY_FONT_SCALE, value.key).apply()
+
+    val fontScaleFlow: Flow<AppFontScale> = prefFlow(
+        key = KEY_FONT_SCALE,
+        current = { fontScale },
     )
 
     fun clearSeenIds() {

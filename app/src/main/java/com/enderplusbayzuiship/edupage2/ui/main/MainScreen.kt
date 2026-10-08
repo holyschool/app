@@ -155,6 +155,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     var showAssignments by remember { mutableStateOf(false) }
     var showAcademics by remember { mutableStateOf(false) }
     var showCloud by remember { mutableStateOf(false) }
+    var showAiQuiz by remember { mutableStateOf(false) }
 
     suspend fun consumePendingDeepLink() {
         val deepLinkInfo = MainActivity.pendingDeepLinkInfo ?: return
@@ -375,6 +376,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                         onAssignments = onOpenAssignments,
                         onAcademics = onOpenAcademics,
                         onCloud = onOpenCloud,
+                        onOpenAiQuiz = { showAiQuiz = true },
                         onSwitchAccount = onSwitchAccount
                     )
             }
@@ -424,6 +426,14 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
             ) {
                     com.enderplusbayzuiship.edupage2.ui.cloud.CloudFilesScreen(
                         onBack = { showCloud = false }
+                    )
+            }
+
+            OverlayTransition(
+                visible = showAiQuiz,
+            ) {
+                    com.enderplusbayzuiship.edupage2.ui.quiz.AiQuizScreen(
+                        onBack = { showAiQuiz = false }
                     )
             }
         }

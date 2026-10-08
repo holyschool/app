@@ -87,10 +87,21 @@ fun Edupage2Theme(
 
     amoled: Boolean = false,
     accent: AccentColor = AccentColor.DEFAULT,
+    customAccentArgb: Int? = null,
     content: @Composable () -> Unit
 ) {
-    val customAccent = accent != AccentColor.DEFAULT
+    val customAccent = accent != AccentColor.DEFAULT || customAccentArgb != null
     val baseScheme = when {
+        customAccentArgb != null -> {
+            val roles = accentRolesFromArgb(customAccentArgb, darkTheme)
+            val base = if (darkTheme) DarkColorScheme else LightColorScheme
+            base.copy(
+                primary            = roles.primary,
+                onPrimary          = roles.onPrimary,
+                primaryContainer   = roles.container,
+                onPrimaryContainer = roles.onContainer,
+            )
+        }
         dynamicColor && !customAccent && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
