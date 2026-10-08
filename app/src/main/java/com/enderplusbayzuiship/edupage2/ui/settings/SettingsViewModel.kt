@@ -1,0 +1,547 @@
+package com.enderplusbayzuiship.edupage2.ui.settings
+
+import android.util.Log
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.edupage.api.Edupage
+import com.edupage.api.model.people.EduAccount
+import com.enderplusbayzuiship.edupage2.R
+import com.enderplusbayzuiship.edupage2.data.AccountProfile
+import com.enderplusbayzuiship.edupage2.data.AccountProfileStore
+import com.enderplusbayzuiship.edupage2.data.AppLanguage
+import com.enderplusbayzuiship.edupage2.data.AppPreferences
+import com.enderplusbayzuiship.edupage2.data.AccentColor
+import com.enderplusbayzuiship.edupage2.data.BackendMode
+import com.enderplusbayzuiship.edupage2.data.BreakVisibility
+import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
+import com.enderplusbayzuiship.edupage2.data.HapticIntensity
+import com.enderplusbayzuiship.edupage2.data.LessonGrouping
+import com.enderplusbayzuiship.edupage2.data.CredentialStore
+import com.enderplusbayzuiship.edupage2.data.DarkModePreference
+import com.enderplusbayzuiship.edupage2.data.DataExporter
+import com.enderplusbayzuiship.edupage2.data.LockStore
+import com.enderplusbayzuiship.edupage2.data.GradesCache
+import com.enderplusbayzuiship.edupage2.data.MealsCache
+import com.enderplusbayzuiship.edupage2.data.TimetableCache
+import com.enderplusbayzuiship.edupage2.data.TimelineCache
+import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.enderplusbayzuiship.edupage2.notification.NotificationScheduler
+import com.google.firebase.messaging.FirebaseMessaging
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    private val edupage: Edupage,    private val credentialStore: CredentialStore,
+    private val accountProfileStore: AccountProfileStore,
+    private val appPreferences: AppPreferences,
+    private val lockStore: LockStore,
+    private val notificationScheduler: NotificationScheduler,
+    private val timetableCache: TimetableCache,
+    private val gradesCache: GradesCache,
+    private val timelineCache: TimelineCache,
+    private val mealsCache: MealsCache,
+    private val backendRegistrationManager: BackendRegistrationManager,
+    private val dataExporter: DataExporter,
+    private val updateChecker: com.enderplusbayzuiship.edupage2.network.UpdateChecker,
+    @ApplicationContext private val context: android.content.Context,
+) : ViewModel() {
+
+    sealed interface UpdateCheckState {
+        data object Idle : UpdateCheckState
+        data object Checking : UpdateCheckState
+        data object UpToDate : UpdateCheckState
+        data class Available(val info: com.enderplusbayzuiship.edupage2.network.AppUpdateInfo) : UpdateCheckState
+        data class Failed(val message: String?) : UpdateCheckState
+    }
+
+    private val _updateState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
+    val updateState: StateFlow<UpdateCheckState> = _updateState.asStateFlow()
+
+    fun checkForUpdates() {
+        if (_updateState.value is UpdateCheckState.Checking) return
+        viewModelScope.launch {
+            _updateState.value = UpdateCheckState.Checking
+            val current = runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull().orEmpty()
+            val info = updateChecker.check(current)
+            _updateState.value = if (info != null) {
+                UpdateCheckState.Available(info)
+            } else {
+                UpdateCheckState.UpToDate
+            }
+        }
+    }
+
+    fun consumeUpdateState() {
+        _updateState.value = UpdateCheckState.Idle
+    }
+
+    fun downloadUpdate(info: com.enderplusbayzuiship.edupage2.network.AppUpdateInfo) {
+        viewModelScope.launch {
+            try {
+                val dm = context.getSystemService(android.app.DownloadManager::class.java) ?: return@launch
+                val request = android.app.DownloadManager.Request(android.net.Uri.parse(info.downloadUrl))
+                    .setTitle(context.getString(R.string.update_downloading, info.versionName))
+                    .setNotificationVisibility(
+                        android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                    )
+                    .setDestinationInExternalPublicDir(
+                        android.os.Environment.DIRECTORY_DOWNLOADS,
+                        "Edupage2-${info.versionName}.apk"
+                    )
+                    .setMimeType("application/vnd.android.package-archive")
+                dm.enqueue(request)
+            } catch (e: Exception) {
+                Log.e(TAG, "update download failed", e)
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "SettingsViewModel"
+    }
+
+    private val _breakVisibility = MutableStateFlow(appPreferences.breakVisibility)
+    val breakVisibility: StateFlow<BreakVisibility> = _breakVisibility.asStateFlow()
+
+    private val _showWeekends = MutableStateFlow(appPreferences.showWeekends)
+    val showWeekends: StateFlow<Boolean> = _showWeekends.asStateFlow()
+
+    private val _showSeconds = MutableStateFlow(appPreferences.showSeconds)
+    val showSeconds: StateFlow<Boolean> = _showSeconds.asStateFlow()
+
+    private val _mealsEnabled = MutableStateFlow(appPreferences.mealsEnabled)
+    val mealsEnabled: StateFlow<Boolean> = _mealsEnabled.asStateFlow()
+
+    private val _compactTimetable = MutableStateFlow(appPreferences.compactTimetable)
+    val compactTimetable: StateFlow<Boolean> = _compactTimetable.asStateFlow()
+
+    private val _autoRefreshIntervalMinutes = MutableStateFlow(appPreferences.autoRefreshIntervalMinutes)
+    val autoRefreshIntervalMinutes: StateFlow<Int> = _autoRefreshIntervalMinutes.asStateFlow()
+
+    private val _keepScreenAwake = MutableStateFlow(appPreferences.keepScreenAwake)
+    val keepScreenAwake: StateFlow<Boolean> = _keepScreenAwake.asStateFlow()
+
+    private val _defaultTab = MutableStateFlow(appPreferences.defaultTab)
+    val defaultTab: StateFlow<Int> = _defaultTab.asStateFlow()
+
+    private val _firstDayOfWeek = MutableStateFlow(appPreferences.firstDayOfWeek)
+    val firstDayOfWeek: StateFlow<Int> = _firstDayOfWeek.asStateFlow()
+
+    private val _cancelledLessonStyle = MutableStateFlow(appPreferences.cancelledLessonStyle)
+    val cancelledLessonStyle: StateFlow<CancelledLessonStyle> = _cancelledLessonStyle.asStateFlow()
+
+    private val _lessonGrouping = MutableStateFlow(appPreferences.lessonGrouping)
+    val lessonGrouping: StateFlow<LessonGrouping> = _lessonGrouping.asStateFlow()
+
+    private val _liveClassNotif = MutableStateFlow(appPreferences.liveClassNotif)
+    val liveClassNotif: StateFlow<Boolean> = _liveClassNotif.asStateFlow()
+
+    private val _hapticIntensity = MutableStateFlow(appPreferences.hapticIntensity)
+    val hapticIntensity: StateFlow<HapticIntensity> = _hapticIntensity.asStateFlow()
+
+    private val _motionBlurEnabled = MutableStateFlow(appPreferences.motionBlurEnabled)
+    val motionBlurEnabled: StateFlow<Boolean> = _motionBlurEnabled.asStateFlow()
+
+    private val _notificationsEnabled = MutableStateFlow(appPreferences.notificationsEnabled)
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    private val _notifGradesEnabled = MutableStateFlow(appPreferences.notifGradesEnabled)
+    val notifGradesEnabled: StateFlow<Boolean> = _notifGradesEnabled.asStateFlow()
+
+    private val _notifMessagesEnabled = MutableStateFlow(appPreferences.notifMessagesEnabled)
+    val notifMessagesEnabled: StateFlow<Boolean> = _notifMessagesEnabled.asStateFlow()
+
+    private val _notifSubstitutionsEnabled = MutableStateFlow(appPreferences.notifSubstitutionsEnabled)
+    val notifSubstitutionsEnabled: StateFlow<Boolean> = _notifSubstitutionsEnabled.asStateFlow()
+
+    private val _notifCheckIntervalMinutes = MutableStateFlow(appPreferences.notifCheckIntervalMinutes)
+    val notifCheckIntervalMinutes: StateFlow<Int> = _notifCheckIntervalMinutes.asStateFlow()
+
+    private val _darkMode = MutableStateFlow(appPreferences.darkMode)
+    val darkMode: StateFlow<DarkModePreference> = _darkMode.asStateFlow()
+
+    private val _useAmoled = MutableStateFlow(appPreferences.useAmoled)
+    val useAmoled: StateFlow<Boolean> = _useAmoled.asStateFlow()
+
+    private val _accentColor = MutableStateFlow(appPreferences.accentColor)
+    val accentColor: StateFlow<AccentColor> = _accentColor.asStateFlow()
+
+    val lockEnabled: StateFlow<Boolean> = lockStore.isEnabledFlow
+    val isBiometricEnabled: StateFlow<Boolean> = lockStore.isBiometricEnabledFlow
+
+    private val _appLanguage = MutableStateFlow(appPreferences.appLanguage)
+    val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
+
+    private val _backendMode = MutableStateFlow(appPreferences.backendMode)
+    val backendMode: StateFlow<BackendMode> = _backendMode.asStateFlow()
+
+    private val _backendCustomUrl = MutableStateFlow(appPreferences.backendCustomUrl)
+    val backendCustomUrl: StateFlow<String> = _backendCustomUrl.asStateFlow()
+
+    private val _backendCustomKey = MutableStateFlow(appPreferences.backendCustomKey)
+    val backendCustomKey: StateFlow<String> = _backendCustomKey.asStateFlow()
+
+    private val _backendRegisterStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val backendRegisterStatus: SharedFlow<Boolean> = _backendRegisterStatus.asSharedFlow()
+
+    private val _backendSyncStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val backendSyncStatus: SharedFlow<Boolean> = _backendSyncStatus.asSharedFlow()
+
+    private val _backendDeleteStatus = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val backendDeleteStatus: SharedFlow<Boolean> = _backendDeleteStatus.asSharedFlow()
+
+    private val _recreateActivity = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val recreateActivity: SharedFlow<Unit> = _recreateActivity.asSharedFlow()
+
+    private val _children = MutableStateFlow<List<EduAccount>?>(null)
+    val children: StateFlow<List<EduAccount>?> = _children.asStateFlow()
+
+    private val _currentChild = MutableStateFlow<EduAccount?>(null)
+    val currentChild: StateFlow<EduAccount?> = _currentChild.asStateFlow()
+
+    val isParent: Boolean
+        get() = edupage.isParent
+
+    private val _parentSwitchEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val parentSwitchEvent: SharedFlow<Unit> = _parentSwitchEvent.asSharedFlow()
+
+    private val _profiles = MutableStateFlow<List<AccountProfile>>(accountProfileStore.loadProfiles())
+    val profiles: StateFlow<List<AccountProfile>> = _profiles.asStateFlow()
+
+    private val _activeProfile = MutableStateFlow<AccountProfile?>(accountProfileStore.activeProfile())
+    val activeProfile: StateFlow<AccountProfile?> = _activeProfile.asStateFlow()
+
+    private val _switchAccountEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val switchAccountEvent: SharedFlow<Unit> = _switchAccountEvent.asSharedFlow()
+
+    init {
+        loadChildren()
+    }
+
+    fun refreshAccounts() {
+        _profiles.value = accountProfileStore.loadProfiles()
+        _activeProfile.value = accountProfileStore.activeProfile()
+    }
+
+    fun removeAccount(id: String) {
+        accountProfileStore.removeProfile(id)
+        refreshAccounts()
+    }
+
+    fun switchToAccount(id: String) {
+        val profile = accountProfileStore.loadProfiles().find { it.id == id } ?: return
+        viewModelScope.launch {
+            credentialStore.save(profile.username, profile.password, profile.subdomain, profile.sessionId)
+            accountProfileStore.setActiveProfile(id)
+            refreshAccounts()
+            clearAllCaches()
+            _switchAccountEvent.emit(Unit)
+            Log.i(TAG, "Switching to account profile ${profile.username}@${profile.subdomain}")
+        }
+    }
+
+    private fun loadChildren() {
+        val childrenList = edupage.children
+        _children.value = childrenList
+        if (childrenList != null) {
+            val selectedId = appPreferences.selectedChildId
+            _currentChild.value = if (selectedId > 0) {
+                childrenList.find { it.personId == selectedId }
+            } else {
+                null
+            }
+        }
+    }
+
+    fun switchToChild(child: EduAccount) {
+        viewModelScope.launch {
+            try {
+                edupage.switchToChild(child)
+                appPreferences.selectedChildId = child.personId
+                _currentChild.value = child
+                clearAllCaches()
+                _parentSwitchEvent.emit(Unit)
+                Log.i(TAG, "Switched to child: ${child.name} (${child.personId})")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to switch to child: ${e.message}", e)
+            }
+        }
+    }
+
+    fun switchToParent() {
+        viewModelScope.launch {
+            try {
+                edupage.switchToParent()
+                appPreferences.selectedChildId = -1
+                _currentChild.value = null
+                clearAllCaches()
+                _parentSwitchEvent.emit(Unit)
+                Log.i(TAG, "Switched back to parent view")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to switch to parent: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun clearAllCaches() {
+        gradesCache.clear()
+        timelineCache.clear()
+        timetableCache.clear()
+        mealsCache.clear()
+        appPreferences.clearNotifiedIds()
+        loadChildren()
+    }
+
+    fun setBreakVisibility(value: BreakVisibility) {
+        appPreferences.breakVisibility = value
+        _breakVisibility.value = value
+    }
+
+    fun setShowWeekends(value: Boolean) {
+        appPreferences.showWeekends = value
+        _showWeekends.value = value
+    }
+
+    fun setShowSeconds(value: Boolean) {
+        appPreferences.showSeconds = value
+        _showSeconds.value = value
+    }
+
+    fun setMealsEnabled(value: Boolean) {
+        appPreferences.mealsEnabled = value
+        _mealsEnabled.value = value
+    }
+
+    fun setCompactTimetable(value: Boolean) {
+        appPreferences.compactTimetable = value
+        _compactTimetable.value = value
+    }
+
+    fun setAutoRefreshIntervalMinutes(value: Int) {
+        val clamped = value.coerceIn(0, 1440)
+        appPreferences.autoRefreshIntervalMinutes = clamped
+        _autoRefreshIntervalMinutes.value = clamped
+    }
+
+    fun setKeepScreenAwake(value: Boolean) {
+        appPreferences.keepScreenAwake = value
+        _keepScreenAwake.value = value
+    }
+
+    fun setDefaultTab(value: Int) {
+        val clamped = value.coerceIn(0, 4)
+        appPreferences.defaultTab = clamped
+        _defaultTab.value = clamped
+    }
+
+    fun setFirstDayOfWeek(value: Int) {
+        val clamped = value.coerceIn(0, 1)
+        appPreferences.firstDayOfWeek = clamped
+        _firstDayOfWeek.value = clamped
+    }
+
+    fun clearCaches() {
+        viewModelScope.launch {
+            timetableCache.clear()
+            gradesCache.clear()
+            timelineCache.clear()
+            mealsCache.clear()
+            Log.i(TAG, "Cleared timetable/grades/timeline/meals caches")
+        }
+    }
+
+    fun setBiometricEnabled(value: Boolean) {
+        lockStore.setBiometricEnabled(value)
+    }
+
+    fun setCancelledLessonStyle(value: CancelledLessonStyle) {
+        appPreferences.cancelledLessonStyle = value
+        _cancelledLessonStyle.value = value
+    }
+
+    fun setLessonGrouping(value: LessonGrouping) {
+        appPreferences.lessonGrouping = value
+        _lessonGrouping.value = value
+    }
+
+    fun setLiveClassNotif(value: Boolean) {
+        appPreferences.liveClassNotif = value
+        _liveClassNotif.value = value
+    }
+
+    fun setHapticIntensity(value: HapticIntensity) {
+        if (value == _hapticIntensity.value) return
+        appPreferences.hapticIntensity = value
+        _hapticIntensity.value = value
+        com.enderplusbayzuiship.edupage2.ui.util.HapticGate.intensity = value
+    }
+
+    fun setMotionBlurEnabled(value: Boolean) {
+        appPreferences.motionBlurEnabled = value
+        _motionBlurEnabled.value = value
+        com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.enabled = value
+    }
+
+    fun setNotifGradesEnabled(value: Boolean) {
+        appPreferences.notifGradesEnabled = value
+        _notifGradesEnabled.value = value
+        updateWorker()
+    }
+
+    fun setNotifMessagesEnabled(value: Boolean) {
+        appPreferences.notifMessagesEnabled = value
+        _notifMessagesEnabled.value = value
+        updateWorker()
+    }
+
+    fun setNotifSubstitutionsEnabled(value: Boolean) {
+        appPreferences.notifSubstitutionsEnabled = value
+        _notifSubstitutionsEnabled.value = value
+        updateWorker()
+    }
+
+    fun setNotifCheckIntervalMinutes(value: Int) {
+        appPreferences.notifCheckIntervalMinutes = value
+        _notifCheckIntervalMinutes.value = value
+        appPreferences.lastNotificationFetchTimestamp = 0L
+        updateWorker()
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        appPreferences.notificationsEnabled = enabled
+        _notificationsEnabled.value = enabled
+        updateWorker()
+        if (!enabled) {
+            appPreferences.lastNotificationFetchTimestamp = 0L
+            appPreferences.lastTimelineId = -1
+        }
+    }
+
+    private fun updateWorker() {
+        val enabled = appPreferences.notificationsEnabled
+        val anyTypeEnabled = appPreferences.notifGradesEnabled ||
+                           appPreferences.notifMessagesEnabled ||
+                           appPreferences.notifSubstitutionsEnabled
+
+        if (enabled && anyTypeEnabled) {
+            notificationScheduler.scheduleGradeMessageCheck()
+        } else {
+            notificationScheduler.cancelGradeMessageCheck()
+        }
+    }
+
+    fun setDarkMode(value: DarkModePreference) {
+        if (value == _darkMode.value) return
+        appPreferences.darkMode = value
+        _darkMode.value = value
+    }
+
+    fun setUseAmoled(value: Boolean) {
+        if (value == _useAmoled.value) return
+        appPreferences.useAmoled = value
+        _useAmoled.value = value
+    }
+
+    fun setAccentColor(value: AccentColor) {
+        if (value == _accentColor.value) return
+        appPreferences.accentColor = value
+        _accentColor.value = value
+    }
+
+    fun setAppLanguage(value: AppLanguage) {
+        if (value == _appLanguage.value) return
+        appPreferences.appLanguage = value
+        _appLanguage.value = value
+        viewModelScope.launch { _recreateActivity.emit(Unit) }
+    }
+
+    fun setBackendBaseUrl(value: String) {
+        appPreferences.backendCustomUrl = value
+        _backendCustomUrl.value = value
+    }
+
+    fun setBackendApiKey(value: String) {
+        appPreferences.backendCustomKey = value
+        _backendCustomKey.value = value
+    }
+
+    fun setBackendMode(value: BackendMode) {
+        appPreferences.backendMode = value
+        _backendMode.value = value
+    }
+
+    fun registerDevice() {
+        runCatching {
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                viewModelScope.launch {
+                    val ok = backendRegistrationManager.registerIfPossible(token)
+                    _backendRegisterStatus.emit(ok)
+                }
+            }
+        }.onFailure {
+            Log.w(TAG, "FCM not configured, cannot register device")
+        }
+    }
+
+    fun syncReadNow() {
+        viewModelScope.launch {
+            val localSeen = appPreferences.getSeenTimelineIds()
+            val result = backendRegistrationManager.syncReadState(localSeen)
+            if (result.ok && result.ids.isNotEmpty()) {
+                appPreferences.markTimelineIdsSeen(result.ids)
+            }
+            _backendSyncStatus.emit(result.ok)
+        }
+    }
+
+    fun deleteAllBackendData() {
+        viewModelScope.launch {
+            val ok = backendRegistrationManager.deleteAllData()
+            _backendDeleteStatus.emit(ok)
+        }
+    }
+
+    fun logout() {
+        notificationScheduler.cancelGradeMessageCheck()
+        com.enderplusbayzuiship.edupage2.notification.ClassLiveController.stop(context)
+        viewModelScope.launch {
+            timetableCache.clear()
+            gradesCache.clear()
+            timelineCache.clear()
+            mealsCache.clear()
+        }
+        credentialStore.clear()
+        edupage.session.cookieJar.clear()
+        edupage.session.isLoggedIn = false
+        edupage.session.data = null
+        edupage.session.gsecHash = null
+    }
+
+    fun exportDataJson(): String = dataExporter.exportAsJson()
+
+    fun appVersionName(): String = appPreferences.appVersionName
+
+    fun enableLock(pin: String) {
+        lockStore.enable(pin)
+    }
+
+    fun disableLock() {
+        lockStore.disable()
+    }
+
+    fun verifyPin(pin: String): Boolean = lockStore.verifyPin(pin)
+
+    fun changePin(currentPin: String, newPin: String): Boolean = lockStore.changePin(currentPin, newPin)
+}
+

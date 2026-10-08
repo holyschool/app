@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <application
+            android:name=".EdupageApp"
+            android:allowBackup="true"
+            android:networkSecurityConfig="@xml/network_security_config"
+            android:dataExtractionRules="@xml/data_extraction_rules"
+            android:fullBackupContent="@xml/backup_rules"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:supportsRtl="true"
+            android:theme="@style/Theme.Edupage2">
+        <service
+                android:name=".notification.AppFirebaseMessagingService"
+                android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <service
+                android:name=".notification.ClassLiveService"
+                android:exported="false"
+                android:foregroundServiceType="specialUse">
+            <property
+                    android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                    android:value="Live class countdown with next lesson info"/>
+        </service>
+        <activity
+                android:name=".MainActivity"
+                android:exported="true"
+                android:label="@string/app_name"
+                android:theme="@style/Theme.Edupage2.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <activity
+                android:name="com.google.android.gms.oss.licenses.OssLicensesMenuActivity"
+                android:exported="false"
+                android:theme="@style/Theme.OssLicenses"
+                tools:replace="android:theme" />
+
+        <receiver
+                android:name=".notification.MarkAsReadReceiver"
+                android:exported="false">            <intent-filter>
+                <action android:name="com.enderplusbayzuiship.edupage2.MARK_AS_READ"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver
+                android:name=".ui.widgets.TimetableWidgetReceiver"
+                android:exported="false"
+                android:label="@string/widget_timetable_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                    android:name="android.appwidget.provider"
+                    android:resource="@xml/timetable_widget_info"/>
+        </receiver>
+
+        <receiver
+                android:name=".ui.widgets.CanteenWidgetReceiver"
+                android:exported="false"
+                android:label="@string/widget_canteen_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                    android:name="android.appwidget.provider"
+                    android:resource="@xml/canteen_widget_info"/>
+        </receiver>
+
+        <receiver
+                android:name=".ui.widgets.HomeworkWidgetReceiver"
+                android:exported="false"
+                android:label="@string/widget_homework_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                    android:name="android.appwidget.provider"
+                    android:resource="@xml/homework_widget_info"/>
+        </receiver>
+
+        <receiver
+                android:name=".ui.widgets.PrepareWidgetReceiver"
+                android:exported="false"
+                android:label="@string/widget_prepare_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                    android:name="android.appwidget.provider"
+                    android:resource="@xml/prepare_widget_info"/>
+        </receiver>
+
+        <provider
+                android:name="androidx.startup.InitializationProvider"
+                android:authorities="${applicationId}.androidx-startup"
+                tools:node="remove" />
+    </application>
+
+</manifest>

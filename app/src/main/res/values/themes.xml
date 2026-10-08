@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Edupage2" parent="android:Theme.Material.Light.NoActionBar"/>
+
+    <style name="Theme.Edupage2.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#010202</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="postSplashScreenTheme">@style/Theme.Edupage2</item>
+    </style>
+
+    <style name="Theme.OssLicenses" parent="Theme.AppCompat.Light.NoActionBar"/>
+</resources>
+
