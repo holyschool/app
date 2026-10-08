@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -113,40 +115,44 @@ fun LocalHomeworkScreen(
     var creating by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<HomeworkItem?>(null) }
     val haptics = rememberAppHaptics()
-    val editorOpen = creating || editing != null
 
     LaunchedEffect(Unit) {
         viewModel.reload()
     }
 
-    BackHandler(enabled = editorOpen) {
-        creating = false
+    val existingSubjects = remember(items) {
+        items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+
+    BackHandler(enabled = editing != null) {
         editing = null
     }
 
-    if (editorOpen) {
-        HomeworkEditorScreen(
-            initial = editing,
-            existingSubjects = remember(items) {
-                items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
-            },
-            onDismiss = {
-                creating = false
-                editing = null
-            },
+    when {
+        creating -> HomeworkCreateWizard(
+            existingSubjects = existingSubjects,
+            onDismiss = { creating = false },
             onSave = { item ->
                 viewModel.addOrUpdate(item)
                 creating = false
+            },
+        )
+
+        editing != null -> HomeworkEditorScreen(
+            initial = editing,
+            existingSubjects = existingSubjects,
+            onDismiss = { editing = null },
+            onSave = { item ->
+                viewModel.addOrUpdate(item)
                 editing = null
             },
             onDelete = { id ->
                 viewModel.remove(id)
-                creating = false
                 editing = null
             },
         )
-    } else {
-        HomeworkListScreen(
+
+        else -> HomeworkListScreen(
             items = items,
             onBack = onBack,
             onCreate = {
@@ -589,6 +595,285 @@ private fun HomeworkRow(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+private enum class CreateStep(val questionRes: Int) {
+    TITLE(R.string.homework_step_title),
+    SUBJECT(R.string.homework_step_subject),
+    DATE(R.string.homework_step_date),
+    NOTES(R.string.homework_step_notes);
+
+    val optional: Boolean get() = this == SUBJECT || this == NOTES
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeworkCreateWizard(
+    existingSubjects: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (HomeworkItem) -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    val steps = CreateStep.entries
+    var step by remember { mutableStateOf(CreateStep.TITLE) }
+    var title by remember { mutableStateOf("") }
+    var subject by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(LocalDate.now().toString()) }
+    var notes by remember { mutableStateOf("") }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val untitledLabel = stringResource(R.string.homework_untitled)
+    val today = remember { LocalDate.now() }
+    val fieldShape = RoundedCornerShape(24.dp)
+    val stepIndex = steps.indexOf(step)
+    val isLast = stepIndex >= steps.lastIndex
+
+    fun save() {
+        onSave(
+            HomeworkItem(
+                title = title.trim().ifBlank { untitledLabel },
+                date = date.trim().ifBlank { today.toString() },
+                subject = subject.trim(),
+                notes = notes.trim(),
+            )
+        )
+    }
+
+    fun advance() {
+        if (isLast) save() else step = steps[stepIndex + 1]
+    }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(top = 4.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.homework_step_of, stepIndex + 1, steps.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                LinearProgressIndicator(
+                    progress = { (stepIndex + 1).toFloat() / steps.size },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(50)),
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+            }
+
+            Text(
+                text = stringResource(step.questionRes),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            when (step) {
+                CreateStep.TITLE -> OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    placeholder = { Text(stringResource(R.string.homework_step_title_hint)) },
+                    singleLine = true,
+                    shape = fieldShape,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                CreateStep.SUBJECT -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = subject,
+                        onValueChange = { subject = it },
+                        placeholder = { Text(stringResource(R.string.homework_subject_label)) },
+                        singleLine = true,
+                        shape = fieldShape,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (existingSubjects.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            existingSubjects.forEach { suggestion ->
+                                FilterChip(
+                                    selected = subject.equals(suggestion, ignoreCase = true),
+                                    onClick = {
+                                        haptics.virtualKey()
+                                        subject = suggestion
+                                    },
+                                    label = { Text(suggestion) },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                CreateStep.DATE -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DateQuickChip(
+                            label = stringResource(R.string.homework_today),
+                            selected = date == today.toString(),
+                            onClick = {
+                                haptics.virtualKey()
+                                date = today.toString()
+                            },
+                        )
+                        DateQuickChip(
+                            label = stringResource(R.string.homework_tomorrow),
+                            selected = date == today.plusDays(1).toString(),
+                            onClick = {
+                                haptics.virtualKey()
+                                date = today.plusDays(1).toString()
+                            },
+                        )
+                        DateQuickChip(
+                            label = stringResource(R.string.homework_next_week),
+                            selected = date == today.plusDays(7).toString(),
+                            onClick = {
+                                haptics.virtualKey()
+                                date = today.plusDays(7).toString()
+                            },
+                        )
+                    }
+                    Surface(
+                        onClick = {
+                            haptics.virtualKey()
+                            showDatePicker = true
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceBright,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        ) {
+                            PastelIcon(icon = Icons.Rounded.CalendarMonth, key = date)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.homework_date_label),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = formatDate(date),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                CreateStep.NOTES -> OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    placeholder = { Text(stringResource(R.string.homework_step_notes_hint)) },
+                    shape = fieldShape,
+                    minLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (stepIndex > 0) {
+                    TextButton(onClick = {
+                        haptics.virtualKey()
+                        step = steps[stepIndex - 1]
+                    }) {
+                        Text(stringResource(R.string.homework_back))
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (step.optional) {
+                    TextButton(onClick = {
+                        haptics.virtualKey()
+                        when (step) {
+                            CreateStep.SUBJECT -> subject = ""
+                            CreateStep.NOTES -> notes = ""
+                            else -> Unit
+                        }
+                        advance()
+                    }) {
+                        Text(stringResource(R.string.homework_skip))
+                    }
+                }
+                Button(
+                    onClick = {
+                        haptics.virtualKey()
+                        advance()
+                    },
+                    enabled = step != CreateStep.TITLE || title.isNotBlank(),
+                    modifier = Modifier.height(52.dp),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (isLast) R.string.homework_finish else R.string.homework_next
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        imageVector = if (isLast) Icons.Rounded.CheckCircle
+                        else Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = remember(date) {
+                runCatching {
+                    LocalDate.parse(date.ifBlank { today.toString() })
+                        .atStartOfDay(java.time.ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli()
+                }.getOrNull()
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    haptics.virtualKey()
+                    pickerState.selectedDateMillis?.let { millis ->
+                        date = java.time.Instant.ofEpochMilli(millis)
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .toLocalDate()
+                            .toString()
+                    }
+                    showDatePicker = false
+                }) {
+                    Text(stringResource(R.string.homework_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text(stringResource(R.string.homework_cancel))
+                }
+            },
+        ) {
+            DatePicker(state = pickerState)
         }
     }
 }
