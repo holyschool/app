@@ -16,6 +16,8 @@ import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.data.HapticIntensity
 import com.enderplusbayzuiship.edupage2.data.LessonGrouping
+import com.enderplusbayzuiship.edupage2.data.MotionBlurScope
+import com.enderplusbayzuiship.edupage2.data.MotionBlurStrength
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.DarkModePreference
 import com.enderplusbayzuiship.edupage2.data.DataExporter
@@ -25,6 +27,7 @@ import com.enderplusbayzuiship.edupage2.data.MealsCache
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
+import com.enderplusbayzuiship.edupage2.network.UpdateCenter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.enderplusbayzuiship.edupage2.notification.NotificationScheduler
 import com.google.firebase.messaging.FirebaseMessaging
@@ -192,6 +195,24 @@ class SettingsViewModel @Inject constructor(
 
     private val _motionBlurEnabled = MutableStateFlow(appPreferences.motionBlurEnabled)
     val motionBlurEnabled: StateFlow<Boolean> = _motionBlurEnabled.asStateFlow()
+
+    private val _motionBlurScope = MutableStateFlow(appPreferences.motionBlurScope)
+    val motionBlurScope: StateFlow<MotionBlurScope> = _motionBlurScope.asStateFlow()
+
+    private val _motionBlurStrength = MutableStateFlow(appPreferences.motionBlurStrength)
+    val motionBlurStrength: StateFlow<MotionBlurStrength> = _motionBlurStrength.asStateFlow()
+
+    private val _liveClassShowSubject = MutableStateFlow(appPreferences.liveClassShowSubject)
+    val liveClassShowSubject: StateFlow<Boolean> = _liveClassShowSubject.asStateFlow()
+
+    private val _liveClassShowRoom = MutableStateFlow(appPreferences.liveClassShowRoom)
+    val liveClassShowRoom: StateFlow<Boolean> = _liveClassShowRoom.asStateFlow()
+
+    private val _liveClassShowTeacher = MutableStateFlow(appPreferences.liveClassShowTeacher)
+    val liveClassShowTeacher: StateFlow<Boolean> = _liveClassShowTeacher.asStateFlow()
+
+    private val _liveClassShowProgress = MutableStateFlow(appPreferences.liveClassShowProgress)
+    val liveClassShowProgress: StateFlow<Boolean> = _liveClassShowProgress.asStateFlow()
 
     private val _autoCheckUpdates = MutableStateFlow(appPreferences.autoCheckUpdates)
     val autoCheckUpdates: StateFlow<Boolean> = _autoCheckUpdates.asStateFlow()
@@ -436,9 +457,47 @@ class SettingsViewModel @Inject constructor(
         com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.enabled = value
     }
 
+    fun setMotionBlurScope(value: MotionBlurScope) {
+        appPreferences.motionBlurScope = value
+        _motionBlurScope.value = value
+        com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.scope = value
+    }
+
+    fun setMotionBlurStrength(value: MotionBlurStrength) {
+        appPreferences.motionBlurStrength = value
+        _motionBlurStrength.value = value
+        com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.scale = value.scale
+    }
+
+    fun setLiveClassShowSubject(value: Boolean) {
+        appPreferences.liveClassShowSubject = value
+        _liveClassShowSubject.value = value
+    }
+
+    fun setLiveClassShowRoom(value: Boolean) {
+        appPreferences.liveClassShowRoom = value
+        _liveClassShowRoom.value = value
+    }
+
+    fun setLiveClassShowTeacher(value: Boolean) {
+        appPreferences.liveClassShowTeacher = value
+        _liveClassShowTeacher.value = value
+    }
+
+    fun setLiveClassShowProgress(value: Boolean) {
+        appPreferences.liveClassShowProgress = value
+        _liveClassShowProgress.value = value
+    }
+
     fun setAutoCheckUpdates(value: Boolean) {
         appPreferences.autoCheckUpdates = value
         _autoCheckUpdates.value = value
+    }
+
+    fun skipUpdate(versionName: String) {
+        appPreferences.skippedUpdateVersion = versionName
+        UpdateCenter.dismiss()
+        _updateState.value = UpdateCheckState.Idle
     }
 
     fun shouldAutoCheckUpdates(): Boolean = appPreferences.autoCheckUpdates

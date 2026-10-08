@@ -1,22 +1,28 @@
 package com.enderplusbayzuiship.edupage2.ui.homework
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -33,20 +39,20 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,18 +66,28 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.HomeworkItem
+import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
-import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+
+private enum class HomeworkBucket(val titleRes: Int) {
+    OVERDUE(R.string.homework_overdue),
+    TODAY(R.string.homework_today),
+    TOMORROW(R.string.homework_tomorrow),
+    WEEK(R.string.homework_this_week),
+    LATER(R.string.homework_later),
+    DONE(R.string.homework_done),
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,9 +96,65 @@ fun LocalHomeworkScreen(
     viewModel: LocalHomeworkViewModel = hiltViewModel(),
 ) {
     val items by viewModel.items.collectAsState()
+    var creating by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<HomeworkItem?>(null) }
-    var showCreate by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
+    val editorOpen = creating || editing != null
+
+    BackHandler(enabled = editorOpen) {
+        creating = false
+        editing = null
+    }
+
+    if (editorOpen) {
+        HomeworkEditorScreen(
+            initial = editing,
+            existingSubjects = remember(items) {
+                items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+            },
+            onDismiss = {
+                creating = false
+                editing = null
+            },
+            onSave = { item ->
+                viewModel.addOrUpdate(item)
+                creating = false
+                editing = null
+            },
+            onDelete = { id ->
+                viewModel.remove(id)
+                creating = false
+                editing = null
+            },
+        )
+    } else {
+        HomeworkListScreen(
+            items = items,
+            onBack = onBack,
+            onCreate = {
+                haptics.virtualKey()
+                creating = true
+            },
+            onEdit = { editing = it },
+            onToggle = { viewModel.toggleDone(it) },
+            onDelete = { viewModel.remove(it) },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeworkListScreen(
+    items: List<HomeworkItem>,
+    onBack: () -> Unit,
+    onCreate: () -> Unit,
+    onEdit: (HomeworkItem) -> Unit,
+    onToggle: (String) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    val today = remember { LocalDate.now() }
+    val buckets = remember(items, today) { bucketize(items, today) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -92,113 +164,89 @@ fun LocalHomeworkScreen(
                     Text(
                         text = stringResource(R.string.homework_title),
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { haptics.virtualKey(); onBack() }) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back)
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
                 actions = {
-                    FilledTonalIconButton(onClick = { haptics.virtualKey(); showCreate = true }) {
+                    FilledTonalIconButton(onClick = onCreate) {
                         Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.homework_add)
+                            Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.homework_add),
                         )
                     }
                     Spacer(Modifier.width(4.dp))
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface
-                )
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { haptics.virtualKey(); showCreate = true }) {
+            FloatingActionButton(onClick = onCreate) {
                 Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.homework_add))
             }
-        }
+        },
     ) { paddingValues ->
         if (items.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Rounded.MenuBook,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(48.dp),
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = stringResource(R.string.homework_empty),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         } else {
-            val done = items.filter { it.done }
-            val pending = items.filter { !it.done }
-
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 16.dp,
-                    vertical = 12.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                if (pending.isNotEmpty()) {
-                    item(key = "homework-pending-header") {
-                        HomeworkGroupHeader(
-                            text = stringResource(R.string.homework_pending),
-                            count = pending.size,
-                        )
-                    }
-                    item(key = "homework-pending-card") {
-                        RoundedCardContainer {
-                            pending.forEach { item ->
-                                key(item.id) {
-                                    HomeworkRow(
-                                        item = item,
-                                        onToggle = { viewModel.toggleDone(item.id) },
-                                        onEdit = { editing = item },
-                                        onDelete = { viewModel.remove(item.id) }
-                                    )
-                                }
-                            }
+                HomeworkBucket.entries.forEach { bucket ->
+                    val bucketItems = buckets[bucket].orEmpty()
+                    if (bucketItems.isNotEmpty()) {
+                        item(key = "hw_header_${bucket.name}") {
+                            HomeworkGroupHeader(
+                                text = stringResource(bucket.titleRes),
+                                count = bucketItems.size,
+                            )
                         }
-                    }
-                }
-                if (done.isNotEmpty()) {
-                    item(key = "homework-done-header") {
-                        HomeworkGroupHeader(
-                            text = stringResource(R.string.homework_done),
-                            count = done.size,
-                        )
-                    }
-                    item(key = "homework-done-card") {
-                        RoundedCardContainer {
-                            done.forEach { item ->
-                                key(item.id) {
-                                    HomeworkRow(
-                                        item = item,
-                                        onToggle = { viewModel.toggleDone(item.id) },
-                                        onEdit = { editing = item },
-                                        onDelete = { viewModel.remove(item.id) }
-                                    )
+                        item(key = "hw_card_${bucket.name}") {
+                            RoundedCardContainer {
+                                bucketItems.forEach { item ->
+                                    key(item.id) {
+                                        HomeworkRow(
+                                            item = item,
+                                            dimmed = bucket == HomeworkBucket.DONE,
+                                            onToggle = { onToggle(item.id) },
+                                            onEdit = { onEdit(item) },
+                                            onDelete = { onDelete(item.id) },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -207,37 +255,29 @@ fun LocalHomeworkScreen(
             }
         }
     }
+}
 
-    if (showCreate) {
-        HomeworkEditSheet(
-            initial = null,
-            existingSubjects = remember(items) {
-                items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
-            },
-            onDismiss = { showCreate = false },
-            onSave = { item ->
-                viewModel.addOrUpdate(item)
-                showCreate = false
-            }
-        )
-    }
-    editing?.let { item ->
-        HomeworkEditSheet(
-            initial = item,
-            existingSubjects = remember(items) {
-                items.map { it.subject.trim() }.filter { it.isNotBlank() }.distinct().sorted()
-            },
-            onDismiss = { editing = null },
-            onSave = { updated ->
-                viewModel.addOrUpdate(updated)
-                editing = null
-            },
-            onDelete = {
-                viewModel.remove(item.id)
-                editing = null
-            }
-        )
-    }
+private fun bucketize(
+    items: List<HomeworkItem>,
+    today: LocalDate,
+): Map<HomeworkBucket, List<HomeworkItem>> {
+    val pending = items.filter { !it.done }
+    val done = items.filter { it.done }.sortedBy { it.date }
+    fun dateOf(item: HomeworkItem): LocalDate? = runCatching { LocalDate.parse(item.date) }.getOrNull()
+    return mapOf(
+        HomeworkBucket.OVERDUE to pending.filter { (dateOf(it)?.isBefore(today)) == true }.sortedBy { it.date },
+        HomeworkBucket.TODAY to pending.filter { dateOf(it) == today }.sortedBy { it.date },
+        HomeworkBucket.TOMORROW to pending.filter { dateOf(it) == today.plusDays(1) }.sortedBy { it.date },
+        HomeworkBucket.WEEK to pending.filter {
+            val d = dateOf(it)
+            d != null && d.isAfter(today.plusDays(1)) && !d.isAfter(today.plusDays(7))
+        }.sortedBy { it.date },
+        HomeworkBucket.LATER to pending.filter {
+            val d = dateOf(it)
+            d == null || d.isAfter(today.plusDays(7))
+        }.sortedBy { it.date },
+        HomeworkBucket.DONE to done,
+    )
 }
 
 @Composable
@@ -276,6 +316,7 @@ private fun HomeworkGroupHeader(
 @Composable
 private fun HomeworkRow(
     item: HomeworkItem,
+    dimmed: Boolean,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -283,46 +324,68 @@ private fun HomeworkRow(
     val haptics = rememberAppHaptics()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = if (item.done) {
+        color = if (dimmed) {
             MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.55f)
         } else {
             MaterialTheme.colorScheme.surfaceBright
+        },
+        onClick = {
+            haptics.virtualKey()
+            onEdit()
         },
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { haptics.virtualKey(); onToggle() }) {
+            IconButton(onClick = {
+                haptics.virtualKey()
+                onToggle()
+            }) {
                 Icon(
                     imageVector = if (item.done) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                     contentDescription = stringResource(R.string.homework_toggle_done),
-                    tint = if (item.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = if (item.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            PastelIcon(
+                icon = Icons.Rounded.MenuBook,
+                key = item.subject.ifBlank { item.title },
+                containerSize = 40.dp,
+                iconSize = 20.dp,
+            )
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(onClick = { haptics.virtualKey(); onEdit() })
-                    .padding(vertical = 6.dp)
+                    .padding(vertical = 6.dp, horizontal = 10.dp),
             ) {
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     textDecoration = if (item.done) TextDecoration.LineThrough else null,
-                    color = if (item.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    color = if (item.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                item.subject.takeIf { it.isNotBlank() }?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (item.subject.isNotBlank()) {
+                        Text(
+                            text = item.subject,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = " · ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     val overdue = remember(item.date, item.done) { isOverdue(item.date) && !item.done }
                     Text(
                         text = formatDate(item.date),
@@ -334,20 +397,25 @@ private fun HomeworkRow(
                         },
                         fontWeight = if (overdue) FontWeight.SemiBold else null,
                     )
-                    item.notes.takeIf { it.isNotBlank() }?.let { notes ->
-                        Text(
-                            text = " · $notes",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                }
+                if (item.notes.isNotBlank()) {
+                    Text(
+                        text = item.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
-            IconButton(onClick = { haptics.virtualKey(); onDelete() }) {
+            IconButton(onClick = {
+                haptics.virtualKey()
+                onDelete()
+            }) {
                 Icon(
                     imageVector = Icons.Rounded.Delete,
                     contentDescription = stringResource(R.string.homework_delete),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -356,12 +424,12 @@ private fun HomeworkRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HomeworkEditSheet(
+private fun HomeworkEditorScreen(
     initial: HomeworkItem?,
     existingSubjects: List<String>,
     onDismiss: () -> Unit,
     onSave: (HomeworkItem) -> Unit,
-    onDelete: (() -> Unit)? = null,
+    onDelete: (String) -> Unit,
 ) {
     var title by remember(initial?.id) { mutableStateOf(initial?.title ?: "") }
     var date by remember(initial?.id) { mutableStateOf(initial?.date ?: LocalDate.now().toString()) }
@@ -374,41 +442,96 @@ private fun HomeworkEditSheet(
     val fieldShape = RoundedCornerShape(20.dp)
     val today = remember { LocalDate.now() }
 
-    AppBottomSheet(onDismissRequest = onDismiss) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(
+                            if (initial == null) R.string.homework_add else R.string.homework_edit
+                        ),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        haptics.virtualKey()
+                        onDismiss()
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
+                    }
+                },
+                actions = {
+                    if (initial != null) {
+                        IconButton(onClick = {
+                            haptics.virtualKey()
+                            onDelete(initial.id)
+                        }) {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                contentDescription = stringResource(R.string.homework_delete),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+        bottomBar = {
+            Button(
+                onClick = {
+                    haptics.virtualKey()
+                    onSave(
+                        HomeworkItem(
+                            id = initial?.id ?: java.util.UUID.randomUUID().toString(),
+                            title = title.trim().ifBlank { untitledLabel },
+                            date = date.trim().ifBlank { LocalDate.now().toString() },
+                            subject = subject.trim(),
+                            notes = notes.trim(),
+                            done = initial?.done ?: false,
+                        )
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(16.dp)
+                    .height(56.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.homework_save),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        },
+    ) { paddingValues ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-            ) {
-                Text(
-                    text = stringResource(
-                        if (initial == null) R.string.homework_add else R.string.homework_edit
-                    ),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
-                if (initial != null && onDelete != null) {
-                    IconButton(onClick = {
-                        haptics.virtualKey()
-                        onDelete()
-                    }) {
-                        Icon(
-                            imageVector = Icons.Rounded.Delete,
-                            contentDescription = stringResource(R.string.homework_delete),
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
+            Spacer(Modifier.height(4.dp))
 
             OutlinedTextField(
                 value = title,
@@ -416,8 +539,63 @@ private fun HomeworkEditSheet(
                 label = { Text(stringResource(R.string.homework_title_label)) },
                 singleLine = true,
                 shape = fieldShape,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
+
+            SectionLabel(
+                text = stringResource(R.string.homework_subject_label),
+                modifier = Modifier.padding(bottom = 0.dp),
+            )
+            if (existingSubjects.isNotEmpty()) {
+                ExposedDropdownMenuBox(
+                    expanded = subjectExpanded,
+                    onExpandedChange = { subjectExpanded = !subjectExpanded },
+                ) {
+                    OutlinedTextField(
+                        value = subject,
+                        onValueChange = {
+                            subject = it
+                            subjectExpanded = true
+                        },
+                        placeholder = { Text(stringResource(R.string.homework_subject_label)) },
+                        singleLine = true,
+                        shape = fieldShape,
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = subjectExpanded)
+                        },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = subjectExpanded,
+                        onDismissRequest = { subjectExpanded = false },
+                    ) {
+                        existingSubjects
+                            .filter { it.contains(subject, ignoreCase = true) }
+                            .take(6)
+                            .forEach { suggestion ->
+                                DropdownMenuItem(
+                                    text = { Text(suggestion) },
+                                    onClick = {
+                                        haptics.virtualKey()
+                                        subject = suggestion
+                                        subjectExpanded = false
+                                    },
+                                )
+                            }
+                    }
+                }
+            } else {
+                OutlinedTextField(
+                    value = subject,
+                    onValueChange = { subject = it },
+                    placeholder = { Text(stringResource(R.string.homework_subject_label)) },
+                    singleLine = true,
+                    shape = fieldShape,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             SectionLabel(
                 text = stringResource(R.string.homework_date_label),
@@ -466,11 +644,9 @@ private fun HomeworkEditSheet(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.CalendarMonth,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp),
+                    PastelIcon(
+                        icon = Icons.Rounded.CalendarMonth,
+                        key = date,
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -487,96 +663,18 @@ private fun HomeworkEditSheet(
                 }
             }
 
-            if (existingSubjects.isNotEmpty()) {
-                ExposedDropdownMenuBox(
-                    expanded = subjectExpanded,
-                    onExpandedChange = { subjectExpanded = !subjectExpanded },
-                ) {
-                    OutlinedTextField(
-                        value = subject,
-                        onValueChange = {
-                            subject = it
-                            subjectExpanded = true
-                        },
-                        label = { Text(stringResource(R.string.homework_subject_label)) },
-                        singleLine = true,
-                        shape = fieldShape,
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = subjectExpanded)
-                        },
-                        modifier = Modifier
-                            .menuAnchor()
-                            .fillMaxWidth(),
-                    )
-                    ExposedDropdownMenu(
-                        expanded = subjectExpanded,
-                        onDismissRequest = { subjectExpanded = false },
-                    ) {
-                        existingSubjects
-                            .filter { it.contains(subject, ignoreCase = true) }
-                            .take(6)
-                            .forEach { suggestion ->
-                                DropdownMenuItem(
-                                    text = { Text(suggestion) },
-                                    onClick = {
-                                        haptics.virtualKey()
-                                        subject = suggestion
-                                        subjectExpanded = false
-                                    },
-                                )
-                            }
-                    }
-                }
-            } else {
-                OutlinedTextField(
-                    value = subject,
-                    onValueChange = { subject = it },
-                    label = { Text(stringResource(R.string.homework_subject_label)) },
-                    singleLine = true,
-                    shape = fieldShape,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            SectionLabel(
+                text = stringResource(R.string.homework_notes_label),
+                modifier = Modifier.padding(bottom = 0.dp),
+            )
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                label = { Text(stringResource(R.string.homework_notes_label)) },
+                placeholder = { Text(stringResource(R.string.homework_notes_label)) },
                 shape = fieldShape,
-                modifier = Modifier.fillMaxWidth()
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
             )
-
-            Button(
-                onClick = {
-                    haptics.virtualKey()
-                    onSave(
-                        HomeworkItem(
-                            id = initial?.id ?: java.util.UUID.randomUUID().toString(),
-                            title = title.trim().ifBlank { untitledLabel },
-                            date = date.trim().ifBlank { LocalDate.now().toString() },
-                            subject = subject.trim(),
-                            notes = notes.trim(),
-                            done = initial?.done ?: false
-                        )
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(vertical = 16.dp)
-                    .height(56.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.homework_save),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
         }
     }
 
@@ -647,4 +745,3 @@ private fun formatDate(iso: String): String {
         iso
     }
 }
-

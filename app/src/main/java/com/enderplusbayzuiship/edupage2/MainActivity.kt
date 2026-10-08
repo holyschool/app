@@ -1,16 +1,12 @@
 package com.enderplusbayzuiship.edupage2
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -20,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -34,6 +29,7 @@ import com.enderplusbayzuiship.edupage2.data.SessionRepository
 import com.enderplusbayzuiship.edupage2.navigation.AppNavGraph
 import com.enderplusbayzuiship.edupage2.navigation.Screen
 import com.enderplusbayzuiship.edupage2.notification.DeepLinkHelper
+import com.enderplusbayzuiship.edupage2.ui.about.WhatsNewCenter
 import com.enderplusbayzuiship.edupage2.ui.about.WhatsNewHost
 import com.enderplusbayzuiship.edupage2.ui.lock.LockScreen
 import com.enderplusbayzuiship.edupage2.ui.lock.LockViewModel
@@ -60,10 +56,6 @@ class MainActivity : FragmentActivity() {
 
         var pendingDeepLinkInfo: DeepLinkHelper.DeepLinkInfo? = null
     }
-
-    private val requestNotificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        }
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.wrap(newBase))
@@ -95,22 +87,24 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-
         setContent {
             composReady = true
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                if (appPreferences.onboardingCompleted &&
+                    appPreferences.lastSeenVersionName != appPreferences.appVersionName
+                ) {
+                    WhatsNewCenter.request()
+                }
+            }
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 com.enderplusbayzuiship.edupage2.ui.util.HapticGate.intensity =
                     appPreferences.hapticIntensity
                 com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.enabled =
                     appPreferences.motionBlurEnabled
+                com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.scope =
+                    appPreferences.motionBlurScope
+                com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.scale =
+                    appPreferences.motionBlurStrength.scale
             }
             val darkModePref by appPreferences.darkModeFlow.collectAsState(
                 initial = appPreferences.darkMode
@@ -171,19 +165,14 @@ class MainActivity : FragmentActivity() {
                 } else {
                     val navController = rememberNavController()
                     this.navController = navController
-                    var showWhatsNew by remember {
-                        mutableStateOf(
-                            appPreferences.onboardingCompleted &&
-                                appPreferences.lastSeenVersionName != appPreferences.appVersionName
-                        )
-                    }
+                    val showWhatsNew by WhatsNewCenter.visible.collectAsState()
                     AppNavGraph(navController = navController, appPreferences = appPreferences)
                     WhatsNewHost(
                         visible = showWhatsNew && !locked,
                         versionName = appPreferences.appVersionName,
                         onDismiss = {
                             appPreferences.lastSeenVersionName = appPreferences.appVersionName
-                            showWhatsNew = false
+                            WhatsNewCenter.dismiss()
                         },
                     )
                 }

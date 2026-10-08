@@ -55,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import com.enderplusbayzuiship.edupage2.network.UpdateCenter
+import com.enderplusbayzuiship.edupage2.ui.update.UpdateAvailableSheet
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -192,10 +194,16 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
         consumePendingDeepLink()
     }
 
-    LaunchedEffect(Unit) {
-        if (settingsVm.shouldAutoCheckUpdates()) {
-            settingsVm.checkForUpdates()
-        }
+    val bootUpdate = UpdateCenter.pending.collectAsState().value
+    if (bootUpdate != null) {
+        val downloadProgress by settingsVm.downloadProgress.collectAsState()
+        UpdateAvailableSheet(
+            info = bootUpdate,
+            downloadProgress = downloadProgress,
+            onDownload = { settingsVm.downloadUpdate(bootUpdate) },
+            onSkip = { settingsVm.skipUpdate(bootUpdate.versionName) },
+            onDismiss = { UpdateCenter.dismiss() },
+        )
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current

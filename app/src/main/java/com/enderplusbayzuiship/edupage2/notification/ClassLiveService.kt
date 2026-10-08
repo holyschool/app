@@ -50,6 +50,7 @@ class ClassLiveService : Service() {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val prefs by lazy { com.enderplusbayzuiship.edupage2.data.AppPreferences(this) }
 
     override fun onCreate() {
         super.onCreate()
@@ -157,18 +158,23 @@ class ClassLiveService : Service() {
         val totalMin = Duration.between(current.start, current.end).toMinutes().coerceAtLeast(1)
         val leftMin = Duration.between(now, current.end).toMinutes().coerceAtLeast(0)
         val elapsed = (totalMin - leftMin).coerceIn(0, totalMin).toInt()
+        val showProgress = prefs.liveClassShowProgress
         val next = lessons.firstOrNull { l -> l.start != null && current.end != null && l.start.isAfter(current.end.minusSeconds(1)) && l != current }
             ?: lessons.firstOrNull { l -> l.start != null && now.isBefore(l.start) }
         val nextText = next?.let {
-            val room = it.room?.let { r -> " · $r" }.orEmpty()
-            getString(R.string.notif_live_next, it.subject + room)
+            getString(R.string.notif_live_next, describeLesson(it))
         }
-        val room = current.room?.let { " · $it" }.orEmpty()
-        val title = getString(R.string.notif_live_class_title, current.subject + room)
+        val title = if (prefs.liveClassShowSubject) {
+            getString(R.string.notif_live_class_title, describeLesson(current))
+        } else {
+            getString(R.string.notif_live_break_title)
+        }
         val text = buildList {
-            add(getString(R.string.notif_live_ends_in, formatMinutes(leftMin)))
+            if (showProgress) {
+                add(getString(R.string.notif_live_ends_in, formatMinutes(leftMin)))
+            }
             nextText?.let { add(it) }
-        }.joinToString(" · ")
+        }.joinToString(" · ").ifBlank { title }
 
         return NotificationCompat.Builder(this, CHANNEL_LIVE_CLASS)
             .setSmallIcon(R.drawable.ic_notification)
@@ -177,8 +183,17 @@ class ClassLiveService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent())
-            .setProgress(totalMin.toInt(), elapsed, false)
+            .apply { if (showProgress) setProgress(totalMin.toInt(), elapsed, false) }
             .build()
+    }
+
+    private fun describeLesson(lesson: com.enderplusbayzuiship.edupage2.ui.widgets.WidgetLesson): String {
+        val parts = mutableListOf<String>()
+        if (prefs.liveClassShowSubject) parts.add(lesson.subject)
+        if (prefs.liveClassShowRoom) lesson.room?.let { parts.add(it) }
+        if (prefs.liveClassShowTeacher) lesson.teacher?.let { parts.add(it) }
+        if (parts.isEmpty()) parts.add(lesson.subject)
+        return parts.joinToString(" · ")
     }
 
     private fun buildBreakNotification(
@@ -194,13 +209,17 @@ class ClassLiveService : Service() {
         }
         val leftMin = Duration.between(now, start).toMinutes().coerceAtLeast(0)
         val elapsed = (totalMin - leftMin).coerceIn(0, totalMin).toInt()
-        val room = next.room?.let { " · $it" }.orEmpty()
+        val showProgress = prefs.liveClassShowProgress
         val title = getString(R.string.notif_live_break_title)
-        val text = getString(
-            R.string.notif_live_break_text,
-            formatMinutes(leftMin),
-            next.subject + room,
-        )
+        val text = if (showProgress) {
+            getString(
+                R.string.notif_live_break_text,
+                formatMinutes(leftMin),
+                describeLesson(next),
+            )
+        } else {
+            describeLesson(next)
+        }
 
         return NotificationCompat.Builder(this, CHANNEL_LIVE_CLASS)
             .setSmallIcon(R.drawable.ic_notification)
@@ -209,7 +228,7 @@ class ClassLiveService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent())
-            .setProgress(totalMin.toInt(), elapsed, false)
+            .apply { if (showProgress) setProgress(totalMin.toInt(), elapsed, false) }
             .build()
     }
 

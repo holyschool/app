@@ -60,7 +60,9 @@ import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Password
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
@@ -117,12 +119,15 @@ import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
 import com.enderplusbayzuiship.edupage2.data.HapticIntensity
 import com.enderplusbayzuiship.edupage2.data.LessonGrouping
+import com.enderplusbayzuiship.edupage2.data.MotionBlurScope
+import com.enderplusbayzuiship.edupage2.data.MotionBlurStrength
 import com.enderplusbayzuiship.edupage2.data.DarkModePreference
 import com.enderplusbayzuiship.edupage2.ui.core.cards.FeatureCard
 import com.enderplusbayzuiship.edupage2.ui.core.cards.IconToggleItem
 import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
 import com.enderplusbayzuiship.edupage2.ui.core.cards.SettingsNavigationRow
 import com.enderplusbayzuiship.edupage2.ui.core.cards.SettingsSelectRow
+import com.enderplusbayzuiship.edupage2.ui.about.WhatsNewCenter
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
@@ -197,34 +202,6 @@ fun SettingsScreen(
 
     LaunchedEffect(Unit) {
         viewModel.switchAccountEvent.collect { onSwitchAccount() }
-    }
-
-    val updateState by viewModel.updateState.collectAsState()
-    var showUpdateSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(updateState) {
-        when (val state = updateState) {
-            is SettingsViewModel.UpdateCheckState.UpToDate -> {
-                android.widget.Toast.makeText(
-                    context,
-                    context.getString(R.string.update_up_to_date),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-                viewModel.consumeUpdateState()
-            }
-            is SettingsViewModel.UpdateCheckState.Failed -> {
-                android.widget.Toast.makeText(
-                    context,
-                    state.message ?: context.getString(R.string.update_check_failed),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-                viewModel.consumeUpdateState()
-            }
-            is SettingsViewModel.UpdateCheckState.Available -> {
-                showUpdateSheet = true
-            }
-            else -> Unit
-        }
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -346,24 +323,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showUpdateSheet) {
-        val info = (updateState as? SettingsViewModel.UpdateCheckState.Available)?.info
-        val downloadProgress by viewModel.downloadProgress.collectAsState()
-        if (info != null) {
-            UpdateAvailableSheet(
-                info = info,
-                downloadProgress = downloadProgress,
-                onDownload = { viewModel.downloadUpdate(info) },
-                onDismiss = {
-                    showUpdateSheet = false
-                    viewModel.consumeUpdateState()
-                },
-            )
-        } else {
-            showUpdateSheet = false
-        }
-    }
-
     if (showBackendSettings) {
         BackendSettingsBottomSheet(
             viewModel = viewModel,
@@ -438,6 +397,7 @@ private fun SettingsHub(
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val appLanguage by viewModel.appLanguage.collectAsState()
+    val mealsEnabled by viewModel.mealsEnabled.collectAsState()
     val backendMode by viewModel.backendMode.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
     val profiles by viewModel.profiles.collectAsState()
@@ -476,7 +436,7 @@ private fun SettingsHub(
                 .padding(innerPadding)
                 .scrollMotionBlur(
                     lazyListState = hubListState,
-                    enabled = MotionBlurGate.enabled,
+                    enabled = MotionBlurGate.forChrome(),
                 ),
             contentPadding = PaddingValues(
                 start = 16.dp,
@@ -517,6 +477,15 @@ private fun SettingsHub(
                         },
                         icon = Icons.Rounded.Language,
                         onClick = onLanguageClick,
+                    )
+                    FeatureCard(
+                        title = stringResource(R.string.settings_meals_enabled),
+                        description = stringResource(R.string.settings_meals_enabled_desc),
+                        icon = Icons.Rounded.Restaurant,
+                        showToggle = true,
+                        checked = mealsEnabled,
+                        onCheckedChange = { viewModel.setMealsEnabled(it) },
+                        onClick = { viewModel.setMealsEnabled(!mealsEnabled) },
                     )
                 }
 
@@ -719,7 +688,7 @@ private fun SettingsDetail(
                 .padding(innerPadding)
                 .scrollMotionBlur(
                     lazyListState = detailListState,
-                    enabled = MotionBlurGate.enabled,
+                    enabled = MotionBlurGate.forChrome(),
                 ),
             contentPadding = PaddingValues(
                 start = 16.dp,
@@ -767,10 +736,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.timetableDetail(
             val showSeconds by viewModel.showSeconds.collectAsState()
             val compactTimetable by viewModel.compactTimetable.collectAsState()
             val firstDayOfWeek by viewModel.firstDayOfWeek.collectAsState()
-            val mealsEnabled by viewModel.mealsEnabled.collectAsState()
             val cancelledLessonStyle by viewModel.cancelledLessonStyle.collectAsState()
             val lessonGrouping by viewModel.lessonGrouping.collectAsState()
-            val liveClassNotif by viewModel.liveClassNotif.collectAsState()
             val context = LocalContext.current
 
             SettingsSelectRow(
@@ -826,13 +793,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.timetableDetail(
                 selectedOption = firstDayOfWeek,
                 onOptionSelected = { viewModel.setFirstDayOfWeek(it) }
             )
-            IconToggleItem(
-                icon = Icons.Rounded.Restaurant,
-                title = stringResource(R.string.settings_meals_enabled),
-                description = stringResource(R.string.settings_meals_enabled_desc),
-                checked = mealsEnabled,
-                onCheckedChange = { viewModel.setMealsEnabled(it) }
-            )
             SettingsSelectRow(
                 title = stringResource(R.string.settings_cancelled_lesson_style),
                 icon = Icons.Rounded.Palette,
@@ -862,20 +822,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.timetableDetail(
                 ),
                 selectedOption = lessonGrouping,
                 onOptionSelected = { viewModel.setLessonGrouping(it) }
-            )
-            IconToggleItem(
-                icon = Icons.Rounded.Notifications,
-                title = stringResource(R.string.settings_live_class),
-                description = stringResource(R.string.settings_live_class_desc),
-                checked = liveClassNotif,
-                onCheckedChange = {
-                    viewModel.setLiveClassNotif(it)
-                    if (it) {
-                        com.enderplusbayzuiship.edupage2.notification.ClassLiveController.start(context)
-                    } else {
-                        com.enderplusbayzuiship.edupage2.notification.ClassLiveController.stop(context)
-                    }
-                }
             )
         }
         RoundedCardContainer { Rows() }
@@ -955,6 +901,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.appearanceDetail(
             val accentColor by viewModel.accentColor.collectAsState()
             val hapticIntensity by viewModel.hapticIntensity.collectAsState()
             val motionBlurEnabled by viewModel.motionBlurEnabled.collectAsState()
+            val motionBlurScope by viewModel.motionBlurScope.collectAsState()
+            val motionBlurStrength by viewModel.motionBlurStrength.collectAsState()
 
             SettingsSelectRow(
                 title = stringResource(R.string.settings_haptics),
@@ -974,6 +922,31 @@ private fun androidx.compose.foundation.lazy.LazyListScope.appearanceDetail(
                 checked = motionBlurEnabled,
                 onCheckedChange = { viewModel.setMotionBlurEnabled(it) }
             )
+            AnimatedVisibility(visible = motionBlurEnabled) {
+                Column {
+                    SettingsSelectRow(
+                        title = stringResource(R.string.settings_motion_blur_scope),
+                        icon = Icons.Filled.BlurOn,
+                        options = listOf(
+                            MotionBlurScope.FULL to stringResource(R.string.settings_motion_blur_scope_full),
+                            MotionBlurScope.TABS to stringResource(R.string.settings_motion_blur_scope_tabs)
+                        ),
+                        selectedOption = motionBlurScope,
+                        onOptionSelected = { viewModel.setMotionBlurScope(it) }
+                    )
+                    SettingsSelectRow(
+                        title = stringResource(R.string.settings_motion_blur_strength),
+                        icon = Icons.Filled.BlurOn,
+                        options = listOf(
+                            MotionBlurStrength.SUBTLE to stringResource(R.string.settings_motion_blur_strength_subtle),
+                            MotionBlurStrength.NORMAL to stringResource(R.string.settings_motion_blur_strength_normal),
+                            MotionBlurStrength.STRONG to stringResource(R.string.settings_motion_blur_strength_strong)
+                        ),
+                        selectedOption = motionBlurStrength,
+                        onOptionSelected = { viewModel.setMotionBlurStrength(it) }
+                    )
+                }
+            }
 
             SettingsSelectRow(
                 title = stringResource(R.string.settings_dark_mode),
@@ -1068,8 +1041,19 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
         SettingsSectionHeader(text = stringResource(R.string.settings_section_notifications))
         @Composable
         fun MasterRows() {
+            val context = LocalContext.current
             val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
             val notifCheckIntervalMinutes by viewModel.notifCheckIntervalMinutes.collectAsState()
+            val liveClassNotif by viewModel.liveClassNotif.collectAsState()
+            val liveClassShowSubject by viewModel.liveClassShowSubject.collectAsState()
+            val liveClassShowRoom by viewModel.liveClassShowRoom.collectAsState()
+            val liveClassShowTeacher by viewModel.liveClassShowTeacher.collectAsState()
+            val liveClassShowProgress by viewModel.liveClassShowProgress.collectAsState()
+            val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+            ) { granted ->
+                if (granted) viewModel.setNotificationsEnabled(true)
+            }
 
             IconToggleItem(
                 icon = Icons.Rounded.Notifications,
@@ -1077,7 +1061,19 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
                 description = if (notificationsEnabled) stringResource(R.string.settings_notif_desc_on)
                 else stringResource(R.string.settings_notif_desc_off),
                 checked = notificationsEnabled,
-                onCheckedChange = { viewModel.setNotificationsEnabled(it) }
+                onCheckedChange = { enable ->
+                    if (!enable) {
+                        viewModel.setNotificationsEnabled(false)
+                    } else if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+                        androidx.core.content.ContextCompat.checkSelfPermission(
+                            context, android.Manifest.permission.POST_NOTIFICATIONS,
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        viewModel.setNotificationsEnabled(true)
+                    } else {
+                        permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
             )
             AnimatedVisibility(visible = notificationsEnabled) {
                 SettingsSelectRow(
@@ -1092,6 +1088,53 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
                     selectedOption = notifCheckIntervalMinutes,
                     onOptionSelected = { viewModel.setNotifCheckIntervalMinutes(it) }
                 )
+            }
+            IconToggleItem(
+                icon = Icons.Rounded.PlayArrow,
+                title = stringResource(R.string.settings_live_class),
+                description = stringResource(R.string.settings_live_class_desc),
+                checked = liveClassNotif,
+                onCheckedChange = {
+                    viewModel.setLiveClassNotif(it)
+                    if (it) {
+                        com.enderplusbayzuiship.edupage2.notification.ClassLiveController.start(context)
+                    } else {
+                        com.enderplusbayzuiship.edupage2.notification.ClassLiveController.stop(context)
+                    }
+                },
+            )
+            AnimatedVisibility(visible = liveClassNotif) {
+                Column {
+                    SectionLabel(
+                        text = stringResource(R.string.settings_live_class_display),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    IconToggleItem(
+                        icon = Icons.Rounded.Grade,
+                        title = stringResource(R.string.settings_live_class_show_subject),
+                        checked = liveClassShowSubject,
+                        onCheckedChange = { viewModel.setLiveClassShowSubject(it) },
+                    )
+                    IconToggleItem(
+                        icon = Icons.Rounded.Home,
+                        title = stringResource(R.string.settings_live_class_show_room),
+                        checked = liveClassShowRoom,
+                        onCheckedChange = { viewModel.setLiveClassShowRoom(it) },
+                    )
+                    IconToggleItem(
+                        icon = Icons.Rounded.Person,
+                        title = stringResource(R.string.settings_live_class_show_teacher),
+                        checked = liveClassShowTeacher,
+                        onCheckedChange = { viewModel.setLiveClassShowTeacher(it) },
+                    )
+                    IconToggleItem(
+                        icon = Icons.Filled.Timer,
+                        title = stringResource(R.string.settings_live_class_show_progress),
+                        description = stringResource(R.string.settings_live_class_show_progress_desc),
+                        checked = liveClassShowProgress,
+                        onCheckedChange = { viewModel.setLiveClassShowProgress(it) },
+                    )
+                }
             }
         }
         RoundedCardContainer { MasterRows() }
@@ -1290,14 +1333,44 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dataAboutDetail(
     item {
         @Composable
         fun UpdateRows() {
+            val context = LocalContext.current
             val autoCheckUpdates by viewModel.autoCheckUpdates.collectAsState()
-            val updateStateLocal by viewModel.updateState.collectAsState()
-            val checking = updateStateLocal is SettingsViewModel.UpdateCheckState.Checking
+            val updateState by viewModel.updateState.collectAsState()
+            val checking = updateState is SettingsViewModel.UpdateCheckState.Checking
+
+            LaunchedEffect(updateState) {
+                when (val state = updateState) {
+                    is SettingsViewModel.UpdateCheckState.UpToDate -> {
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.update_up_to_date),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        viewModel.consumeUpdateState()
+                    }
+                    is SettingsViewModel.UpdateCheckState.Failed -> {
+                        android.widget.Toast.makeText(
+                            context,
+                            state.message ?: context.getString(R.string.update_check_failed),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        viewModel.consumeUpdateState()
+                    }
+                    is SettingsViewModel.UpdateCheckState.Available -> {
+                        com.enderplusbayzuiship.edupage2.network.UpdateCenter.post(state.info)
+                        viewModel.consumeUpdateState()
+                    }
+                    else -> Unit
+                }
+            }
 
             IconToggleItem(
                 icon = Icons.Filled.Refresh,
                 title = stringResource(R.string.update_auto_check),
-                description = stringResource(R.string.update_auto_check_desc),
+                description = stringResource(
+                    R.string.update_auto_check_desc,
+                    viewModel.appVersionName(),
+                ),
                 checked = autoCheckUpdates,
                 onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
             )
@@ -1316,6 +1389,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dataAboutDetail(
     }
     item {
         RoundedCardContainer {
+            SettingsNavigationRow(
+                title = stringResource(R.string.whats_new_title),
+                description = stringResource(R.string.whats_new_retrigger_desc),
+                icon = Icons.Rounded.Info,
+                onClick = { WhatsNewCenter.request() }
+            )
             SettingsNavigationRow(
                 title = stringResource(R.string.about_title),
                 icon = Icons.Rounded.Info,

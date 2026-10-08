@@ -10,6 +10,7 @@ import androidx.work.Configuration
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import com.enderplusbayzuiship.edupage2.notification.GradeMessageCheckWorker
+import com.enderplusbayzuiship.edupage2.network.UpdateCenter
 import com.enderplusbayzuiship.edupage2.ui.widgets.WidgetUpdater
 import com.enderplusbayzuiship.edupage2.util.LocaleHelper
 import com.enderplusbayzuiship.edupage2.ui.util.ConnectivityObserver
@@ -58,6 +59,9 @@ class EdupageApp : Application(), Configuration.Provider {
         WidgetUpdater.schedulePeriodic(this)
         if (appPreferences.liveClassNotif) {
             com.enderplusbayzuiship.edupage2.notification.ClassLiveController.start(this)
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            UpdateCenter.checkOnBoot(appPreferences, appPreferences.appVersionName)
         }
     }
 
