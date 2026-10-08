@@ -8,15 +8,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -695,7 +692,7 @@ private enum class CreateStep(val questionRes: Int) {
     val optional: Boolean get() = this != TITLE
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeworkCreateWizard(
     existingSubjects: List<String>,
@@ -711,6 +708,7 @@ private fun HomeworkCreateWizard(
     var notes by remember { mutableStateOf("") }
     var iconKey by remember { mutableStateOf<String?>(null) }
     var ownSubject by remember { mutableStateOf(existingSubjects.isEmpty()) }
+    var subjectMenuExpanded by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     val untitledLabel = stringResource(R.string.homework_untitled)
     val today = remember { LocalDate.now() }
@@ -777,41 +775,61 @@ private fun HomeworkCreateWizard(
                 )
 
                 CreateStep.SUBJECT -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 200.dp)
-                            .verticalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ExposedDropdownMenuBox(
+                        expanded = subjectMenuExpanded,
+                        onExpandedChange = { subjectMenuExpanded = !subjectMenuExpanded },
                     ) {
-                        existingSubjects.forEach { suggestion ->
-                            FilterChip(
-                                selected = !ownSubject && subject.equals(suggestion, ignoreCase = true),
+                        OutlinedTextField(
+                            value = when {
+                                ownSubject -> stringResource(R.string.homework_subject_own)
+                                else -> subject
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            placeholder = { Text(stringResource(R.string.homework_subject_label)) },
+                            singleLine = true,
+                            shape = fieldShape,
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = subjectMenuExpanded)
+                            },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = subjectMenuExpanded,
+                            onDismissRequest = { subjectMenuExpanded = false },
+                        ) {
+                            existingSubjects.forEach { suggestion ->
+                                DropdownMenuItem(
+                                    text = { Text(suggestion) },
+                                    onClick = {
+                                        haptics.virtualKey()
+                                        ownSubject = false
+                                        subject = suggestion
+                                        subjectMenuExpanded = false
+                                    },
+                                )
+                            }
+                            if (existingSubjects.isNotEmpty()) {
+                                HorizontalDivider()
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.homework_subject_own)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Edit,
+                                        contentDescription = null,
+                                    )
+                                },
                                 onClick = {
                                     haptics.virtualKey()
-                                    ownSubject = false
-                                    subject = suggestion
+                                    ownSubject = true
+                                    subject = ""
+                                    subjectMenuExpanded = false
                                 },
-                                label = { Text(suggestion) },
                             )
                         }
-                        FilterChip(
-                            selected = ownSubject,
-                            onClick = {
-                                haptics.virtualKey()
-                                ownSubject = true
-                                subject = ""
-                            },
-                            label = { Text(stringResource(R.string.homework_subject_own)) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Edit,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            },
-                        )
                     }
                     if (ownSubject) {
                         OutlinedTextField(
