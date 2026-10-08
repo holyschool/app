@@ -99,6 +99,8 @@
     <string name="messages_refresh">Refresh</string>
     <string name="messages_unknown_sender">Unknown</string>
     <string name="messages_load_more">Load more</string>
+    <string name="messages_view_categories">Categories</string>
+    <string name="messages_view_all">All</string>
     <string name="messages_compose">Compose</string>
     <string name="messages_send">Send</string>
     <string name="messages_recipient_hint">Recipients</string>
@@ -303,6 +305,12 @@
     <string name="settings_notif_messages_desc">Get notified when you receive a message.</string>
     <string name="settings_notif_substitutions">Timetable changes</string>
     <string name="settings_notif_substitutions_desc">Get notified about substitutions and cancellations.</string>
+
+    <string name="settings_section_messages">Messages</string>
+    <string name="settings_messages_priority">Priority messages</string>
+    <string name="settings_messages_priority_desc">Show important and starred messages first, skipping categories.</string>
+    <string name="settings_messages_new_on_top">New messages on top</string>
+    <string name="settings_messages_new_on_top_desc">Mix categories and keep unread messages at the top.</string>
 
     <string name="settings_section_developer">Developer</string>
     <string name="settings_developer_options">Developer options</string>

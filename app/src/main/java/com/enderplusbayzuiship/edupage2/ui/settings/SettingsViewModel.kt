@@ -175,6 +175,12 @@ class SettingsViewModel @Inject constructor(
     private val _keepScreenAwake = MutableStateFlow(appPreferences.keepScreenAwake)
     val keepScreenAwake: StateFlow<Boolean> = _keepScreenAwake.asStateFlow()
 
+    private val _messagesPriority = MutableStateFlow(appPreferences.messagesPriority)
+    val messagesPriority: StateFlow<Boolean> = _messagesPriority.asStateFlow()
+
+    private val _messagesNewOnTop = MutableStateFlow(appPreferences.messagesNewOnTop)
+    val messagesNewOnTop: StateFlow<Boolean> = _messagesNewOnTop.asStateFlow()
+
     private val _defaultTab = MutableStateFlow(appPreferences.defaultTab)
     val defaultTab: StateFlow<Int> = _defaultTab.asStateFlow()
 
@@ -401,6 +407,16 @@ class SettingsViewModel @Inject constructor(
     fun setKeepScreenAwake(value: Boolean) {
         appPreferences.keepScreenAwake = value
         _keepScreenAwake.value = value
+    }
+
+    fun setMessagesPriority(value: Boolean) {
+        appPreferences.messagesPriority = value
+        _messagesPriority.value = value
+    }
+
+    fun setMessagesNewOnTop(value: Boolean) {
+        appPreferences.messagesNewOnTop = value
+        _messagesNewOnTop.value = value
     }
 
     fun setDefaultTab(value: Int) {

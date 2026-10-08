@@ -11,6 +11,7 @@ import com.edupage.api.model.people.EduAccount
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.LocalHomeworkStore
+import com.enderplusbayzuiship.edupage2.data.MessagesViewMode
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import com.enderplusbayzuiship.edupage2.ui.util.isNetworkError
@@ -18,6 +19,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +88,22 @@ class MessagesViewModel @Inject constructor(
 
     fun consumeImportedHomework() {
         _importedHomework.value = 0
+    }
+
+    val viewModeFlow: Flow<MessagesViewMode> = prefs.messagesViewModeFlow
+    val priorityFlow: Flow<Boolean> = prefs.messagesPriorityFlow
+    val newOnTopFlow: Flow<Boolean> = prefs.messagesNewOnTopFlow
+
+    fun setViewMode(mode: MessagesViewMode) {
+        prefs.messagesViewMode = mode
+    }
+
+    fun setPriorityMessages(value: Boolean) {
+        prefs.messagesPriority = value
+    }
+
+    fun setNewOnTop(value: Boolean) {
+        prefs.messagesNewOnTop = value
     }
 
     private var allEvents: List<TimelineEvent> = emptyList()

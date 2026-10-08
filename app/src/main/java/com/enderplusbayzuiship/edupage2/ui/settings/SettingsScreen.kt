@@ -63,11 +63,13 @@ import androidx.compose.material.icons.rounded.Password
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VerticalAlignTop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1171,6 +1173,31 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
             )
         }
         RoundedCardContainer { TypeRows() }
+    }
+    item {
+        Spacer(modifier = Modifier.height(20.dp))
+        SettingsSectionHeader(text = stringResource(R.string.settings_section_messages))
+        @Composable
+        fun MessagesRows() {
+            val messagesPriority by viewModel.messagesPriority.collectAsState()
+            val messagesNewOnTop by viewModel.messagesNewOnTop.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.PriorityHigh,
+                title = stringResource(R.string.settings_messages_priority),
+                description = stringResource(R.string.settings_messages_priority_desc),
+                checked = messagesPriority,
+                onCheckedChange = { viewModel.setMessagesPriority(it) },
+            )
+            IconToggleItem(
+                icon = Icons.Rounded.VerticalAlignTop,
+                title = stringResource(R.string.settings_messages_new_on_top),
+                description = stringResource(R.string.settings_messages_new_on_top_desc),
+                checked = messagesNewOnTop,
+                onCheckedChange = { viewModel.setMessagesNewOnTop(it) },
+            )
+        }
+        RoundedCardContainer { MessagesRows() }
     }
 }
 

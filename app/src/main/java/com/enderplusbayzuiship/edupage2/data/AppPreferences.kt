@@ -132,6 +132,16 @@ enum class TimetableViewMode(val key: String) {
     }
 }
 
+enum class MessagesViewMode(val key: String) {
+    CATEGORIES("categories"),
+    ALL("all");
+
+    companion object {
+        val DEFAULT = CATEGORIES
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
 @Singleton
 class AppPreferences @Inject constructor(
     @ApplicationContext private val context: Context
@@ -198,6 +208,10 @@ class AppPreferences @Inject constructor(
         private const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"
         private const val KEY_DEFAULT_TAB = "default_tab"
         private const val KEY_FIRST_DAY_OF_WEEK = "first_day_of_week"
+
+        private const val KEY_MESSAGES_VIEW_MODE = "messages_view_mode"
+        private const val KEY_MESSAGES_PRIORITY = "messages_priority"
+        private const val KEY_MESSAGES_NEW_ON_TOP = "messages_new_on_top"
 
         private const val OFFICIAL_BACKEND_URL = "https://edupage.stwupid.tech"
         private const val OFFICIAL_BACKEND_KEY = "change-this-long-random"
@@ -469,6 +483,33 @@ class AppPreferences @Inject constructor(
     val firstDayOfWeekFlow: Flow<Int> = prefFlow(
         key = KEY_FIRST_DAY_OF_WEEK,
         current = { firstDayOfWeek },
+    )
+
+    var messagesViewMode: MessagesViewMode
+        get() = MessagesViewMode.fromKey(prefs.getString(KEY_MESSAGES_VIEW_MODE, null))
+        set(value) = prefs.edit().putString(KEY_MESSAGES_VIEW_MODE, value.key).apply()
+
+    val messagesViewModeFlow: Flow<MessagesViewMode> = prefFlow(
+        key = KEY_MESSAGES_VIEW_MODE,
+        current = { messagesViewMode },
+    )
+
+    var messagesPriority: Boolean
+        get() = prefs.getBoolean(KEY_MESSAGES_PRIORITY, false)
+        set(value) = prefs.edit().putBoolean(KEY_MESSAGES_PRIORITY, value).apply()
+
+    val messagesPriorityFlow: Flow<Boolean> = prefFlow(
+        key = KEY_MESSAGES_PRIORITY,
+        current = { messagesPriority },
+    )
+
+    var messagesNewOnTop: Boolean
+        get() = prefs.getBoolean(KEY_MESSAGES_NEW_ON_TOP, false)
+        set(value) = prefs.edit().putBoolean(KEY_MESSAGES_NEW_ON_TOP, value).apply()
+
+    val messagesNewOnTopFlow: Flow<Boolean> = prefFlow(
+        key = KEY_MESSAGES_NEW_ON_TOP,
+        current = { messagesNewOnTop },
     )
 
     fun clearSeenIds() {
