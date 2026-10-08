@@ -156,11 +156,11 @@ fun SubjectIconEditorSheet(
                         },
                         onSkip = {
                             haptics.virtualKey()
-                            if (editingIndex >= selected.lastIndex) editingIndex = -1 else editingIndex += 1
+                            if (editingIndex >= selected.lastIndex) onDismiss() else editingIndex += 1
                         },
                         onNext = {
                             haptics.virtualKey()
-                            if (editingIndex >= selected.lastIndex) editingIndex = -1 else editingIndex += 1
+                            if (editingIndex >= selected.lastIndex) onDismiss() else editingIndex += 1
                         },
                     )
                 }
@@ -462,16 +462,16 @@ private fun EditSubjectStep(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TextButton(onClick = onBack) {
-                Text(stringResource(R.string.homework_back))
+                Text(stringResource(R.string.subject_icons_back))
             }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onSkip) {
-                Text(stringResource(R.string.homework_skip))
+                Text(stringResource(R.string.subject_icons_skip))
             }
             Button(onClick = onNext) {
                 Text(
                     stringResource(
-                        if (index >= total - 1) R.string.homework_finish else R.string.homework_next
+                        if (index >= total - 1) R.string.subject_icons_finish else R.string.subject_icons_next
                     )
                 )
             }

@@ -56,6 +56,7 @@ import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Grade
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.List
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.MenuBook
@@ -141,6 +142,7 @@ import com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate
 import com.enderplusbayzuiship.edupage2.ui.modifiers.scrollMotionBlur
 import com.enderplusbayzuiship.edupage2.ui.modifiers.transitionMotionBlur
 import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconEditorSheet
+import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconsOverviewSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
 private enum class SettingsSection {
@@ -174,6 +176,7 @@ fun SettingsScreen(
     var showBackendSettings by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
     var showSubjectIconsEditor by remember { mutableStateOf(false) }
+    var showSubjectIconsOverview by remember { mutableStateOf(false) }
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showDisablePinDialog by remember { mutableStateOf(false) }
     var showChangePinDialog by remember { mutableStateOf(false) }
@@ -322,6 +325,10 @@ fun SettingsScreen(
                     haptics.virtualKey()
                     showSubjectIconsEditor = true
                 },
+                onViewSubjects = {
+                    haptics.virtualKey()
+                    showSubjectIconsOverview = true
+                },
                 viewModel = viewModel,
             )
             }
@@ -345,6 +352,12 @@ fun SettingsScreen(
     if (showSubjectIconsEditor) {
         SubjectIconEditorSheet(
             onDismiss = { showSubjectIconsEditor = false },
+        )
+    }
+
+    if (showSubjectIconsOverview) {
+        SubjectIconsOverviewSheet(
+            onDismiss = { showSubjectIconsOverview = false },
         )
     }
 
@@ -675,6 +688,7 @@ private fun SettingsDetail(
     onChangePin: () -> Unit,
     onExport: () -> Unit,
     onEditSubjectIcons: () -> Unit,
+    onViewSubjects: () -> Unit,
     viewModel: SettingsViewModel,
 ) {
     val title = when (section) {
@@ -745,6 +759,7 @@ private fun SettingsDetail(
                 SettingsSection.EXPERIMENTAL -> experimentalDetail(
                     viewModel = viewModel,
                     onEditSubjectIcons = onEditSubjectIcons,
+                    onViewSubjects = onViewSubjects,
                 )
                 SettingsSection.ACCOUNTS -> accountsDetail(viewModel, onLogout)
                 SettingsSection.DATA_ABOUT -> dataAboutDetail(
@@ -1239,12 +1254,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
 private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
     viewModel: SettingsViewModel,
     onEditSubjectIcons: () -> Unit,
+    onViewSubjects: () -> Unit,
 ) {
     item {
         SettingsSectionHeader(text = stringResource(R.string.settings_section_experimental_features))
         @Composable
         fun Rows() {
             val subjectIconsEnabled by viewModel.subjectIconsEnabled.collectAsState()
+            val subjectStyles by viewModel.subjectStyles.collectAsState()
 
             IconToggleItem(
                 icon = Icons.Rounded.Category,
@@ -1254,12 +1271,22 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
                 onCheckedChange = { viewModel.setSubjectIconsEnabled(it) },
             )
             AnimatedVisibility(visible = subjectIconsEnabled) {
-                SettingsNavigationRow(
-                    title = stringResource(R.string.settings_subject_icons_edit),
-                    description = stringResource(R.string.settings_subject_icons_edit_desc),
-                    icon = Icons.Rounded.Edit,
-                    onClick = onEditSubjectIcons,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_subject_icons_edit),
+                        description = stringResource(R.string.settings_subject_icons_edit_desc),
+                        icon = Icons.Rounded.Edit,
+                        onClick = onEditSubjectIcons,
+                    )
+                    if (subjectStyles.isNotEmpty()) {
+                        SettingsNavigationRow(
+                            title = stringResource(R.string.subject_icons_view),
+                            description = stringResource(R.string.subject_icons_view_desc),
+                            icon = Icons.Rounded.List,
+                            onClick = onViewSubjects,
+                        )
+                    }
+                }
             }
         }
         RoundedCardContainer { Rows() }

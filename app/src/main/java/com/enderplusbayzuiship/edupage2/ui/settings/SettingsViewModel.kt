@@ -24,6 +24,8 @@ import com.enderplusbayzuiship.edupage2.data.DataExporter
 import com.enderplusbayzuiship.edupage2.data.LockStore
 import com.enderplusbayzuiship.edupage2.data.GradesCache
 import com.enderplusbayzuiship.edupage2.data.MealsCache
+import com.enderplusbayzuiship.edupage2.data.SubjectStyle
+import com.enderplusbayzuiship.edupage2.data.SubjectStyleStore
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
@@ -53,6 +55,7 @@ class SettingsViewModel @Inject constructor(
     private val gradesCache: GradesCache,
     private val timelineCache: TimelineCache,
     private val mealsCache: MealsCache,
+    private val subjectStyleStore: SubjectStyleStore,
     private val backendRegistrationManager: BackendRegistrationManager,
     private val dataExporter: DataExporter,
     private val updateChecker: com.enderplusbayzuiship.edupage2.network.UpdateChecker,
@@ -183,6 +186,8 @@ class SettingsViewModel @Inject constructor(
 
     private val _subjectIconsEnabled = MutableStateFlow(appPreferences.subjectIconsEnabled)
     val subjectIconsEnabled: StateFlow<Boolean> = _subjectIconsEnabled.asStateFlow()
+
+    val subjectStyles: StateFlow<Map<String, SubjectStyle>> = subjectStyleStore.styles
 
     private val _defaultTab = MutableStateFlow(appPreferences.defaultTab)
     val defaultTab: StateFlow<Int> = _defaultTab.asStateFlow()
