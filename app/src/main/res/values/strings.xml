@@ -312,6 +312,24 @@
     <string name="settings_messages_new_on_top">New messages on top</string>
     <string name="settings_messages_new_on_top_desc">Mix categories and keep unread messages at the top.</string>
 
+    <string name="settings_section_experimental_features">Experimental Features</string>
+    <string name="settings_subject_icons">Subject Icons</string>
+    <string name="settings_subject_icons_desc">Show a custom icon and color for each subject instead of letters.</string>
+    <string name="settings_subject_icons_edit">Edit subject icons</string>
+    <string name="settings_subject_icons_edit_desc">Choose subjects, then an icon and color</string>
+
+    <string name="subject_icons_loading">Loading subjects…</string>
+    <string name="subject_icons_error">Couldn\'t load subjects</string>
+    <string name="subject_icons_step_select">Choose subjects</string>
+    <string name="subject_icons_select_hint">Pick the subjects you want to customize.</string>
+    <string name="subject_icons_fallback_note">Showing all school subjects</string>
+    <string name="subject_icons_select_all">Select all</string>
+    <string name="subject_icons_clear_all">Clear</string>
+    <string name="subject_icons_next">Next</string>
+    <string name="subject_icons_icon_label">Icon</string>
+    <string name="subject_icons_none">None</string>
+    <string name="subject_icons_color_label">Color</string>
+
     <string name="settings_section_developer">Developer</string>
     <string name="settings_developer_options">Developer options</string>
 
@@ -353,6 +371,7 @@
     <string name="settings_hub_notifications_desc">Alerts and check interval</string>
     <string name="settings_hub_data_desc">Homework, files and export</string>
     <string name="settings_hub_developer_desc">Tools and diagnostics</string>
+    <string name="settings_hub_experimental_desc">Try beta features before they are ready</string>
 
     <string name="dev_options_title">Developer Options</string>
     <string name="dev_section_device">Device &amp; Account</string>

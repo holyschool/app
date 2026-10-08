@@ -181,6 +181,9 @@ class SettingsViewModel @Inject constructor(
     private val _messagesNewOnTop = MutableStateFlow(appPreferences.messagesNewOnTop)
     val messagesNewOnTop: StateFlow<Boolean> = _messagesNewOnTop.asStateFlow()
 
+    private val _subjectIconsEnabled = MutableStateFlow(appPreferences.subjectIconsEnabled)
+    val subjectIconsEnabled: StateFlow<Boolean> = _subjectIconsEnabled.asStateFlow()
+
     private val _defaultTab = MutableStateFlow(appPreferences.defaultTab)
     val defaultTab: StateFlow<Int> = _defaultTab.asStateFlow()
 
@@ -417,6 +420,11 @@ class SettingsViewModel @Inject constructor(
     fun setMessagesNewOnTop(value: Boolean) {
         appPreferences.messagesNewOnTop = value
         _messagesNewOnTop.value = value
+    }
+
+    fun setSubjectIconsEnabled(value: Boolean) {
+        appPreferences.subjectIconsEnabled = value
+        _subjectIconsEnabled.value = value
     }
 
     fun setDefaultTab(value: Int) {

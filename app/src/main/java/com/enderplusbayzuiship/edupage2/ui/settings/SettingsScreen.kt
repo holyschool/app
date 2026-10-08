@@ -41,12 +41,14 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.EventNote
 import androidx.compose.material.icons.rounded.FileDownload
@@ -67,6 +69,7 @@ import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerticalAlignTop
@@ -137,6 +140,7 @@ import com.enderplusbayzuiship.edupage2.ui.update.UpdateAvailableSheet
 import com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate
 import com.enderplusbayzuiship.edupage2.ui.modifiers.scrollMotionBlur
 import com.enderplusbayzuiship.edupage2.ui.modifiers.transitionMotionBlur
+import com.enderplusbayzuiship.edupage2.ui.subjects.SubjectIconEditorSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
 private enum class SettingsSection {
@@ -145,6 +149,7 @@ private enum class SettingsSection {
     APPEARANCE,
     SECURITY,
     NOTIFICATIONS,
+    EXPERIMENTAL,
     ACCOUNTS,
     DATA_ABOUT,
 }
@@ -168,6 +173,7 @@ fun SettingsScreen(
     var openSection by remember { mutableStateOf<SettingsSection?>(null) }
     var showBackendSettings by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
+    var showSubjectIconsEditor by remember { mutableStateOf(false) }
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showDisablePinDialog by remember { mutableStateOf(false) }
     var showChangePinDialog by remember { mutableStateOf(false) }
@@ -312,6 +318,10 @@ fun SettingsScreen(
                         Log.e("SettingsScreen", "unable to launch export", it)
                     }
                 },
+                onEditSubjectIcons = {
+                    haptics.virtualKey()
+                    showSubjectIconsEditor = true
+                },
                 viewModel = viewModel,
             )
             }
@@ -329,6 +339,12 @@ fun SettingsScreen(
         BackendSettingsBottomSheet(
             viewModel = viewModel,
             onDismiss = { showBackendSettings = false }
+        )
+    }
+
+    if (showSubjectIconsEditor) {
+        SubjectIconEditorSheet(
+            onDismiss = { showSubjectIconsEditor = false },
         )
     }
 
@@ -580,6 +596,19 @@ private fun SettingsHub(
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
+                SettingsSectionHeader(text = stringResource(R.string.settings_section_experimental_features))
+                RoundedCardContainer {
+                    FeatureCard(
+                        title = stringResource(R.string.settings_section_experimental_features),
+                        description = stringResource(R.string.settings_hub_experimental_desc),
+                        icon = Icons.Rounded.Science,
+                        onClick = { onOpenSection(SettingsSection.EXPERIMENTAL) },
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsSectionHeader(text = stringResource(R.string.settings_section_about))
                 RoundedCardContainer {
                     FeatureCard(
@@ -645,6 +674,7 @@ private fun SettingsDetail(
     onDisablePin: () -> Unit,
     onChangePin: () -> Unit,
     onExport: () -> Unit,
+    onEditSubjectIcons: () -> Unit,
     viewModel: SettingsViewModel,
 ) {
     val title = when (section) {
@@ -653,6 +683,7 @@ private fun SettingsDetail(
         SettingsSection.APPEARANCE -> stringResource(R.string.settings_section_appearance)
         SettingsSection.SECURITY -> stringResource(R.string.settings_section_security)
         SettingsSection.NOTIFICATIONS -> stringResource(R.string.settings_section_notifications)
+        SettingsSection.EXPERIMENTAL -> stringResource(R.string.settings_section_experimental_features)
         SettingsSection.ACCOUNTS -> stringResource(R.string.settings_section_accounts)
         SettingsSection.DATA_ABOUT -> stringResource(R.string.settings_section_about)
     }
@@ -711,6 +742,10 @@ private fun SettingsDetail(
                     onChangePin = onChangePin,
                 )
                 SettingsSection.NOTIFICATIONS -> notificationsDetail(viewModel)
+                SettingsSection.EXPERIMENTAL -> experimentalDetail(
+                    viewModel = viewModel,
+                    onEditSubjectIcons = onEditSubjectIcons,
+                )
                 SettingsSection.ACCOUNTS -> accountsDetail(viewModel, onLogout)
                 SettingsSection.DATA_ABOUT -> dataAboutDetail(
                     onHomework = onHomework,
@@ -1198,6 +1233,36 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
             )
         }
         RoundedCardContainer { MessagesRows() }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
+    viewModel: SettingsViewModel,
+    onEditSubjectIcons: () -> Unit,
+) {
+    item {
+        SettingsSectionHeader(text = stringResource(R.string.settings_section_experimental_features))
+        @Composable
+        fun Rows() {
+            val subjectIconsEnabled by viewModel.subjectIconsEnabled.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.Category,
+                title = stringResource(R.string.settings_subject_icons),
+                description = stringResource(R.string.settings_subject_icons_desc),
+                checked = subjectIconsEnabled,
+                onCheckedChange = { viewModel.setSubjectIconsEnabled(it) },
+            )
+            AnimatedVisibility(visible = subjectIconsEnabled) {
+                SettingsNavigationRow(
+                    title = stringResource(R.string.settings_subject_icons_edit),
+                    description = stringResource(R.string.settings_subject_icons_edit_desc),
+                    icon = Icons.Rounded.Edit,
+                    onClick = onEditSubjectIcons,
+                )
+            }
+        }
+        RoundedCardContainer { Rows() }
     }
 }
 

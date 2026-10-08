@@ -213,6 +213,8 @@ class AppPreferences @Inject constructor(
         private const val KEY_MESSAGES_PRIORITY = "messages_priority"
         private const val KEY_MESSAGES_NEW_ON_TOP = "messages_new_on_top"
 
+        private const val KEY_SUBJECT_ICONS_ENABLED = "subject_icons_enabled"
+
         private const val OFFICIAL_BACKEND_URL = "https://edupage.stwupid.tech"
         private const val OFFICIAL_BACKEND_KEY = "change-this-long-random"
     }
@@ -510,6 +512,15 @@ class AppPreferences @Inject constructor(
     val messagesNewOnTopFlow: Flow<Boolean> = prefFlow(
         key = KEY_MESSAGES_NEW_ON_TOP,
         current = { messagesNewOnTop },
+    )
+
+    var subjectIconsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SUBJECT_ICONS_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_SUBJECT_ICONS_ENABLED, value).apply()
+
+    val subjectIconsEnabledFlow: Flow<Boolean> = prefFlow(
+        key = KEY_SUBJECT_ICONS_ENABLED,
+        current = { subjectIconsEnabled },
     )
 
     fun clearSeenIds() {
