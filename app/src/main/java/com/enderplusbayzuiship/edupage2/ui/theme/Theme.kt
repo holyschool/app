@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.enderplusbayzuiship.edupage2.data.AccentColor
 
 private val LightColorScheme = lightColorScheme(
     primary                = Primary40,
@@ -40,6 +41,8 @@ private val LightColorScheme = lightColorScheme(
     surfaceContainer       = SurfaceContainer,
     surfaceContainerHigh   = SurfaceContainerHigh,
     surfaceContainerHighest= SurfaceContainerHighest,
+    surfaceBright          = SurfaceBrightLight,
+    surfaceDim             = SurfaceDimLight,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -71,6 +74,8 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainer       = SurfaceContainerDark,
     surfaceContainerHigh   = SurfaceContainerHighDark,
     surfaceContainerHighest= SurfaceContainerHighestDark,
+    surfaceBright          = SurfaceBrightDark,
+    surfaceDim             = SurfaceDimDark,
 )
 
 private val AmoledBlack = Color(0xFF000000)
@@ -81,15 +86,33 @@ fun Edupage2Theme(
     dynamicColor: Boolean = true,
 
     amoled: Boolean = false,
+    accent: AccentColor = AccentColor.DEFAULT,
     content: @Composable () -> Unit
 ) {
+    val customAccent = accent != AccentColor.DEFAULT
     val baseScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        dynamicColor && !customAccent && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else      -> LightColorScheme
+        darkTheme -> {
+            val roles = accentDarkPrimary(accent)
+            DarkColorScheme.copy(
+                primary            = roles.primary,
+                onPrimary          = roles.onPrimary,
+                primaryContainer   = roles.container,
+                onPrimaryContainer = roles.onContainer,
+            )
+        }
+        else -> {
+            val roles = accentLightPrimary(accent)
+            LightColorScheme.copy(
+                primary            = roles.primary,
+                onPrimary          = roles.onPrimary,
+                primaryContainer   = roles.container,
+                onPrimaryContainer = roles.onContainer,
+            )
+        }
     }
 
     val colorScheme = if (darkTheme && amoled) {
@@ -110,6 +133,8 @@ fun Edupage2Theme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography  = Typography,
+        shapes      = AppShapes,
         content     = content
     )
 }
+

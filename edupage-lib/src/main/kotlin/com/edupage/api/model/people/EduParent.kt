@@ -8,3 +8,4 @@ class EduParent(
     gender: Gender?,
     inSchoolSince: LocalDateTime?
 ) : EduAccount(personId, name, gender, inSchoolSince, EduAccountType.PARENT)
+

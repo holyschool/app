@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,12 +45,10 @@ internal fun MessagesSkeleton(
 
 @Composable
 private fun MessageItemSkeleton() {
-    ElevatedCard(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceBright,
     ) {
         Row(
             modifier = Modifier
@@ -89,3 +87,4 @@ private fun MessageItemSkeleton() {
         }
     }
 }
+

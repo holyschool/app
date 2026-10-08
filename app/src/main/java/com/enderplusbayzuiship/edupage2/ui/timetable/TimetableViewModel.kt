@@ -10,13 +10,16 @@ import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
+import com.enderplusbayzuiship.edupage2.data.LessonGrouping
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
+import com.enderplusbayzuiship.edupage2.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,8 +64,17 @@ class TimetableViewModel @Inject constructor(
     private val _cancelledLessonStyle = MutableStateFlow(appPreferences.cancelledLessonStyle)
     val cancelledLessonStyle: StateFlow<CancelledLessonStyle> = _cancelledLessonStyle.asStateFlow()
 
+    private val _lessonGrouping = MutableStateFlow(appPreferences.lessonGrouping)
+    val lessonGrouping: StateFlow<LessonGrouping> = _lessonGrouping.asStateFlow()
+
     private val _showWeekends = MutableStateFlow(appPreferences.showWeekends)
     val showWeekends: StateFlow<Boolean> = _showWeekends.asStateFlow()
+
+    private val _showSeconds = MutableStateFlow(appPreferences.showSeconds)
+    val showSeconds: StateFlow<Boolean> = _showSeconds.asStateFlow()
+
+    private val _compactTimetable = MutableStateFlow(appPreferences.compactTimetable)
+    val compactTimetable: StateFlow<Boolean> = _compactTimetable.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -70,14 +82,16 @@ class TimetableViewModel @Inject constructor(
             _selectedDate.value = resolvedInitialDate
             loadTimetable(resolvedInitialDate)
 
-            // Periodic updates for time-dependent UI (current lesson highlight, etc.)
             launch {
                 while (true) {
-                    delay(30_000)
+                    delay(if (_showSeconds.value) 1_000L else 30_000L)
                     _currentTime.value = LocalTime.now()
                     _breakVisibility.value = appPreferences.breakVisibility
                     _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
+                    _lessonGrouping.value = appPreferences.lessonGrouping
                     _showWeekends.value = appPreferences.showWeekends
+                    _showSeconds.value = appPreferences.showSeconds
+                    _compactTimetable.value = appPreferences.compactTimetable
                 }
             }
         }
@@ -86,10 +100,9 @@ class TimetableViewModel @Inject constructor(
     private suspend fun determineInitialDate(): LocalDate {
         val today = LocalDate.now()
         val showWeekends = appPreferences.showWeekends
-        
-        // Check if today's school day is over
+
         val lessons = try {
-            // Prefer cache for fast startup, fall back to API
+
             val cached = timetableCache.loadWithStale(today)
             cached?.first ?: edupage.getMyTimetable(today)?.lessons ?: emptyList()
         } catch (_: Exception) {
@@ -104,13 +117,12 @@ class TimetableViewModel @Inject constructor(
             }
         }
 
-        // If today is weekend or we skipped to a weekend, and weekends are hidden, go to Monday
         if (!showWeekends) {
             while (targetDate.dayOfWeek == DayOfWeek.SATURDAY || targetDate.dayOfWeek == DayOfWeek.SUNDAY) {
                 targetDate = targetDate.plusDays(1)
             }
         }
-        
+
         return targetDate
     }
 
@@ -138,11 +150,15 @@ class TimetableViewModel @Inject constructor(
         loadTimetable(_selectedDate.value)
         _breakVisibility.value = appPreferences.breakVisibility
         _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
+        _lessonGrouping.value = appPreferences.lessonGrouping
         _showWeekends.value = appPreferences.showWeekends
+        _compactTimetable.value = appPreferences.compactTimetable
     }
 
     fun logout() {
         credentialStore.clear()
+        edupage.session.cookieJar.clear()
+        com.enderplusbayzuiship.edupage2.notification.ClassLiveController.stop(context)
         edupage.session.isLoggedIn = false
         edupage.session.data = null
         edupage.session.gsecHash = null
@@ -165,6 +181,15 @@ class TimetableViewModel @Inject constructor(
                     if (!isStale) return@launch
                 }
             }
+            if (!com.enderplusbayzuiship.edupage2.ui.util.ConnectivityObserver.isOnline.value) {
+                val offline = _uiState.value
+                if (offline is TimetableUiState.Success) {
+                    _uiState.value = offline.copy(isRefreshing = false)
+                } else {
+                    _uiState.value = TimetableUiState.Error(context.getString(R.string.network_error))
+                }
+                return@launch
+            }
             try {
                 val timetable = edupage.getMyTimetable(date)
                 val lessons = timetable?.lessons ?: emptyList()
@@ -178,9 +203,13 @@ class TimetableViewModel @Inject constructor(
                     _uiState.value = afterFail.copy(isRefreshing = false)
                     Log.w(TAG, "background refresh failed, keeping cached data: ${e.message}")
                 } else {
-                    _uiState.value = TimetableUiState.Error(e.message ?: context.getString(R.string.timetable_error_failed_to_load))
+                    _uiState.value = TimetableUiState.Error(if (e.isNetworkError())
+                        context.getString(R.string.network_error)
+                    else
+                        e.message ?: context.getString(R.string.timetable_error_failed_to_load))
                 }
             }
         }
     }
 }
+

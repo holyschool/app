@@ -44,3 +44,4 @@ internal class Ringing(private val session: EdupageSession) {
         return LocalTime.of(parts[0].toInt(), parts[1].toInt())
     }
 }
+

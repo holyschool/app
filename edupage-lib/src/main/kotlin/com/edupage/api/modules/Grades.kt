@@ -34,6 +34,13 @@ internal class Grades(private val session: EdupageSession) {
         return try { asString } catch (_: Exception) { null }
     }
 
+    private fun JsonElement?.safeObject(): JsonObject? {
+        if (this == null || isJsonNull) return null
+        return try { asJsonObject } catch (_: Exception) { null }
+    }
+
+    private fun JsonObject.safeObjectMember(key: String): JsonObject? = get(key).safeObject()
+
     private fun parseGradeData(html: String): JsonObject {
         return try {
             val marker = ".znamkyStudentViewer("
@@ -86,8 +93,8 @@ internal class Grades(private val session: EdupageSession) {
         }
 
         val grades = gradeData.getAsJsonArray("vsetkyZnamky") ?: return emptyList()
-        val gradeDetails = gradeData.getAsJsonObject("vsetkyUdalosti")
-            ?.getAsJsonObject("edupage") ?: return emptyList()
+        val gradeDetails = gradeData.safeObjectMember("vsetkyUdalosti")
+            ?.safeObjectMember("edupage") ?: return emptyList()
 
         val subjectMap: Map<Int, String> = buildMap {
             gradeData.get("predmety")
@@ -122,7 +129,7 @@ internal class Grades(private val session: EdupageSession) {
                 val eventIdStr = grade.get("udalostid").safeString() ?: continue
                 val eventId = eventIdStr.toIntOrNull() ?: continue
 
-                val details = gradeDetails.getAsJsonObject(eventIdStr) ?: continue
+                val details = gradeDetails.get(eventIdStr).safeObject() ?: continue
                 val title = details.get("p_meno").safeString() ?: ""
 
                 val dateStr = grade.get("datum").safeString() ?: continue
@@ -206,3 +213,4 @@ internal class Grades(private val session: EdupageSession) {
         return output
     }
 }
+

@@ -6,6 +6,7 @@ import com.edupage.api.model.EduCloudFile
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.Request
@@ -58,4 +59,42 @@ internal class Cloud(private val session: EdupageSession) {
             else -> "application/octet-stream"
         }
     }
+
+    suspend fun listCloudFiles(): List<EduCloudFile> = withContext(Dispatchers.IO) {
+        if (!session.isLoggedIn) throw NotLoggedInException()
+        val url = "https://${session.subdomain}.edupage.org/timeline/server/cloud.js?__func=cloudFileList"
+        val request = Request.Builder().url(url)
+            .post(FormBody.Builder().add("__gsh", session.gsecHash ?: "").build())
+            .build()
+        val response = session.httpClient.newCall(request).execute()
+        val responseStr = response.body?.string() ?: return@withContext emptyList()
+        runCatching {
+            val json = JsonParser.parseString(responseStr).asJsonObject
+            val files = (json.get("files") ?: json.getAsJsonObject("r")?.getAsJsonObject("files"))
+                ?: return@withContext emptyList()
+            if (files.isJsonArray) {
+                files.asJsonArray.mapNotNull { el ->
+                    val f = runCatching { el.asJsonObject }.getOrNull() ?: return@mapNotNull null
+                    val id = f.get("id")?.asString ?: return@mapNotNull null
+                    EduCloudFile(fileId = id, fileName = f.get("name")?.asString ?: id, uploadPath = f.get("path")?.asString ?: "")
+                }
+            } else {
+                emptyList()
+            }
+        }.getOrElse { emptyList() }
+    }
+
+    suspend fun deleteCloudFile(fileId: String): Boolean = withContext(Dispatchers.IO) {
+        if (!session.isLoggedIn) throw NotLoggedInException()
+        val url = "https://${session.subdomain}.edupage.org/timeline/server/cloud.js?__func=deleteCloudFile"
+        val request = Request.Builder().url(url)
+            .post(FormBody.Builder()
+                .add("id", fileId)
+                .add("__gsh", session.gsecHash ?: "").build())
+            .build()
+        val response = session.httpClient.newCall(request).execute()
+        val responseStr = response.body?.string() ?: return@withContext false
+        responseStr != "0" && responseStr.isNotBlank()
+    }
 }
+

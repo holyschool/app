@@ -14,13 +14,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.util.ShimmerBox
 
 @Composable
@@ -70,7 +70,7 @@ internal fun CurrentLessonBannerSkeleton() {
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp),
-        cornerRadius = 12.dp,
+        cornerRadius = 20.dp,
     )
 }
 
@@ -185,7 +185,7 @@ private fun QuickActionsSkeleton() {
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
-                        cornerRadius = 12.dp,
+                        cornerRadius = 20.dp,
                     )
                 }
             }
@@ -195,16 +195,16 @@ private fun QuickActionsSkeleton() {
 
 @Composable
 private fun SkeletonCard(content: @Composable () -> Unit) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            content()
+    RoundedCardContainer(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceBright,
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                content()
+            }
         }
     }
 }
+

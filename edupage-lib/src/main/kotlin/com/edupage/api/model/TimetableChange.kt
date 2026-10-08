@@ -15,3 +15,4 @@ data class TimetableChange(
     val className: String?,
     val note: String?
 )
+

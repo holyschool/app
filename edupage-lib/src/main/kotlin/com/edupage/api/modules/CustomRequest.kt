@@ -38,3 +38,4 @@ internal class CustomRequest(private val session: EdupageSession) {
         }
     }
 }
+

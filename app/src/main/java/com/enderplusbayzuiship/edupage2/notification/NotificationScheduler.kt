@@ -45,7 +45,7 @@ class NotificationScheduler @Inject constructor(
             }
         }
 
-        val intervalMinutes = appPreferences.notifCheckIntervalMinutes.toLong()
+        val intervalMinutes = appPreferences.notifCheckIntervalMinutes.toLong().coerceAtLeast(15)
         Log.i(TAG, "scheduling grade/message/substitution check every ${intervalMinutes}min")
 
         try {
@@ -94,3 +94,4 @@ class NotificationScheduler @Inject constructor(
         }
     }
 }
+

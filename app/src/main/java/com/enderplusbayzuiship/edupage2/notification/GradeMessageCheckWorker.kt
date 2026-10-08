@@ -198,7 +198,7 @@ class GradeMessageCheckWorker @AssistedInject constructor(
     private suspend fun checkGrades(gradeTimelineId: Int = -1) {
         val year = edupage.getSchoolYear() ?: return
         val activeTerm = if (gradesCache.hasCacheFor(Term.SECOND)) Term.SECOND else Term.FIRST
-        
+
         val fresh = try {
             edupage.getGradesForTerm(year, activeTerm)
         } catch (e: Exception) {
@@ -222,12 +222,18 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                 else      -> "?"
             }
             val subject = g.subjectName ?: appContext.getString(R.string.grades_unknown_subject)
+            val teacher = g.teacher?.name
+            val text = if (!teacher.isNullOrBlank()) {
+                appContext.getString(R.string.notif_grade_single_teacher, gradeText, subject, teacher)
+            } else {
+                appContext.getString(R.string.notif_grade_single, gradeText, subject)
+            }
             nm.notify(
                 NOTIF_ID_GRADES,
                 buildNotification(
                     channel = CHANNEL_GRADES,
                     title = appContext.getString(R.string.notif_grade_title),
-                    text = appContext.getString(R.string.notif_grade_single, gradeText, subject),
+                    text = text,
                     iconRes = NotificationType.iconFor("grade"),
                     group = NOTIF_GROUP_GRADES,
                     timelineId = gradeTimelineId,
@@ -241,12 +247,18 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                     else      -> "?"
                 }
                 val subject = grade.subjectName ?: appContext.getString(R.string.grades_unknown_subject)
+                val teacher = grade.teacher?.name
+                val text = if (!teacher.isNullOrBlank()) {
+                    appContext.getString(R.string.notif_grade_single_teacher, gradeText, subject, teacher)
+                } else {
+                    appContext.getString(R.string.notif_grade_single, gradeText, subject)
+                }
                 nm.notify(
-                    NOTIF_ID_GRADES + index + 1,
+                    NOTIF_ID_GRADES + 100 + index,
                     buildNotification(
                         channel = CHANNEL_GRADES,
                         title = appContext.getString(R.string.notif_grade_title),
-                        text = appContext.getString(R.string.notif_grade_single, gradeText, subject),
+                        text = text,
                         iconRes = NotificationType.iconFor("grade"),
                         group = NOTIF_GROUP_GRADES,
                         timelineId = gradeTimelineId,
@@ -322,6 +334,13 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             "absence" -> appContext.getString(R.string.notif_absence_title_sender, sender)
             "announcement" -> appContext.getString(R.string.notif_announcement_title_sender, sender)
             "event" -> appContext.getString(R.string.notif_event_title_sender, sender)
+            "message" -> appContext.getString(R.string.notif_message_title, sender)
+            "grade" -> appContext.getString(R.string.notif_grade_title)
+            "payment" -> appContext.getString(R.string.notif_payment_title, sender)
+            "signin" -> appContext.getString(R.string.notif_signin_title, sender)
+            "album" -> appContext.getString(R.string.notif_album_title, sender)
+            "behaviour" -> appContext.getString(R.string.notif_behaviour_title, sender)
+            "notification" -> appContext.getString(R.string.notif_notification_title, sender)
             else -> appContext.getString(R.string.notif_message_title, sender)
         }
         val preview = (event.title ?: event.text)
@@ -335,19 +354,17 @@ class GradeMessageCheckWorker @AssistedInject constructor(
 
     private suspend fun checkSubstitutions(newEvents: List<com.edupage.api.model.TimelineEvent>) {
         if (newEvents.isEmpty()) return
-
-        // We could fetch actual changes, but the timeline events often contain enough info.
-        // For now, let's just notify based on timeline events to save data.
         val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (newEvents.size == 1) {
             val ev = newEvents.first()
+            val body = buildSubstitutionBody(ev)
             nm.notify(
                 ev.timelineId,
                 buildNotification(
                     channel = CHANNEL_SUBSTITUTIONS,
                     title = appContext.getString(R.string.notif_substitution_title),
-                    text = ev.title ?: appContext.getString(R.string.notif_substitution_new),
+                    text = body,
                     iconRes = NotificationType.iconFor("substitution"),
                     group = NOTIF_GROUP_SUBSTITUTIONS,
                     timelineId = ev.timelineId,
@@ -355,12 +372,13 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             )
         } else {
             newEvents.forEach { ev ->
+                val body = buildSubstitutionBody(ev)
                 nm.notify(
                     ev.timelineId,
                     buildNotification(
                         channel = CHANNEL_SUBSTITUTIONS,
                         title = appContext.getString(R.string.notif_substitution_title),
-                        text = ev.title ?: appContext.getString(R.string.notif_substitution_new),
+                        text = body,
                         iconRes = NotificationType.iconFor("substitution"),
                         group = NOTIF_GROUP_SUBSTITUTIONS,
                         timelineId = ev.timelineId,
@@ -380,6 +398,14 @@ class GradeMessageCheckWorker @AssistedInject constructor(
         }
     }
 
+    private fun buildSubstitutionBody(event: com.edupage.api.model.TimelineEvent): String {
+        val parts = mutableListOf<String>()
+        event.title?.replace(Regex("<[^>]+>"), "")?.trim()?.let { if (it.isNotBlank()) parts.add(it) }
+        event.text?.replace(Regex("<[^>]+>"), "")?.trim()?.let { if (it.isNotBlank()) parts.add(it) }
+        val combined = parts.joinToString(" — ")
+        return combined.ifBlank { appContext.getString(R.string.notif_substitution_new) }
+    }
+
     private fun buildNotification(
         channel: String,
         title: String,
@@ -395,7 +421,7 @@ class GradeMessageCheckWorker @AssistedInject constructor(
             else -> DeepLinkHelper.createOverviewIntent(appContext)
         }
 
-        val notificationId = if (timelineId > 0) timelineId else System.currentTimeMillis().toInt()
+        val notificationId = if (timelineId > 0) timelineId else (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
         val markPending = if (timelineId > 0) {
             FirebaseNotificationHandler.createMarkReadPendingIntent(
                 appContext, timelineId, notificationId, channel,
@@ -451,6 +477,12 @@ class GradeMessageCheckWorker @AssistedInject constructor(
                 edupage.session.isLoggedIn = restored.session.isLoggedIn
                 edupage.session.data = restored.session.data
                 edupage.session.gsecHash = restored.session.gsecHash
+                edupage.session.subdomain = restored.session.subdomain
+                edupage.session.username = restored.session.username
+                edupage.session.cookieJar.setSessionId(
+                    "${creds.subdomain}.edupage.org",
+                    creds.sessionId
+                )
                 if (edupage.session.isLoggedIn) return
             } catch (e: Exception) {
                 Log.w(TAG, "Session restore failed: ${e.message}")
@@ -466,3 +498,4 @@ class GradeMessageCheckWorker @AssistedInject constructor(
         }
     }
 }
+

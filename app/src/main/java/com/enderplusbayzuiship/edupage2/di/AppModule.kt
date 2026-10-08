@@ -26,3 +26,4 @@ object AppModule {
     @Singleton
     fun provideGson(): Gson = Gson()
 }
+

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
+import com.enderplusbayzuiship.edupage2.data.AccountProfileStore
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +22,8 @@ sealed interface SplashUiState {
 @HiltViewModel
 class SplashViewModel @Inject constructor(
     private val edupage: Edupage,
-    private val credentialStore: CredentialStore
+    private val credentialStore: CredentialStore,
+    private val accountProfileStore: AccountProfileStore
 ) : ViewModel() {
 
     companion object {
@@ -64,6 +66,7 @@ class SplashViewModel @Inject constructor(
 
                 if (sessionOk && edupage.isLoggedIn) {
                     Log.i(TAG, "session restore success for ${saved.username}@${saved.subdomain}")
+                    refreshActiveProfile(saved.sessionId)
                     _uiState.value = SplashUiState.Success
                     return@launch
                 }
@@ -79,6 +82,7 @@ class SplashViewModel @Inject constructor(
                 val newSessionId = edupage.session.cookieJar
                     .getSessionId("${saved.subdomain}.edupage.org")
                 credentialStore.updateSessionId(newSessionId)
+                refreshActiveProfile(newSessionId)
                 Log.i(TAG, "full re-login success for ${saved.username}@${saved.subdomain}")
                 _uiState.value = SplashUiState.Success
             } else {
@@ -90,4 +94,10 @@ class SplashViewModel @Inject constructor(
             }
         }
     }
+
+    private fun refreshActiveProfile(sessionId: String?) {
+        val activeId = accountProfileStore.activeProfileId() ?: return
+        accountProfileStore.updateSessionId(activeId, sessionId ?: "")
+    }
 }
+

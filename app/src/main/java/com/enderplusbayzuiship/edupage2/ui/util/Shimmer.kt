@@ -57,3 +57,4 @@ fun ShimmerBox(
             .background(shimmerBrush())
     )
 }
+

@@ -43,12 +43,50 @@ enum class DarkModePreference(val key: String) {
     }
 }
 
+enum class AccentColor(val key: String) {
+    BLUE("blue"),
+    PURPLE("purple"),
+    GREEN("green"),
+    ORANGE("orange"),
+    RED("red"),
+    TEAL("teal"),
+    PINK("pink"),
+    SLATE("slate");
+
+    companion object {
+        val DEFAULT = BLUE
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
 enum class CancelledLessonStyle(val key: String) {
     RED("red"),
     GREYED_OUT("greyed_out");
 
     companion object {
         val DEFAULT = RED
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
+enum class LessonGrouping(val key: String) {
+    OFF("off"),
+    DOUBLES("doubles"),
+    ALL("all");
+
+    companion object {
+        val DEFAULT = DOUBLES
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
+enum class HapticIntensity(val key: String) {
+    OFF("off"),
+    SUBTLE("subtle"),
+    STRONG("strong");
+
+    companion object {
+        val DEFAULT = SUBTLE
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
     }
 }
@@ -63,6 +101,16 @@ enum class BackendMode(val key: String) {
     }
 }
 
+enum class TimetableViewMode(val key: String) {
+    DAY("day"),
+    WEEK("week");
+
+    companion object {
+        val DEFAULT = DAY
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
+
 @Singleton
 class AppPreferences @Inject constructor(
     @ApplicationContext private val context: Context
@@ -73,12 +121,17 @@ class AppPreferences @Inject constructor(
         private const val KEY_BREAK_VISIBILITY       = "break_visibility"
         private const val KEY_SHOW_WEEKENDS          = "show_weekends"
         private const val KEY_CANCELLED_LESSON_STYLE = "cancelled_lesson_style"
+        private const val KEY_LESSON_GROUPING        = "lesson_grouping"
         const val LONG_BREAK_THRESHOLD_MINUTES = 30L
+
+        private const val KEY_TIMETABLE_VIEW_MODE   = "timetable_view_mode"
+        private const val KEY_SHOW_SECONDS          = "show_seconds"
 
         private const val KEY_NOTIFICATIONS_ENABLED  = "notifications_enabled"
 
         private const val KEY_DARK_MODE   = "dark_mode"
         private const val KEY_USE_AMOLED  = "use_amoled"
+        private const val KEY_ACCENT      = "accent_color"
 
         private const val KEY_APP_LANGUAGE = "app_language"
 
@@ -102,6 +155,20 @@ class AppPreferences @Inject constructor(
         private const val KEY_BACKEND_API_KEY = "backend_api_key"
         private const val KEY_APP_VERSION_NAME = "app_version_name"
         private const val KEY_BACKEND_MODE = "backend_mode"
+        private const val KEY_SELECTED_CHILD_ID = "selected_child_id"
+
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_MEALS_ENABLED = "meals_enabled"
+        private const val KEY_LIVE_CLASS_NOTIF = "live_class_notif"
+        private const val KEY_HAPTIC_INTENSITY = "haptic_intensity"
+        private const val KEY_LAST_SEEN_VERSION = "last_seen_version"
+        private const val KEY_MOTION_BLUR = "motion_blur"
+
+        private const val KEY_COMPACT_TIMETABLE = "compact_timetable"
+        private const val KEY_AUTO_REFRESH_MINS = "auto_refresh_mins"
+        private const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"
+        private const val KEY_DEFAULT_TAB = "default_tab"
+        private const val KEY_FIRST_DAY_OF_WEEK = "first_day_of_week"
 
         private const val OFFICIAL_BACKEND_URL = "https://edupage.stwupid.tech"
         private const val OFFICIAL_BACKEND_KEY = "change-this-long-random"
@@ -123,6 +190,18 @@ class AppPreferences @Inject constructor(
         get() = CancelledLessonStyle.fromKey(prefs.getString(KEY_CANCELLED_LESSON_STYLE, null))
         set(value) = prefs.edit().putString(KEY_CANCELLED_LESSON_STYLE, value.key).apply()
 
+    var lessonGrouping: LessonGrouping
+        get() = LessonGrouping.fromKey(prefs.getString(KEY_LESSON_GROUPING, null))
+        set(value) = prefs.edit().putString(KEY_LESSON_GROUPING, value.key).apply()
+
+    var timetableViewModel: TimetableViewMode
+        get() = TimetableViewMode.fromKey(prefs.getString(KEY_TIMETABLE_VIEW_MODE, null))
+        set(value) = prefs.edit().putString(KEY_TIMETABLE_VIEW_MODE, value.key).apply()
+
+    var showSeconds: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_SECONDS, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_SECONDS, value).apply()
+
     var notificationsEnabled: Boolean
         get() = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, value).apply()
@@ -143,6 +222,15 @@ class AppPreferences @Inject constructor(
     val useAmoledFlow: Flow<Boolean> = prefFlow(
         key = KEY_USE_AMOLED,
         current = { useAmoled },
+    )
+
+    var accentColor: AccentColor
+        get() = AccentColor.fromKey(prefs.getString(KEY_ACCENT, null))
+        set(value) = prefs.edit().putString(KEY_ACCENT, value.key).apply()
+
+    val accentColorFlow: Flow<AccentColor> = prefFlow(
+        key = KEY_ACCENT,
+        current = { accentColor },
     )
 
     var appLanguage: AppLanguage
@@ -249,6 +337,83 @@ class AppPreferences @Inject constructor(
         get() = prefs.getString(KEY_BACKEND_API_KEY, "") ?: ""
         set(value) = prefs.edit().putString(KEY_BACKEND_API_KEY, value).apply()
 
+    var selectedChildId: Int
+        get() = prefs.getInt(KEY_SELECTED_CHILD_ID, -1)
+        set(value) = prefs.edit().putInt(KEY_SELECTED_CHILD_ID, value).apply()
+
+    var onboardingCompleted: Boolean
+        get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+        set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+
+    var mealsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_MEALS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_MEALS_ENABLED, value).apply()
+
+    var liveClassNotif: Boolean
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_NOTIF, false)
+        set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_NOTIF, value).apply()
+
+    var hapticIntensity: HapticIntensity
+        get() = HapticIntensity.fromKey(prefs.getString(KEY_HAPTIC_INTENSITY, null))
+        set(value) = prefs.edit().putString(KEY_HAPTIC_INTENSITY, value.key).apply()
+
+    var lastSeenVersionName: String
+        get() = prefs.getString(KEY_LAST_SEEN_VERSION, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_LAST_SEEN_VERSION, value).apply()
+
+    var motionBlurEnabled: Boolean
+        get() = prefs.getBoolean(KEY_MOTION_BLUR, true)
+        set(value) = prefs.edit().putBoolean(KEY_MOTION_BLUR, value).apply()
+
+    val mealsEnabledFlow: Flow<Boolean> = prefFlow(
+        key = KEY_MEALS_ENABLED,
+        current = { mealsEnabled },
+    )
+
+    var compactTimetable: Boolean
+        get() = prefs.getBoolean(KEY_COMPACT_TIMETABLE, false)
+        set(value) = prefs.edit().putBoolean(KEY_COMPACT_TIMETABLE, value).apply()
+
+    var autoRefreshIntervalMinutes: Int
+        get() = prefs.getInt(KEY_AUTO_REFRESH_MINS, 0).coerceIn(0, 1440)
+        set(value) = prefs.edit().putInt(KEY_AUTO_REFRESH_MINS, value.coerceIn(0, 1440)).apply()
+
+    val autoRefreshIntervalMinutesFlow: Flow<Int> = prefFlow(
+        key = KEY_AUTO_REFRESH_MINS,
+        current = { autoRefreshIntervalMinutes },
+    )
+
+    var keepScreenAwake: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
+        set(value) = prefs.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, value).apply()
+
+    val keepScreenAwakeFlow: Flow<Boolean> = prefFlow(
+        key = KEY_KEEP_SCREEN_AWAKE,
+        current = { keepScreenAwake },
+    )
+
+    var defaultTab: Int
+        get() = prefs.getInt(KEY_DEFAULT_TAB, 0).coerceIn(0, 4)
+        set(value) = prefs.edit().putInt(KEY_DEFAULT_TAB, value.coerceIn(0, 4)).apply()
+
+    val defaultTabFlow: Flow<Int> = prefFlow(
+        key = KEY_DEFAULT_TAB,
+        current = { defaultTab },
+    )
+
+    var firstDayOfWeek: Int
+        get() = prefs.getInt(KEY_FIRST_DAY_OF_WEEK, 0).coerceIn(0, 1)
+        set(value) = prefs.edit().putInt(KEY_FIRST_DAY_OF_WEEK, value.coerceIn(0, 1)).apply()
+
+    val firstDayOfWeekFlow: Flow<Int> = prefFlow(
+        key = KEY_FIRST_DAY_OF_WEEK,
+        current = { firstDayOfWeek },
+    )
+
+    fun clearSeenIds() {
+        prefs.edit().remove(KEY_SEEN_TIMELINE_IDS).apply()
+    }
+
     val backendEffectiveUrl: String
         get() = if (backendMode == BackendMode.OFFICIAL) OFFICIAL_BACKEND_URL else backendCustomUrl
 
@@ -269,3 +434,4 @@ class AppPreferences @Inject constructor(
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 }
+

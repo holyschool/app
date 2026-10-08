@@ -7,6 +7,8 @@ import com.edupage.api.Edupage
 import com.edupage.api.exceptions.BadCredentialsException
 import com.edupage.api.exceptions.CaptchaException
 import com.edupage.api.modules.TwoFactorLogin
+import com.enderplusbayzuiship.edupage2.data.AccountProfile
+import com.enderplusbayzuiship.edupage2.data.AccountProfileStore
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
@@ -40,6 +42,7 @@ sealed interface LoginUiState {
 class LoginViewModel @Inject constructor(
     private val edupage: Edupage,
     private val credentialStore: CredentialStore,
+    private val accountProfileStore: AccountProfileStore,
     private val appPreferences: AppPreferences,
     private val timelineCache: TimelineCache,
     private val backendRegistrationManager: BackendRegistrationManager,
@@ -52,12 +55,15 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
+    private var pendingPassword: String? = null
+
     fun login(username: String, password: String, subdomain: String) {
         if (username.isBlank() || password.isBlank() || subdomain.isBlank()) {
             Log.w(TAG, "login attempt with empty fields")
             _uiState.value = LoginUiState.Error(LoginError.EmptyFields)
             return
         }
+        pendingPassword = password
         Log.i(TAG, "login attempt for $username@$subdomain")
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
@@ -101,7 +107,8 @@ class LoginViewModel @Inject constructor(
                 val username  = edupage.username  ?: ""
                 val sessionId = edupage.session.cookieJar
                     .getSessionId("$subdomain.edupage.org")
-                credentialStore.updateSessionId(sessionId)
+                credentialStore.save(username, pendingPassword.orEmpty(), subdomain, sessionId)
+                upsertAccountProfile(username, pendingPassword.orEmpty(), subdomain, sessionId)
                 Log.i(TAG, "2FA verification success for $username@$subdomain")
                 registerBackendDevice()
                 seedSeenIdsIfFirstLogin()
@@ -130,7 +137,7 @@ class LoginViewModel @Inject constructor(
             if (events.isNotEmpty()) {
                 val ids = events.map { it.timelineId }
                 appPreferences.markTimelineIdsSeen(ids)
-                appPreferences.lastTimelineId = ids.max()
+                appPreferences.lastTimelineId = ids.maxOrNull() ?: return
                 Log.i(TAG, "seeded ${ids.size} timeline IDs, lastTimelineId=${appPreferences.lastTimelineId}")
             }
         } catch (e: Exception) {
@@ -142,7 +149,18 @@ class LoginViewModel @Inject constructor(
         val sessionId = edupage.session.cookieJar
             .getSessionId("$subdomain.edupage.org")
         credentialStore.save(username, password, subdomain, sessionId)
+        upsertAccountProfile(username, password, subdomain, sessionId)
     }
+
+    private fun upsertAccountProfile(username: String, password: String, subdomain: String, sessionId: String?) {
+        val id = profileIdFor(username, subdomain)
+        accountProfileStore.upsertProfile(
+            AccountProfile(id = id, username = username, password = password, subdomain = subdomain, sessionId = sessionId)
+        )
+    }
+
+    private fun profileIdFor(username: String, subdomain: String): String =
+        "${subdomain}|$username"
 
     private fun registerBackendDevice() {
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
@@ -152,3 +170,4 @@ class LoginViewModel @Inject constructor(
         }
     }
 }
+

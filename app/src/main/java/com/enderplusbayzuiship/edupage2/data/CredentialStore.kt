@@ -69,3 +69,4 @@ class CredentialStore @Inject constructor(
         prefs.edit().clear().apply()
     }
 }
+

@@ -5,3 +5,4 @@ data class EduStudentSkeleton(
     val nameShort: String,
     val classId: Int?
 )
+

@@ -10,6 +10,7 @@ import fetch from "node-fetch";
 const {
   FCM_PROJECT_ID,
   FCM_SERVICE_ACCOUNT,
+  FCM_SERVICE_ACCOUNT_JSON,
   FCM_TOPIC = "edupage_all",
   SERVER_API_KEY,
   DATABASE_PATH = "./data/edupage-notify.sqlite",
@@ -23,13 +24,10 @@ const {
   RSA_KEYS_DIR = "./data/keys",
 } = process.env;
 
-// --- Crypto Helpers ---
-
 const ensureDir = (dirPath) => {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 };
 
-// RSA Key Management
 ensureDir(RSA_KEYS_DIR);
 const privateKeyPath = path.join(RSA_KEYS_DIR, "private.pem");
 const publicKeyPath = path.join(RSA_KEYS_DIR, "public.pem");
@@ -51,7 +49,6 @@ if (!fs.existsSync(privateKeyPath)) {
   publicKey = fs.readFileSync(publicKeyPath, "utf8");
 }
 
-// AES Master Key Management
 if (!fs.existsSync(ENCRYPTION_KEY_PATH)) {
   ensureDir(path.dirname(ENCRYPTION_KEY_PATH));
   fs.writeFileSync(ENCRYPTION_KEY_PATH, crypto.randomBytes(32).toString("hex"));
@@ -102,12 +99,19 @@ function decryptRsa(encryptedBase64) {
   }
 }
 
-// --- End Crypto Helpers ---
-
-const REQUIRED = ["FCM_PROJECT_ID", "FCM_SERVICE_ACCOUNT", "SERVER_API_KEY"];
+const REQUIRED = ["FCM_PROJECT_ID", "SERVER_API_KEY"];
 const missing = REQUIRED.filter((k) => !process.env[k]);
+if (!FCM_SERVICE_ACCOUNT && !FCM_SERVICE_ACCOUNT_JSON) {
+  missing.push("FCM_SERVICE_ACCOUNT or FCM_SERVICE_ACCOUNT_JSON");
+}
 if (missing.length) {
   console.error(`Missing env vars: ${missing.join(", ")}`);
+  process.exit(1);
+}
+
+const portNumber = Number(PORT);
+if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
+  console.error(`Invalid PORT: ${PORT}`);
   process.exit(1);
 }
 
@@ -117,7 +121,9 @@ const seedGradesOnStart = SEED_GRADES_ON_START !== "false";
 const previewCharsRaw = Number(MESSAGE_PREVIEW_CHARS);
 const messagePreviewChars = Number.isFinite(previewCharsRaw) ? Math.max(20, previewCharsRaw) : 140;
 
-const serviceAccount = JSON.parse(fs.readFileSync(FCM_SERVICE_ACCOUNT, "utf8"));
+const serviceAccount = FCM_SERVICE_ACCOUNT_JSON
+  ? JSON.parse(FCM_SERVICE_ACCOUNT_JSON)
+  : JSON.parse(fs.readFileSync(FCM_SERVICE_ACCOUNT, "utf8"));
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   projectId: FCM_PROJECT_ID,
@@ -184,7 +190,7 @@ function buildAbsenceText(data) {
   const type = stringOrNull(data.typ_nazov);
   const from = stringOrNull(data.date_from);
   const to = stringOrNull(data.date_to);
-  
+
   let result = type || "Absence";
   if (from) result += ` from ${from}`;
   if (to && to !== from) result += ` to ${to}`;
@@ -205,7 +211,7 @@ function buildEventText(data) {
   const name = stringOrNull(data.nazov) || stringOrNull(data.titulok);
   const place = stringOrNull(data.miesto);
   const date = stringOrNull(data.datum_od_txt) || stringOrNull(data.date);
-  
+
   let result = name || "School event";
   if (date) result += ` (${date})`;
   if (place) result += ` at ${place}`;
@@ -284,11 +290,10 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_unique ON users(subdomain, username);
 `);
 
-// Add is_encrypted column if it doesn't exist
 try {
   db.exec("ALTER TABLE users ADD COLUMN is_encrypted INTEGER NOT NULL DEFAULT 0");
 } catch (e) {
-  // Already exists
+
 }
 
 db.exec(`
@@ -330,7 +335,6 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_unique ON devices(user_id, fcm_token);
 `);
 
-// Migration: Encrypt existing plain text passwords
 const unencryptedUsers = db.prepare("SELECT * FROM users WHERE is_encrypted = 0").all();
 if (unencryptedUsers.length > 0) {
   console.log(`Migrating ${unencryptedUsers.length} users to encrypted passwords...`);
@@ -458,9 +462,9 @@ async function login(user) {
   }
 
   const gsecHash = extractGsecHash(body) || null;
-  
+
   userSessions.set(user.id || `${subdomain}:${username}`, { sessionCookie, gsecHash });
-  
+
   log("login ok", subdomain, username);
   return { sessionCookie, gsecHash };
 }
@@ -640,7 +644,7 @@ function channelForType(type) {
 }
 
 async function sendTopicNotification({ title, body, data, topic, token }) {
-  // Data-only so the app always builds notifications with correct icons, channels, and actions.
+
   const payload = {
     data: toDataPayload({
       title,
@@ -684,7 +688,7 @@ async function notifyMessages(events, { topic, token }) {
   if (sorted.length === 1) {
     const msg = sorted[0];
     const sender = msg.authorName || "EduPage";
-    
+
     let title = `Message from ${sender}`;
     if (msg.type === "absence") title = `Absence update: ${sender}`;
     else if (msg.type === "homework") title = `New Homework: ${sender}`;
@@ -917,6 +921,15 @@ async function start() {
   const app = express();
   app.use(express.json({ limit: "200kb" }));
 
+  app.get("/api/health", (_req, res) => {
+    const users = db.prepare("SELECT COUNT(*) AS c FROM users WHERE enabled = 1").get()?.c ?? 0;
+    res.json({ ok: true, uptimeSec: Math.floor(process.uptime()), users });
+  });
+
+  app.get("/api/public-key", (_req, res) => {
+    res.json({ publicKey });
+  });
+
   app.use((req, res, next) => {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -924,10 +937,6 @@ async function start() {
       return res.status(401).json({ error: "Unauthorized" });
     }
     next();
-  });
-
-  app.get("/api/public-key", (_req, res) => {
-    res.json({ publicKey });
   });
 
   app.post("/api/register", async (req, res) => {
@@ -1100,23 +1109,43 @@ async function start() {
     }
   });
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
+  app.get("/api/version", (_req, res) => {
+    res.json({ name: "edupage-notify-backend", version: "0.2.0" });
   });
 
-  app.listen(Number(PORT), () => {
-    console.log(`API listening on ${PORT}`);
+  const server = app.listen(portNumber, () => {
+    console.log(`API listening on ${portNumber}`);
   });
+
+  const shutdown = (signal) => {
+    console.log(`Received ${signal}, shutting down...`);
+    clearInterval(pollTimer);
+    server.close(() => {
+      try {
+        db.close();
+      } catch (e) {
+        console.error("DB close failed", e.message);
+      }
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 5000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 
   const activeUsers = queries.listEnabledUsers.all();
+  const intervalMs = Math.max(15, Number(POLL_INTERVAL_SECONDS)) * 1000;
+  console.log(
+    `Polling ${activeUsers.length} user(s) every ${intervalMs / 1000}s ` +
+    `(topic=${FCM_TOPIC}, seedGrades=${seedGradesOnStart}, firstRunNotify=${firstRunNotify})`
+  );
   if (!activeUsers.length) {
     console.log("No users registered yet.");
   }
   for (const user of activeUsers) {
     await pollUser(getEffectiveUser(user));
   }
-  const intervalMs = Math.max(15, Number(POLL_INTERVAL_SECONDS)) * 1000;
-  setInterval(async () => {
+  const pollTimer = setInterval(async () => {
     const users = queries.listEnabledUsers.all();
     for (const user of users) {
       await pollUser(getEffectiveUser(user));
@@ -1125,3 +1154,4 @@ async function start() {
 }
 
 start();
+

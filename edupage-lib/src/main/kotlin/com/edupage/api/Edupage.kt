@@ -10,6 +10,7 @@ import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.TimetableChange
 import com.edupage.api.model.grades.EduGrade
 import com.edupage.api.model.grades.Term
+import com.edupage.api.model.grades.computeStats
 import com.edupage.api.model.people.EduAccount
 import com.edupage.api.model.people.EduStudent
 import com.edupage.api.model.people.EduStudentSkeleton
@@ -93,11 +94,48 @@ class Edupage(timeoutSeconds: Long = 15L) {
     suspend fun getGradesForTerm(year: Int, term: Term): List<EduGrade> =
         Grades(session).getGrades(term, year)
 
-    suspend fun sendMessage(recipients: List<EduAccount>, body: String): Int =
-        Messages(session).sendMessage(recipients, body)
+    suspend fun computeGradeStats(grades: List<EduGrade>): com.edupage.api.model.grades.GradeStats =
+        grades.computeStats()
 
-    suspend fun sendMessage(recipient: EduAccount, body: String): Int =
-        sendMessage(listOf(recipient), body)
+    suspend fun sendMessage(recipients: List<EduAccount>, body: String, important: Boolean = false, files: List<EduCloudFile> = emptyList()): Int =
+        Messages(session).sendMessage(recipients, body, important, files)
+
+    suspend fun sendMessage(recipient: EduAccount, body: String, important: Boolean = false, files: List<EduCloudFile> = emptyList()): Int =
+        sendMessage(listOf(recipient), body, important, files)
+
+    suspend fun createPoll(
+        recipients: List<EduAccount>,
+        question: String,
+        answers: List<String>,
+        anonymous: Boolean = false,
+        singleChoice: Boolean = false,
+        files: List<EduCloudFile> = emptyList(),
+    ): Int = Messages(session).createPoll(recipients, question, answers, anonymous, singleChoice, files)
+
+    suspend fun sendReply(
+        recipientUserString: String?,
+        body: String,
+        replyToTimelineId: Int,
+        files: List<EduCloudFile> = emptyList(),
+    ): Int = Messages(session).sendReply(recipientUserString, body, replyToTimelineId, files)
+
+    suspend fun deleteMessage(timelineId: Int): Boolean =
+        Messages(session).deleteItem(timelineId)
+
+    suspend fun markMessageSeen(timelineId: Int): Boolean =
+        Messages(session).markAsSeen(timelineId)
+
+    suspend fun likeMessage(timelineId: Int, liked: Boolean = true): Boolean =
+        Messages(session).markAsLiked(timelineId, liked)
+
+    suspend fun toggleMessageDone(timelineId: Int, done: Boolean): Boolean =
+        Messages(session).markAsDone(timelineId, done)
+
+    suspend fun toggleMessageStarred(timelineId: Int, starred: Boolean): Boolean =
+        Messages(session).markAsStarred(timelineId, starred)
+
+    suspend fun voteOnPoll(timelineId: Int, answerIds: List<String>): Boolean =
+        Messages(session).voteOnPoll(timelineId, answerIds)
 
     suspend fun getNotifications(): List<TimelineEvent> =
         Timeline(session).getNotifications()
@@ -105,8 +143,32 @@ class Edupage(timeoutSeconds: Long = 15L) {
     suspend fun getNotificationHistory(dateFrom: LocalDate): List<TimelineEvent> =
         Timeline(session).getNotificationsHistory(dateFrom)
 
+    suspend fun getAssignments(dateFrom: LocalDate): List<com.edupage.api.model.grades.Assignment> =
+        Timeline(session).getAssignments(dateFrom)
+
+    suspend fun getAssignmentData(superId: String): com.google.gson.JsonObject? =
+        com.edupage.api.modules.Assignments(session).getAssignmentData(superId)
+
+    suspend fun getPlans(): List<com.edupage.api.model.SchoolPlan> =
+        com.edupage.api.modules.Plans(session).getPlans()
+
+    suspend fun getAbsences(dateFrom: java.time.LocalDate): List<com.edupage.api.model.Absence> =
+        com.edupage.api.modules.Attendance(session).getAbsences(dateFrom)
+
+    fun extractAbsences(events: List<TimelineEvent>): List<com.edupage.api.model.Absence> =
+        com.edupage.api.modules.Attendance(session).fromTimeline(events)
+
+    fun searchHistory(events: List<TimelineEvent>, query: String): List<TimelineEvent> =
+        com.edupage.api.modules.Timeline(session).searchHistory(events, query)
+
     suspend fun getMeals(date: LocalDate): Meals? =
         Lunches(session).getMeals(date)
+
+    suspend fun orderMeal(date: LocalDate, mealTypeIndex: String, choice: String, boarderId: String): Boolean =
+        Lunches(session).orderMeal(date, mealTypeIndex, choice, boarderId)
+
+    suspend fun cancelMeal(date: LocalDate, mealTypeIndex: String, boarderId: String): Boolean =
+        Lunches(session).cancelMeal(date, mealTypeIndex, boarderId)
 
     suspend fun getMissingTeachers(date: LocalDate): List<EduTeacher> =
         Substitution(session).getMissingTeachers(date)
@@ -119,6 +181,26 @@ class Edupage(timeoutSeconds: Long = 15L) {
 
     suspend fun cloudUpload(file: File): EduCloudFile =
         Cloud(session).uploadFile(file)
+
+    suspend fun cloudList(): List<EduCloudFile> =
+        Cloud(session).listCloudFiles()
+
+    suspend fun cloudDelete(fileId: String): Boolean =
+        Cloud(session).deleteCloudFile(fileId)
+
+    val children: List<EduAccount>?
+        get() = session.children
+
+    val isParent: Boolean
+        get() = session.isParentAccount
+
+    val currentChildId: Int?
+        get() = session.activeChildId
+
+    fun getCurrentChild(): EduAccount? {
+        val childId = session.activeChildId ?: return null
+        return session.children?.find { it.personId == childId }
+    }
 
     suspend fun switchToChild(child: EduAccount) =
         Parent(session).switchToChild(child)
@@ -136,3 +218,4 @@ class Edupage(timeoutSeconds: Long = 15L) {
         headers: Map<String, String> = emptyMap()
     ): String = CustomRequest(session).customRequest(url, method, data, headers)
 }
+

@@ -22,8 +22,8 @@ android {
         applicationId = "com.enderplusbayzuiship.edupage2"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -53,6 +53,7 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
 
     implementation(platform(libs.androidx.compose.bom))
@@ -74,9 +75,15 @@ dependencies {
 
     implementation(libs.androidx.work.runtime.ktx)
 
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
+    implementation(libs.androidx.datastore.preferences)
+
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.biometric)
 
     implementation(libs.okhttp)
     implementation(libs.gson)

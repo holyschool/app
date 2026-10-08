@@ -13,3 +13,4 @@ open class EduAccount(
 
     override fun toString(): String = "EduAccount(personId=$personId, name='$name', type=$accountType)"
 }
+

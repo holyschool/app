@@ -5,12 +5,14 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
+import com.edupage.api.model.EduCloudFile
 import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.people.EduAccount
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
+import com.enderplusbayzuiship.edupage2.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -74,6 +76,9 @@ class MessagesViewModel @Inject constructor(
     private val _recipientsState = MutableStateFlow<RecipientsState>(RecipientsState.Idle)
     val recipientsState: StateFlow<RecipientsState> = _recipientsState.asStateFlow()
 
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
     private var allEvents: List<TimelineEvent> = emptyList()
 
     private var historyMonthsBack: Int = 1
@@ -103,6 +108,7 @@ class MessagesViewModel @Inject constructor(
     fun loadMore() {
         val current = _uiState.value as? MessagesUiState.Success ?: return
         if (current.isLoadingMore || !current.canLoadMore) return
+        if (!com.enderplusbayzuiship.edupage2.ui.util.ConnectivityObserver.isOnline.value) return
         Log.i(TAG, "loadMore: historyMonthsBack=$historyMonthsBack")
         viewModelScope.launch {
             _uiState.value = current.copy(isLoadingMore = true)
@@ -117,6 +123,7 @@ class MessagesViewModel @Inject constructor(
                 allEvents = (allEvents + newUnique).sortedByDescending { it.timestamp }
 
                 cache.save(allEvents)
+                updateUnreadCount()
                 val canLoadMore = newUnique.size >= PAGE_SIZE
                 Log.i(TAG, "loadMore: got ${newUnique.size} new items, canLoadMore=$canLoadMore")
                 _uiState.value = current.copy(
@@ -138,8 +145,10 @@ class MessagesViewModel @Inject constructor(
         val ids = allEvents.map { it.timelineId }
         prefs.markTimelineIdsSeen(ids)
         _uiState.value = current.copy(seenIds = prefs.getSeenTimelineIds())
+        updateUnreadCount()
         viewModelScope.launch {
             backendRegistrationManager.markMessagesRead(ids)
+            ids.forEach { id -> try { edupage.markMessageSeen(id) } catch (_: Exception) {} }
         }
     }
 
@@ -151,8 +160,10 @@ class MessagesViewModel @Inject constructor(
         if (current != null) {
             _uiState.value = current.copy(seenIds = prefs.getSeenTimelineIds())
         }
+        updateUnreadCount()
         viewModelScope.launch {
             backendRegistrationManager.markMessagesRead(listOf(timelineId))
+            try { edupage.markMessageSeen(timelineId) } catch (_: Exception) {}
         }
     }
 
@@ -174,19 +185,22 @@ class MessagesViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "failed to load recipients: ${e.message}", e)
                 _recipientsState.value = RecipientsState.Error(
-                    e.message ?: context.getString(R.string.messages_error_failed_to_load)
+                    if (e.isNetworkError())
+                        context.getString(R.string.network_error)
+                    else
+                        e.message ?: context.getString(R.string.messages_error_failed_to_load)
                 )
             }
         }
     }
 
-    fun sendMessage(recipients: List<EduAccount>, body: String) {
+    fun sendMessage(recipients: List<EduAccount>, body: String, important: Boolean = false, files: List<EduCloudFile> = emptyList()) {
         if (recipients.isEmpty() || body.isBlank()) return
         val current = _uiState.value as? MessagesUiState.Success ?: return
         viewModelScope.launch {
             _uiState.value = current.copy(isSending = true, sendError = null)
             try {
-                edupage.sendMessage(recipients, body)
+                edupage.sendMessage(recipients, body, important, files)
                 Log.i(TAG, "message sent, refreshing")
 
                 historyMonthsBack = 1
@@ -196,7 +210,10 @@ class MessagesViewModel @Inject constructor(
                 val afterSend = _uiState.value as? MessagesUiState.Success ?: current
                 _uiState.value = afterSend.copy(
                     isSending = false,
-                    sendError = e.message ?: context.getString(R.string.messages_error_failed_to_load)
+                    sendError = if (e.isNetworkError())
+                        context.getString(R.string.network_error)
+                    else
+                        e.message ?: context.getString(R.string.messages_error_failed_to_load)
                 )
             }
         }
@@ -207,11 +224,151 @@ class MessagesViewModel @Inject constructor(
         _uiState.value = current.copy(sendError = null)
     }
 
+    fun getCurrentUserId(): String? = edupage.getUserId()
+
+    fun sendReply(body: String, replyToTimelineId: Int, recipientUserString: String?) {
+        if (body.isBlank()) return
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        viewModelScope.launch {
+            _uiState.value = current.copy(isSending = true, sendError = null)
+            try {
+                edupage.sendReply(recipientUserString, body, replyToTimelineId)
+                Log.i(TAG, "reply sent to $replyToTimelineId, refreshing")
+                historyMonthsBack = 1
+                fetchAndUpdate(backgroundUpdate = true)
+            } catch (e: Exception) {
+                Log.e(TAG, "sendReply failed: ${e.message}", e)
+                val afterSend = _uiState.value as? MessagesUiState.Success ?: current
+                _uiState.value = afterSend.copy(
+                    isSending = false,
+                    sendError = if (e.isNetworkError())
+                        context.getString(R.string.network_error)
+                    else
+                        e.message ?: context.getString(R.string.messages_error_failed_to_load)
+                )
+            }
+        }
+    }
+
+    fun deleteMessage(timelineId: Int) {
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        viewModelScope.launch {
+            try {
+                edupage.deleteMessage(timelineId)
+                allEvents = allEvents.filter { it.timelineId != timelineId }
+                cache.save(allEvents)
+                _uiState.value = current.copy(groups = allEvents.toGroups(), seenIds = prefs.getSeenTimelineIds())
+                updateUnreadCount()
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteMessage failed: ${e.message}", e)
+            }
+        }
+    }
+
+    fun likeMessage(timelineId: Int, liked: Boolean) {
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        viewModelScope.launch {
+            try {
+                edupage.likeMessage(timelineId, liked)
+                replaceEvent(timelineId) { it.copy(reactionCount = (it.reactionCount + if (liked) 1 else -1).coerceAtLeast(0)) }
+            } catch (e: Exception) {
+                Log.e(TAG, "likeMessage failed: ${e.message}", e)
+            }
+        }
+    }
+
+    fun toggleMessageDone(timelineId: Int, done: Boolean) {
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        viewModelScope.launch {
+            try {
+                edupage.toggleMessageDone(timelineId, done)
+                replaceEvent(timelineId) { it.copy(isDone = done) }
+            } catch (e: Exception) {
+                Log.e(TAG, "toggleMessageDone failed: ${e.message}", e)
+            }
+        }
+    }
+
+    fun toggleMessageStarred(timelineId: Int, starred: Boolean) {
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        viewModelScope.launch {
+            try {
+                edupage.toggleMessageStarred(timelineId, starred)
+                replaceEvent(timelineId) { it.copy(isStarred = starred) }
+            } catch (e: Exception) {
+                Log.e(TAG, "toggleMessageStarred failed: ${e.message}", e)
+            }
+        }
+    }
+
+    fun voteOnPoll(timelineId: Int, answerIds: List<String>) {
+        if (answerIds.isEmpty()) return
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        viewModelScope.launch {
+            try {
+                edupage.voteOnPoll(timelineId, answerIds)
+                replaceEvent(timelineId) { it.copy(myVotes = answerIds) }
+                fetchAndUpdate(backgroundUpdate = true)
+            } catch (e: Exception) {
+                Log.e(TAG, "voteOnPoll failed: ${e.message}", e)
+                val afterSend = _uiState.value as? MessagesUiState.Success ?: current
+                _uiState.value = afterSend.copy(
+                    sendError = if (e.isNetworkError())
+                        context.getString(R.string.network_error)
+                    else
+                        e.message ?: context.getString(R.string.messages_error_failed_to_load)
+                )
+            }
+        }
+    }
+
+    private fun replaceEvent(timelineId: Int, transform: (TimelineEvent) -> TimelineEvent) {
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        allEvents = allEvents.map { if (it.timelineId == timelineId) transform(it) else it }
+        cache.save(allEvents)
+        _uiState.value = current.copy(groups = allEvents.toGroups(), seenIds = prefs.getSeenTimelineIds())
+    }
+
+    suspend fun uploadFile(file: java.io.File): EduCloudFile = edupage.cloudUpload(file)
+
+    suspend fun sendPoll(
+        recipients: List<EduAccount>,
+        question: String,
+        answers: List<String>,
+        anonymous: Boolean = false,
+        singleChoice: Boolean = false,
+    ) {
+        if (recipients.isEmpty() || question.isBlank() || answers.isEmpty()) return
+        val current = _uiState.value as? MessagesUiState.Success ?: return
+        viewModelScope.launch {
+            _uiState.value = current.copy(isSending = true, sendError = null)
+            try {
+                edupage.createPoll(recipients, question, answers, anonymous, singleChoice)
+                historyMonthsBack = 1
+                fetchAndUpdate(backgroundUpdate = true)
+            } catch (e: Exception) {
+                Log.e(TAG, "sendPoll failed: ${e.message}", e)
+                val afterSend = _uiState.value as? MessagesUiState.Success ?: current
+                _uiState.value = afterSend.copy(
+                    isSending = false,
+                    sendError = if (e.isNetworkError())
+                        context.getString(R.string.network_error)
+                    else
+                        e.message ?: context.getString(R.string.messages_error_failed_to_load)
+                )
+            }
+        }
+    }
+
+    private fun updateUnreadCount() {
+        _unreadCount.value = allEvents.count { it.timelineId !in prefs.getSeenTimelineIds() }
+    }
+
     private fun List<TimelineEvent>.toGroups(): List<MessageGroup> {
         val filtered = filter { it.type?.lowercase() !in HIDDEN_TYPES }
         val mains = filtered.filter { it.reactionTo == null || it.reactionTo == 0 }
         val replies = filtered.filter { it.reactionTo != null && it.reactionTo != 0 }
-        
+
         return mains.map { main ->
             MessageGroup(
                 main = main,
@@ -228,6 +385,7 @@ class MessagesViewModel @Inject constructor(
             if (cached != null) {
                 val (events, isStale) = cached
                 allEvents = events.sortedByDescending { it.timestamp }
+                updateUnreadCount()
                 val groups = allEvents.toGroups()
                 Log.i(TAG, "cache hit: ${events.size} events, stale=$isStale")
                 syncReadState()
@@ -246,12 +404,22 @@ class MessagesViewModel @Inject constructor(
     }
 
     private suspend fun fetchAndUpdate(backgroundUpdate: Boolean) {
+        if (!com.enderplusbayzuiship.edupage2.ui.util.ConnectivityObserver.isOnline.value) {
+            val offline = _uiState.value
+            if (offline is MessagesUiState.Success) {
+                _uiState.value = offline.copy(isRefreshing = false, isLoadingMore = false)
+            } else {
+                _uiState.value = MessagesUiState.Error(context.getString(R.string.network_error))
+            }
+            return
+        }
         try {
             syncReadState()
             val events = edupage.getNotifications()
                 .sortedByDescending { it.timestamp }
             allEvents = events
             cache.save(events)
+            updateUnreadCount()
             val groups = events.toGroups()
             Log.i(TAG, "fetchAndUpdate: ${events.size} events")
             _uiState.value = MessagesUiState.Success(
@@ -268,7 +436,10 @@ class MessagesViewModel @Inject constructor(
             } else {
                 Log.e(TAG, "fetchAndUpdate failed: ${e.message}", e)
                 _uiState.value = MessagesUiState.Error(
-                    e.message ?: context.getString(R.string.messages_error_failed_to_load)
+                    if (e.isNetworkError())
+                        context.getString(R.string.network_error)
+                    else
+                        e.message ?: context.getString(R.string.messages_error_failed_to_load)
                 )
             }
         }
@@ -286,3 +457,4 @@ class MessagesViewModel @Inject constructor(
         }
     }
 }
+

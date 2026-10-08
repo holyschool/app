@@ -19,3 +19,4 @@ class FailedToParseGradeDataException(message: String) : Exception(message)
 class NotParentException(message: String = "This method can only be used on parent accounts") : Exception(message)
 
 class NotAnOnlineLessonException(message: String = "This lesson is not an online lesson") : Exception(message)
+

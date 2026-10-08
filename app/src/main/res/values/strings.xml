@@ -1,14 +1,12 @@
 <resources>
     <string name="app_name">Edupage2</string>
 
-    <!-- Tab Navigation -->
     <string name="tab_overview">Overview</string>
     <string name="tab_messages">Messages</string>
     <string name="tab_timetable">Timetable</string>
     <string name="tab_grades">Grades</string>
     <string name="tab_settings">Settings</string>
 
-    <!-- Login Screen -->
     <string name="login_title">EduPage</string>
     <string name="login_subtitle">Sign in to continue</string>
     <string name="login_subtitle_2fa">Two-factor authentication</string>
@@ -25,7 +23,6 @@
     <string name="login_button_verify">Verify</string>
     <string name="login_button_signin">Sign In</string>
 
-    <!-- Login Error Messages -->
     <string name="login_error_empty_fields">Please fill in all fields</string>
     <string name="login_error_bad_credentials">Wrong username or password</string>
     <string name="login_error_captcha">Captcha required — please try again later</string>
@@ -33,7 +30,6 @@
     <string name="login_error_empty_code">Please enter the verification code</string>
     <string name="login_error_verification_failed">Verification failed: %s</string>
 
-    <!-- Timetable Screen -->
     <string name="timetable_title">Timetable</string>
     <string name="timetable_refresh">Refresh</string>
     <string name="timetable_previous_day">Previous day</string>
@@ -42,21 +38,27 @@
     <string name="timetable_retry">Retry</string>
     <string name="timetable_no_lessons">No lessons today</string>
     <string name="timetable_unknown_subject">Unknown subject</string>
+    <string name="timetable_event">Event</string>
+    <string name="timetable_view_day">Day</string>
+    <string name="timetable_view_week">Week</string>
+    <string name="timetable_week">Week</string>
 
-    <!-- Timetable Badges -->
     <string name="timetable_badge_now">Now</string>
     <string name="timetable_badge_cancelled">Cancelled</string>
     <string name="timetable_badge_changed">Changed</string>
     <string name="timetable_badge_online">Online</string>
     <string name="timetable_time_left">%s left</string>
 
-    <!-- Timetable Break Separator -->
     <string name="timetable_break_minutes">%dm break</string>
     <string name="timetable_break_hours">%dh break</string>
     <string name="timetable_break_hours_minutes">%1$dh %2$dm break</string>
 
-    <!-- Grades Screen -->
     <string name="grades_title">Grades</string>
+    <string name="grades_stats_title">Summary</string>
+    <string name="grades_stats_count">Grades</string>
+    <string name="grades_stats_subjects">Subjects</string>
+    <string name="grades_stats_verbal">Verbal</string>
+    <string name="grades_stats_trend">Monthly average</string>
     <string name="grades_coming_soon">Coming soon</string>
     <string name="grades_error_failed_to_load">Failed to load grades</string>
     <string name="grades_retry">Retry</string>
@@ -67,16 +69,33 @@
     <string name="grades_average">Avg</string>
     <string name="grades_percent">%s%%</string>
     <string name="grades_points">%1$s / %2$s pts</string>
+    <string name="grades_weight">%s×</string>
     <string name="grades_count">%d grade(s)</string>
+    <string name="grades_class_average">Class avg: %s</string>
     <string name="grades_unknown_subject">Unknown subject</string>
     <string name="grades_refresh">Refresh</string>
     <string name="grades_mark_all_read">Mark all as read</string>
+    <string name="grades_predict_button">Predict average</string>
+    <string name="grades_predict_title">Grade prediction</string>
+    <string name="grades_predict_subject">Subject</string>
+    <string name="grades_predict_pick_subject">Select a subject</string>
+    <string name="grades_predict_existing">Existing grades</string>
+    <string name="grades_predict_no_subject_grades">No grades in this subject</string>
+    <string name="grades_predict_virtual">Virtual grades</string>
+    <string name="grades_predict_add_virtual">Add virtual grade</string>
+    <string name="grades_predict_value">Grade</string>
+    <string name="grades_predict_weight">Weight</string>
+    <string name="grades_predict_show_all">Show all %d grades</string>
+    <string name="grades_predict_show_less">Show less</string>
+    <string name="grades_predict_current">Current average</string>
+    <string name="grades_predict_predicted">Predicted average</string>
+    <string name="grades_predict_note">Virtual grades are not saved.</string>
 
-    <!-- Messages Screen -->
     <string name="messages_title">Messages</string>
     <string name="messages_error_failed_to_load">Failed to load messages</string>
     <string name="messages_retry">Retry</string>
     <string name="messages_no_messages">No messages</string>
+    <string name="messages_no_unread">No unread messages</string>
     <string name="messages_refresh">Refresh</string>
     <string name="messages_unknown_sender">Unknown</string>
     <string name="messages_load_more">Load more</string>
@@ -84,6 +103,9 @@
     <string name="messages_send">Send</string>
     <string name="messages_recipient_hint">Recipients</string>
     <string name="messages_search_recipients">Search people\u2026</string>
+    <string name="messages_search">Search</string>
+    <string name="messages_search_hint">Search messages</string>
+    <string name="messages_no_results">No results</string>
     <string name="messages_message_body_hint">Write a message\u2026</string>
     <string name="messages_type_message">Message</string>
     <string name="messages_type_homework">Homework</string>
@@ -100,6 +122,7 @@
     <string name="messages_type_notification">Notification</string>
     <string name="messages_filter_all">All</string>
     <string name="messages_filter">Filter</string>
+    <string name="messages_filter_starred">Starred</string>
     <string name="messages_detail_from">From</string>
     <string name="messages_detail_due">Due</string>
     <string name="messages_detail_date">Date</string>
@@ -110,8 +133,42 @@
     <string name="messages_sending">Sending\u2026</string>
     <string name="messages_send_error">Failed to send message</string>
     <string name="messages_no_recipients_selected">Select at least one recipient</string>
+    <string name="messages_important">Mark as important</string>
+    <string name="messages_format_bold">Bold</string>
+    <string name="messages_format_italic">Italic</string>
+    <string name="messages_format_underline">Underline</string>
+    <string name="messages_fullscreen">Fullscreen</string>
+    <string name="messages_exit_fullscreen">Exit fullscreen</string>
+    <string name="messages_poll">Poll</string>
+    <string name="messages_poll_question">Poll question</string>
+    <string name="messages_poll_add_answer">Add answer</string>
+    <string name="messages_poll_remove_answer">Remove answer</string>
+    <string name="messages_poll_anonymous">Anonymous</string>
+    <string name="messages_poll_public">Public</string>
+    <string name="messages_poll_single_choice">Single choice</string>
+    <string name="messages_poll_multiple">Multiple choice</string>
+    <string name="messages_poll_single">Single choice</string>
+    <string name="messages_poll_label">Poll</string>
+    <string name="messages_poll_total_votes">%d total votes</string>
+    <string name="messages_poll_option_hint">Answer option</string>
+    <string name="messages_poll_vote">Vote</string>
+    <string name="messages_like">Like</string>
+    <string name="messages_star">Star</string>
+    <string name="messages_done">Mark as done</string>
+    <string name="messages_delete_title">Delete message</string>
+    <string name="messages_delete_confirm">Are you sure you want to delete this message? This action cannot be undone.</string>
+    <string name="messages_delete_action">Delete</string>
+    <string name="messages_important_label">Important</string>
+    <string name="messages_attachment">Attachment</string>
+    <string name="messages_attachment_pick">Pick attachment</string>
+    <string name="messages_attachment_error">Failed to attach file</string>
+    <string name="messages_attachment_count">%d attachment(s)</string>
+    <string name="messages_comments">Comments</string>
+    <string name="messages_reply">Reply</string>
+    <string name="messages_reply_hint">Write a reply…</string>
+    <string name="messages_comment_hint">Write a comment…</string>
+    <string name="messages_send_as_poll">Send as poll</string>
 
-    <!-- Overview Screen -->
     <string name="overview_title">Overview</string>
     <string name="overview_coming_soon">Coming soon</string>
     <string name="overview_today_schedule">Today\'s Schedule</string>
@@ -130,6 +187,9 @@
     <string name="overview_settings">Settings</string>
     <string name="overview_lessons_more">+%d more lessons</string>
     <string name="overview_error_timetable">Couldn\'t load timetable</string>
+    <string name="overview_retry">Retry</string>
+    <string name="network_error">No internet connection. Check your connection and try again.</string>
+    <string name="offline_banner">You\'re offline — showing saved data</string>
     <string name="overview_show_less">Show less</string>
     <string name="overview_see_timetable">Full timetable</string>
     <string name="overview_see_grades">All grades</string>
@@ -137,8 +197,52 @@
     <string name="overview_grades_more">+%d more grades</string>
     <string name="overview_recent_messages">Recent Messages</string>
     <string name="overview_no_messages">No messages yet</string>
+    <string name="overview_today_meals">Today\'s Meals</string>
+    <string name="overview_no_meals">No meals today</string>
+    <string name="overview_see_meals">All meals</string>
+    <string name="overview_my_homework">My Homework</string>
+    <string name="overview_no_homework">No homework yet</string>
+    <string name="overview_see_homework">See all homework</string>
+    <string name="overview_action_homework">Homework</string>
+    <string name="overview_ends_in">Current lesson ends in %s</string>
+    <string name="overview_next_starts_in">%1$s starts in %2$s</string>
 
-    <!-- Settings Screen -->
+    <string name="overview_stat_lessons">%d lessons</string>
+    <string name="overview_stat_unread">%d unread</string>
+    <string name="overview_stat_todo">%d to-do</string>
+
+    <string name="prepare_title">Prepare for tomorrow</string>
+    <string name="prepare_widget_title">Prepare</string>
+    <string name="prepare_title_date">Prepare · %1$s</string>
+    <string name="prepare_widget_loading">Loading tomorrow…</string>
+    <string name="prepare_widget_subtitle">%1$d classes · %2$d prepared</string>
+    <string name="prepare_later">Later</string>
+    <string name="prepare_prepared">Prepared</string>
+    <string name="prepare_progress">%1$d of %2$d prepared</string>
+    <string name="prepare_hint">Swipe right if you packed it · left to see it later</string>
+    <string name="prepare_all_done">You\'re all set</string>
+    <string name="prepare_all_done_desc">Everything is packed for %1$s. Sleep well.</string>
+    <string name="prepare_back">Back to overview</string>
+    <string name="prepare_reset">Start over</string>
+    <string name="prepare_stamp_prepared">PREPARED</string>
+    <string name="prepare_stamp_later">LATER</string>
+
+    <string name="widget_timetable_desc">Today\'s timetable at a glance</string>
+    <string name="widget_timetable_title">Today · %1$s</string>
+    <string name="widget_now">Now</string>
+    <string name="widget_empty_lessons">No lessons today</string>
+    <string name="widget_canteen_desc">Today\'s canteen menu at a glance</string>
+    <string name="widget_canteen_title">Meals · %1$s</string>
+    <string name="widget_credit">Credit: %1$s</string>
+    <string name="widget_empty_meals">No meals today</string>
+    <string name="widget_homework_desc">Pending homework at a glance</string>
+    <string name="widget_homework_title">Homework</string>
+    <string name="widget_empty_homework">Nothing to do</string>
+    <string name="widget_prepare_desc">Prepare-for-tomorrow shortcut</string>
+    <string name="widget_prepare_title">Prepare</string>
+    <string name="widget_prepare_tap">Tap to load classes</string>
+    <string name="widget_prepare_progress">%1$d of %2$d packed</string>
+
     <string name="settings_title">Settings</string>
     <string name="settings_section_timetable">Timetable</string>
     <string name="settings_section_account">Account</string>
@@ -151,7 +255,12 @@
     <string name="settings_break_visibility_desc_active_or_long">Shows the active break and any free period of %d+ minutes.</string>
     <string name="settings_logout">Log out</string>
 
-    <!-- Settings – Language -->
+    <string name="settings_section_accounts">Accounts</string>
+    <string name="settings_accounts_empty">No saved accounts. Log in to add one.</string>
+    <string name="settings_accounts_active">Active account</string>
+    <string name="settings_accounts_switch">Tap to switch</string>
+    <string name="settings_accounts_add">Add another account…</string>
+
     <string name="settings_section_language">Language</string>
     <string name="settings_language_label">App language</string>
     <string name="settings_language_system">System</string>
@@ -159,16 +268,23 @@
     <string name="settings_language_czech">Czech</string>
     <string name="settings_language_slovak">Slovak</string>
 
-    <!-- Settings – Appearance -->
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_dark_mode">Dark mode</string>
     <string name="settings_dark_mode_system">System</string>
     <string name="settings_dark_mode_light">Light</string>
     <string name="settings_dark_mode_dark">Dark</string>
+    <string name="settings_accent_color">Accent color</string>
+    <string name="settings_accent_blue">Blue (default)</string>
+    <string name="settings_accent_purple">Purple</string>
+    <string name="settings_accent_green">Green</string>
+    <string name="settings_accent_orange">Orange</string>
+    <string name="settings_accent_red">Red</string>
+    <string name="settings_accent_teal">Teal</string>
+    <string name="settings_accent_pink">Pink</string>
+    <string name="settings_accent_slate">Slate</string>
     <string name="settings_amoled">AMOLED black</string>
     <string name="settings_amoled_desc">Use pure black backgrounds in dark mode to save power on OLED screens.</string>
 
-    <!-- Settings – Notifications -->
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_notif_label">Notifications</string>
     <string name="settings_notif_desc_on">Manage background checks and alerts.</string>
@@ -180,7 +296,6 @@
     <string name="settings_notif_interval_1h">1 h</string>
     <string name="settings_notif_interval_2h">2 h</string>
 
-    <!-- Settings – Grades, Messages &amp; Substitutions -->
     <string name="settings_section_notif_types">Notification Types</string>
     <string name="settings_notif_grades">New grades</string>
     <string name="settings_notif_grades_desc">Get notified when a new grade is posted.</string>
@@ -189,11 +304,15 @@
     <string name="settings_notif_substitutions">Timetable changes</string>
     <string name="settings_notif_substitutions_desc">Get notified about substitutions and cancellations.</string>
 
-    <!-- Settings – Developer -->
     <string name="settings_section_developer">Developer</string>
     <string name="settings_developer_options">Developer options</string>
 
-    <!-- Settings – Backend Notifications -->
+    <string name="settings_account_signed_in_as">Signed in as %s</string>
+    <string name="settings_account_viewing_child">Viewing: %s</string>
+    <string name="settings_account_switch_to_parent">Switch to parent view</string>
+    <string name="settings_account_switch_to_child">Switch to %s</string>
+    <string name="settings_account_parent">Parent</string>
+
     <string name="settings_section_backend">Backend</string>
     <string name="settings_backend_title">Push backend</string>
     <string name="settings_backend_url">Backend URL</string>
@@ -219,27 +338,68 @@
     <string name="settings_backend_official_desc">Use the official backend</string>
     <string name="settings_backend_own_desc">Use your own backend URL and key</string>
 
-    <!-- Developer Options Screen -->
-    <string name="dev_options_title">Developer Options</string>
-    <string name="dev_test_notif_grade">Test Grade Notif</string>
-    <string name="dev_test_notif_message">Test Message Notif</string>
-    <string name="dev_trigger_worker">Trigger Check Worker</string>
-    <string name="dev_reset_watermarks">Reset Watermarks</string>
-    <string name="dev_debug_info">Debug Info</string>
-    <string name="dev_last_fetch">Last fetch: %s</string>
-    <string name="dev_last_timeline_id">Last timeline ID: %d</string>
+    <string name="settings_hub_timetable_desc">Breaks, weekends and views</string>
+    <string name="settings_hub_general_desc">Refresh, tabs and caches</string>
+    <string name="settings_hub_appearance_desc">Theme and accent color</string>
+    <string name="settings_hub_security_desc">App lock and biometrics</string>
+    <string name="settings_hub_notifications_desc">Alerts and check interval</string>
+    <string name="settings_hub_data_desc">Homework, files and export</string>
+    <string name="settings_hub_developer_desc">Tools and diagnostics</string>
 
-    <!-- Splash Screen -->
+    <string name="dev_options_title">Developer Options</string>
+    <string name="dev_section_device">Device &amp; Account</string>
+    <string name="dev_app_version_title">App version</string>
+    <string name="dev_app_version">App: %1$s (%2$d)</string>
+    <string name="dev_account_title">Active account</string>
+    <string name="dev_no_account">Not logged in</string>
+    <string name="dev_copy_debug">Copy debug info</string>
+    <string name="dev_copied">Copied to clipboard</string>
+    <string name="dev_debug_info">Debug info</string>
+    <string name="dev_last_fetch">Last fetch: %s</string>
+    <string name="dev_last_fetch_label">Last fetch</string>
+    <string name="dev_last_timeline_id">Last timeline ID: %d</string>
+    <string name="dev_last_timeline_label">Last timeline ID</string>
+    <string name="dev_refresh_info">Refresh info</string>
+    <string name="dev_section_tests">Notification tests</string>
+    <string name="dev_test_notif_grade">Test grade notification</string>
+    <string name="dev_test_notif_message">Test message notification</string>
+    <string name="dev_test_notif_homework">Test homework notification</string>
+    <string name="dev_test_notif_substitution">Test substitution notification</string>
+    <string name="dev_test_notif_event">Test event notification</string>
+    <string name="dev_trigger_worker">Trigger check worker now</string>
+    <string name="dev_worker_triggered">Check worker triggered</string>
+    <string name="dev_section_links">Tokens &amp; deep links</string>
+    <string name="dev_copy_token">Copy push token</string>
+    <string name="dev_token_copied">Push token copied</string>
+    <string name="dev_no_token">No push token available</string>
+    <string name="dev_open_notif_settings">Open notification settings</string>
+    <string name="dev_dl_grades">Open Grades deep link</string>
+    <string name="dev_dl_timetable">Open Timetable deep link</string>
+    <string name="dev_dl_messages">Open Messages deep link</string>
+    <string name="dev_section_storage">Storage &amp; data</string>
+    <string name="dev_clear_caches">Clear all caches</string>
+    <string name="dev_caches_cleared">Caches cleared</string>
+    <string name="dev_clear_seen">Clear seen message IDs</string>
+    <string name="dev_seen_cleared">Seen message IDs cleared</string>
+    <string name="dev_reset_watermarks">Reset notification watermarks</string>
+    <string name="dev_watermarks_reset">Watermarks reset</string>
+    <string name="dev_export_dump">Export debug dump</string>
+    <string name="dev_dump_exported">Debug dump exported</string>
+    <string name="dev_dump_failed">Export failed</string>
+    <string name="dev_section_onboarding">Onboarding</string>
+    <string name="dev_section_playground">Playground</string>
+    <string name="dev_test_ui">Test UI</string>
+    <string name="dev_test_ui_desc">Preview of every UI component</string>    <string name="dev_reset_onboarding">Reset onboarding tutorial</string>
+    <string name="dev_onboarding_reset">Onboarding will show again on next launch</string>
+
     <string name="splash_signing_in">Signing you in\u2026</string>
 
-    <!-- Timetable – fallback / misc -->
     <string name="timetable_unknown_placeholder">?</string>
     <string name="timetable_time_left_under_1m">&lt;1m</string>
     <string name="timetable_time_left_minutes">%dm</string>
     <string name="timetable_time_left_hours">%dh</string>
     <string name="timetable_time_left_hours_minutes">%1$dh %2$dm</string>
 
-    <!-- Notification Service Content -->
     <string name="notif_loading">Timetable loading\u2026</string>
     <string name="notif_subject_fallback">Class</string>
     <string name="notif_class_ends_in">%1$s ends in %2$dm</string>
@@ -249,24 +409,51 @@
     <string name="notif_subject_in">%1$s in %2$dm</string>
     <string name="notif_day_ended">School day ended</string>
 
-    <!-- Timetable Error -->
     <string name="timetable_error_failed_to_load">Failed to load timetable</string>
 
-    <!-- Settings – Timetable extra -->
     <string name="settings_show_weekends">Show weekends</string>
     <string name="settings_show_weekends_desc">Include Saturday and Sunday in the date navigation.</string>
+    <string name="settings_timetable_view_mode">Default timetable view</string>
+    <string name="settings_timetable_view_day">Day</string>
+    <string name="settings_timetable_view_week">Week</string>
+    <string name="settings_show_seconds">Show seconds in live timers</string>
+    <string name="settings_show_seconds_desc">Display seconds while a break or lesson is running.</string>
     <string name="settings_cancelled_lesson_style">Cancelled lesson style</string>
     <string name="settings_cancelled_lesson_style_red">Red</string>
     <string name="settings_cancelled_lesson_style_grey">Grey</string>
     <string name="settings_cancelled_lesson_style_desc_red">Cancelled lessons are highlighted in red.</string>
     <string name="settings_cancelled_lesson_style_desc_grey">Cancelled lessons are shown greyed out.</string>
+    <string name="settings_lesson_grouping">Group lessons</string>
+    <string name="settings_lesson_grouping_off">Off</string>
+    <string name="settings_lesson_grouping_doubles">Double lessons</string>
+    <string name="settings_lesson_grouping_doubles_desc">Back-to-back periods of the same class merge into one card.</string>
+    <string name="settings_lesson_grouping_all">Everything between breaks</string>
+    <string name="settings_lesson_grouping_all_desc">Merge all classes until the next visible break separator.</string>
 
-    <!-- Grade notifications -->
+    <string name="settings_general_section">General</string>
+    <string name="settings_auto_refresh">Auto-refresh data</string>
+    <string name="settings_auto_refresh_off">Off</string>
+    <string name="settings_auto_refresh_5m">Every 5 min</string>
+    <string name="settings_auto_refresh_15m">Every 15 min</string>
+    <string name="settings_auto_refresh_30m">Every 30 min</string>
+    <string name="settings_auto_refresh_1h">Every hour</string>
+    <string name="settings_keep_screen_awake">Keep screen awake</string>
+    <string name="settings_keep_screen_awake_desc">Keep the screen on while using the app.</string>
+    <string name="settings_default_tab">Tab on launch</string>
+    <string name="settings_compact_timetable">Compact timetable</string>
+    <string name="settings_compact_timetable_desc">Reduce spacing between lessons.</string>
+    <string name="settings_first_day_of_week">First day of week</string>
+    <string name="settings_first_day_monday">Monday</string>
+    <string name="settings_first_day_sunday">Sunday</string>
+    <string name="settings_clear_caches">Clear data caches</string>
+    <string name="settings_clear_caches_desc">Delete cached timetable, grades, messages and meals.</string>
+    <string name="settings_caches_cleared">Caches cleared</string>
+
     <string name="notif_grade_title">New Grade</string>
     <string name="notif_grade_single">You got a %1$s in %2$s</string>
+    <string name="notif_grade_single_teacher">You got a %1$s in %2$s — %3$s</string>
     <string name="notif_grade_multiple">%1$d new grades</string>
 
-    <!-- Message notifications -->
     <string name="notif_message_title">Message from %1$s</string>
     <string name="notif_message_title_multiple">New Messages</string>
     <string name="notif_message_multiple">%1$d new messages</string>
@@ -274,7 +461,6 @@
     <string name="notif_message_unknown_sender">Unknown</string>
     <string name="notif_mark_read">Mark as read</string>
 
-    <!-- Substitution notifications -->
     <string name="notif_homework_title">New homework</string>
     <string name="notif_homework_title_sender">New homework from %1$s</string>
     <string name="notif_test_title">New test</string>
@@ -289,15 +475,66 @@
     <string name="notif_substitution_new">New substitution or cancellation</string>
     <string name="notif_substitution_multiple">%1$d new timetable changes</string>
 
-    <!-- Notification Channels -->
+    <string name="notif_payment_title">Payment from %1$s</string>
+    <string name="notif_signin_title">Confirmation request from %1$s</string>
+    <string name="notif_album_title">New photos from %1$s</string>
+    <string name="notif_behaviour_title">Behaviour record from %1$s</string>
+    <string name="notif_notification_title">Notification from %1$s</string>
+
     <string name="notif_channel_grades_name">New grades</string>
     <string name="notif_channel_grades_desc">Notifies you when a new grade is posted</string>
     <string name="notif_channel_messages_name">New messages</string>
     <string name="notif_channel_messages_desc">Notifies you when you receive a new message</string>
     <string name="notif_channel_substitutions_name">Timetable changes</string>
     <string name="notif_channel_substitutions_desc">Notifies you about substitutions and cancellations</string>
+    <string name="notif_channel_live_class_name">Live class</string>
+    <string name="notif_channel_live_class_desc">Ongoing countdown for the current lesson or break</string>
+    <string name="notif_live_loading">Checking today\'s classes…</string>
+    <string name="notif_live_class_title">%1$s</string>
+    <string name="notif_live_ends_in">ends in %1$s</string>
+    <string name="notif_live_next">Next: %1$s</string>
+    <string name="notif_live_break_title">Break</string>
+    <string name="notif_live_break_text">%1$s left · %2$s</string>
+    <string name="settings_live_class">Live class notification</string>
+    <string name="settings_live_class_desc">Keep an ongoing notification with countdown, progress and the next classroom.</string>
+    <string name="settings_haptics">Haptic feedback</string>
+    <string name="settings_haptics_off">Off</string>
+    <string name="settings_haptics_subtle">Subtle</string>
+    <string name="settings_haptics_strong">Strong</string>
+    <string name="settings_motion_blur">Motion blur</string>
+    <string name="settings_motion_blur_desc">Blur lists while scrolling.</string>
+    <string name="whats_new_title">What\'s new</string>
+    <string name="whats_new_dismiss">Let me in</string>
+    <string name="settings_check_updates">Check for updates</string>
+    <string name="settings_checking_updates">Checking…</string>
+    <string name="update_up_to_date">You\'re on the latest version</string>
+    <string name="update_check_failed">Update check failed</string>
+    <string name="update_available_title">Update available: %1$s</string>
+    <string name="update_download">Download</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_download_started">Download started — tap the notification to install</string>
 
-    <!-- About Screen -->
+    <string name="tab_meals">Meals</string>
+    <string name="meals_title">School meals</string>
+    <string name="meals_refresh">Refresh</string>
+    <string name="meals_today">Today</string>
+    <string name="meals_prev_day">Previous day</string>
+    <string name="meals_next_day">Next day</string>
+    <string name="meals_no_meals">No meals available for this day</string>
+    <string name="meals_loading">Loading meals\u2026</string>
+    <string name="meals_error">Failed to load meals</string>
+    <string name="meals_retry">Retry</string>
+    <string name="meals_allergens">Allergens</string>
+    <string name="meals_weight">Weight: %s</string>
+    <string name="meals_ordered">Ordered</string>
+    <string name="meals_not_ordered">Not ordered</string>
+    <string name="meals_order">Order</string>
+    <string name="meals_cancel_order">Cancel</string>
+    <string name="meals_action_meals">Meals</string>
+    <string name="meals_credit">Credit: %s</string>
+    <string name="meals_change_until">Can be changed until %s</string>
+    <string name="meals_date_format">d MMM yyyy</string>
+
     <string name="settings_section_about">About</string>
     <string name="about_title">About</string>
     <string name="about_app_name">Edupage2</string>
@@ -307,4 +544,171 @@
     <string name="about_open_source_licenses_desc">View licenses for third-party libraries used in this app.</string>
     <string name="about_source_code">Source code</string>
     <string name="about_source_code_desc">View the source code on GitHub.</string>
+
+    <string name="settings_my_homework">My homework</string>
+    <string name="settings_my_homework_desc">Add local homework assignments</string>
+    <string name="settings_assignments">Assignments</string>
+    <string name="settings_assignments_desc">Tests and homework from EduPage</string>
+    <string name="settings_academics">Absences &amp; curriculum</string>
+    <string name="settings_academics_desc">Excuses and lesson plans</string>
+    <string name="settings_cloud">Cloud files</string>
+    <string name="settings_cloud_desc">Manage your EduPage cloud storage</string>
+    <string name="settings_export_data">Export data</string>
+    <string name="settings_export_data_desc">Save local data as a JSON file</string>
+    <string name="settings_export_success">Data exported</string>
+    <string name="settings_export_failed">Export failed</string>
+    <string name="homework_title">Homework</string>
+    <string name="homework_empty">No homework yet. Tap + to add.</string>
+    <string name="homework_pending">To do</string>
+    <string name="homework_done">Done</string>
+    <string name="homework_add">Add homework</string>
+    <string name="homework_edit">Edit homework</string>
+    <string name="homework_delete">Delete</string>
+    <string name="homework_toggle_done">Toggle done</string>
+    <string name="homework_title_label">Title</string>
+    <string name="homework_date_label">Date (YYYY-MM-DD)</string>
+    <string name="homework_date_hint">e.g. 2026-09-15</string>
+    <string name="homework_subject_label">Subject</string>
+    <string name="homework_notes_label">Notes</string>
+    <string name="homework_save">Save</string>
+    <string name="homework_cancel">Cancel</string>
+    <string name="homework_untitled">Untitled</string>
+
+    <string name="assignments_title">Assignments</string>
+    <string name="assignments_refresh">Refresh</string>
+    <string name="assignments_error_loading">Could not load assignments.</string>
+    <string name="assignments_empty">No assignments found for this period.</string>
+    <string name="assignments_load_more">Load older</string>
+    <string name="assignments_retry">Retry</string>
+    <string name="assignments_finished">Finished</string>
+    <string name="assignments_filter_all">All</string>
+    <string name="assignments_filter_pending">To do</string>
+    <string name="assignments_filter_done">Done</string>
+    <string name="assignments_filter_tests">Tests</string>
+    <string name="assignment_type_test">Test</string>
+    <string name="assignment_type_homework">Homework</string>
+    <string name="assignment_type_exam">Exam</string>
+    <string name="assignment_type_project">Project</string>
+    <string name="assignment_type_lesson">Lesson</string>
+    <string name="assignment_type_curriculum">Curriculum</string>
+    <string name="assignment_type_other">Assignment</string>
+
+    <string name="academics_title">Academics</string>
+    <string name="academics_refresh">Refresh</string>
+    <string name="academics_retry">Retry</string>
+    <string name="academics_tab_absences">Absences</string>
+    <string name="academics_tab_curriculum">Curriculum</string>
+    <string name="absences_error_loading">Could not load absences.</string>
+    <string name="absences_empty">No absences recorded. You\'re all clear!</string>
+    <string name="absence_excused">Excused</string>
+    <string name="absence_unexcused">Unexcused</string>
+    <string name="absence_total">Total</string>
+    <string name="absence_excused_label">Excused</string>
+    <string name="absence_unexcused_label">Unexcused</string>
+    <string name="curriculum_error_loading">Could not load curriculum.</string>
+    <string name="curriculum_empty">No curriculum plans available.</string>
+    <string name="curriculum_unknown_subject">Unknown subject</string>
+    <string name="curriculum_progress">Taught %1$d of %2$d topics</string>
+
+    <string name="cloud_title">Cloud files</string>
+    <string name="cloud_refresh">Refresh</string>
+    <string name="cloud_retry">Retry</string>
+    <string name="cloud_error_loading">Could not load cloud files.</string>
+    <string name="cloud_empty">No files in your cloud yet.</string>
+    <string name="cloud_delete_title">Delete file?</string>
+    <string name="cloud_delete_confirm">Delete "%1$s" from your cloud?</string>
+    <string name="cloud_delete_action">Delete</string>
+    <string name="cloud_cancel">Cancel</string>
+
+    <string name="onboarding_welcome_title">Welcome to Edupage2</string>
+    <string name="onboarding_welcome_subtitle">Your school day, grades and messages — in one clean app.</string>
+    <string name="onboarding_welcome_begin">Let\'s begin</string>
+    <string name="onboarding_pill_text">Unofficial EduPage client</string>
+    <string name="onboarding_ack_title">Before you begin</string>
+    <string name="onboarding_ack_desc">Edupage2 is an unofficial client for EduPage. It signs in with your school account to show your timetable, grades, messages and meals in one place.</string>
+    <string name="onboarding_ack_warning">Your password is stored encrypted on this device only and is never sent anywhere except your school\'s EduPage server.</string>
+    <string name="onboarding_ack_footer">Background checks for new grades and messages run on this device. You can turn them off at any time below or later in Settings.</string>
+    <string name="action_i_understand">I understand</string>
+    <string name="action_all_set">All set</string>
+    <string name="action_let_me_in">Let me in</string>
+    <string name="onboarding_step_counter">Step %1$d of %2$d</string>
+    <string name="onboarding_prefs_title">Make it yours</string>
+    <string name="onboarding_prefs_desc">Choose what you want to see and when to be notified. You can change this later in Settings.</string>
+    <string name="onboarding_section_app">App</string>
+    <string name="onboarding_section_notifs">Notifications</string>
+    <string name="onboarding_features_title">Take a quick tour</string>
+    <string name="onboarding_features_desc">Here is what you will find inside — overview, timetable, alerts and meals.</string>
+    <string name="action_back">Back</string>
+    <string name="onboarding_title_1">All your school in one place</string>
+    <string name="onboarding_desc_1">See your day at a glance — lessons, meal credit, grades and the latest news on the overview screen.</string>
+    <string name="onboarding_title_2">Timetable, day or week</string>
+    <string name="onboarding_desc_2">Browse your schedule by day or week, mark cancelled lessons, and never miss a period.</string>
+    <string name="onboarding_title_3">Stay notified</string>
+    <string name="onboarding_desc_3">Get notifications for new grades, messages and substitutions. Add homework and export your data from Settings.</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_get_started">Get started</string>
+
+    <string name="onboarding_example_overview_label">Overview</string>
+    <string name="onboarding_example_lesson_subject">Mathematics</string>
+    <string name="onboarding_example_lesson_room">Room 12</string>
+    <string name="onboarding_example_lesson_time">08:00</string>
+    <string name="onboarding_example_grade">Grade 1</string>
+    <string name="onboarding_example_grade_subject">English</string>
+    <string name="onboarding_example_grade_value">A</string>
+    <string name="onboarding_example_notif_title">New grade</string>
+    <string name="onboarding_example_notif_body">You got a new grade in Mathematics</string>
+    <string name="onboarding_example_meals_credit">Meal credit</string>
+    <string name="onboarding_example_meals_credit_value">€25.40</string>
+    <string name="onboarding_example_meals_menu">Canteen menu for today</string>
+    <string name="onboarding_example_meals_dish">Chicken &amp; rice</string>
+
+    <string name="settings_section_security">Security</string>
+    <string name="lock_title">Enter your PIN</string>
+    <string name="lock_pin_hint">PIN</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_wrong_pin">Incorrect PIN</string>
+    <string name="settings_lock_enable">App lock</string>
+    <string name="settings_lock_desc">Require a PIN when opening the app</string>
+    <string name="settings_lock_set">Set PIN</string>
+    <string name="settings_lock_change">Change PIN</string>
+    <string name="settings_lock_current_pin_hint">Current PIN</string>
+    <string name="settings_lock_new_pin_hint">New PIN</string>
+    <string name="settings_lock_confirm_pin_hint">Confirm PIN</string>
+    <string name="settings_lock_mismatch">PINs do not match</string>
+    <string name="settings_lock_must_be_enabled">Enable app lock first</string>
+    <string name="settings_lock_saved">PIN set</string>
+    <string name="settings_lock_disabled">App lock disabled</string>
+    <string name="settings_lock_pin_length">PIN must be at least 4 digits</string>
+    <string name="settings_lock_cancel">Cancel</string>
+    <string name="settings_lock_save">Save</string>
+    <string name="settings_lock_confirm">Confirm</string>
+
+    <string name="settings_lock_biometrics">Use biometric unlock</string>
+    <string name="settings_lock_biometrics_desc">Let your fingerprint or face unlock the app instead of the PIN.</string>
+    <string name="lock_biometric_prompt_title">Unlock with biometric</string>
+    <string name="lock_biometric_prompt_subtitle">Place your finger on the sensor</string>
+    <string name="lock_biometric_prompt_cancel">Use PIN instead</string>
+
+    <string name="settings_section_onboarding">Onboarding</string>
+    <string name="onboarding_meals_title">Canteen &amp; Meals</string>
+    <string name="onboarding_meals_desc">Track your meal credit and canteen menu. You can enable this later in Settings.</string>
+    <string name="onboarding_meals_enabled">Enable canteen tab</string>
+
+    <string name="settings_meals_enabled">Meals / Canteen</string>
+    <string name="settings_meals_enabled_desc">Show the Meals tab with canteen information.</string>
+
+    <string name="grade_details_title">Grade details</string>
+    <string name="grade_details_score">Score</string>
+    <string name="grade_details_subject">Subject</string>
+    <string name="grade_details_assignment">Assignment</string>
+    <string name="grade_details_percentage">Percentage</string>
+    <string name="grade_details_points">Points</string>
+    <string name="grade_details_weight">Weight</string>
+    <string name="grade_details_class_average">Class average</string>
+    <string name="grade_details_teacher">Teacher</string>
+    <string name="grade_details_date">Date</string>
+    <string name="grade_details_note">Note</string>
+    <string name="grade_details_no_note">No note</string>
 </resources>
+

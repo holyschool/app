@@ -37,7 +37,7 @@ class BackendSecurityManager @Inject constructor(
                 .replace("-----END PUBLIC KEY-----", "")
                 .replace("\n", "")
                 .trim()
-            
+
             val keyBytes = Base64.decode(cleanPem, Base64.DEFAULT)
             val spec = X509EncodedKeySpec(keyBytes)
             val keyFactory = KeyFactory.getInstance("RSA")
@@ -63,3 +63,4 @@ class BackendSecurityManager @Inject constructor(
         }
     }
 }
+

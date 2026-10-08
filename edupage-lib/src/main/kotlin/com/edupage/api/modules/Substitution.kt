@@ -80,6 +80,9 @@ internal class Substitution(private val session: EdupageSession) {
     }
 
     private fun buildRequestBody(date: LocalDate): okhttp3.RequestBody {
+        val gsh = session.gsecHash ?: throw IllegalStateException(
+            "gsecHash is null — login may not have completed successfully"
+        )
         val body = com.google.gson.JsonObject().apply {
             add("__args", com.google.gson.JsonArray().apply {
                 add(com.google.gson.JsonNull.INSTANCE)
@@ -87,7 +90,7 @@ internal class Substitution(private val session: EdupageSession) {
                     addProperty("date", date.format(dateFmt))
                 })
             })
-            addProperty("__gsh", session.gsecHash)
+            addProperty("__gsh", gsh)
         }
         return body.toString().toRequestBody("application/json".toMediaType())
     }
@@ -100,3 +103,4 @@ internal class Substitution(private val session: EdupageSession) {
         } catch (e: Exception) { null }
     }
 }
+

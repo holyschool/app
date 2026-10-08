@@ -5,3 +5,4 @@ data class Subject(
     val name: String?,
     val shortName: String?
 )
+

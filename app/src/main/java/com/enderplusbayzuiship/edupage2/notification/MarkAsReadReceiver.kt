@@ -37,3 +37,4 @@ class MarkAsReadReceiver : BroadcastReceiver() {
         )
     }
 }
+

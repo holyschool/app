@@ -6,12 +6,15 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.ui.login.LoginScreen
 import com.enderplusbayzuiship.edupage2.ui.main.MainScreen
+import com.enderplusbayzuiship.edupage2.ui.onboarding.OnboardingScreen
 import com.enderplusbayzuiship.edupage2.ui.splash.SplashScreen
 
 @Composable
-fun AppNavGraph(navController: NavHostController) {
+fun AppNavGraph(navController: NavHostController, appPreferences: AppPreferences) {
+    val onboardingCompleted = appPreferences.onboardingCompleted
     NavHost(
         navController = navController,
         startDestination = Screen.Splash.route
@@ -19,7 +22,9 @@ fun AppNavGraph(navController: NavHostController) {
         composable(Screen.Splash.route) {
             SplashScreen(
                 onAutoLoginSuccess = {
-                    navController.navigate(Screen.Main.route) {
+                    val destination =
+                        if (onboardingCompleted) Screen.Main.route else Screen.Onboarding.route
+                    navController.navigate(destination) {
                         popUpTo(Screen.Splash.route) { inclusive = true }
                     }
                 },
@@ -43,8 +48,19 @@ fun AppNavGraph(navController: NavHostController) {
                 prefillUsername = prefillUsername,
                 prefillSubdomain = prefillSubdomain,
                 onLoginSuccess = {
-                    navController.navigate(Screen.Main.route) {
+                    val destination =
+                        if (appPreferences.onboardingCompleted) Screen.Main.route else Screen.Onboarding.route
+                    navController.navigate(destination) {
                         popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        composable(Screen.Onboarding.route) {
+            OnboardingScreen(
+                onFinish = {
+                    navController.navigate(Screen.Main.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }
                 }
             )
@@ -55,8 +71,14 @@ fun AppNavGraph(navController: NavHostController) {
                     navController.navigate(Screen.Login.route()) {
                         popUpTo(Screen.Main.route) { inclusive = true }
                     }
+                },
+                onSwitchAccount = {
+                    navController.navigate(Screen.Splash.route) {
+                        popUpTo(Screen.Main.route) { inclusive = true }
+                    }
                 }
             )
         }
     }
 }
+

@@ -8,3 +8,4 @@ enum class Gender(val value: String) {
         fun parse(value: String?): Gender? = values().firstOrNull { it.value == value }
     }
 }
+

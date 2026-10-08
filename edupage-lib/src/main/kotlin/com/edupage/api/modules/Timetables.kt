@@ -48,6 +48,9 @@ internal class Timetables(private val session: EdupageSession) {
 
     private suspend fun getTimetableData(targetId: Int, table: String, date: LocalDate): List<JsonObject> {
         return withContext(Dispatchers.IO) {
+            val gsh = session.gsecHash ?: throw IllegalStateException(
+                "gsecHash is null — login may not have completed successfully"
+            )
             val url = "https://${session.subdomain}.edupage.org/timetable/server/currenttt.js?__func=curentttGetData"
             val body = JsonObject().apply {
                 add("__args", com.google.gson.JsonArray().apply {
@@ -64,7 +67,7 @@ internal class Timetables(private val session: EdupageSession) {
                         addProperty("log_module", "CurrentTTView")
                     })
                 })
-                addProperty("__gsh", session.gsecHash)
+                addProperty("__gsh", gsh)
             }
             val requestBody = body.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder().url(url).post(requestBody).build()
@@ -177,10 +180,10 @@ internal class Timetables(private val session: EdupageSession) {
             val classroomIds = lessonJson.get("classroomids")?.takeIf { !it.isJsonNull }?.asJsonArray
             val lessonClassrooms = classroomIds?.mapNotNull { classrooms.getClassroom(it.asString) }
 
-            val isEvent = lessonJson.field("type").safeString().let { type ->
-                type == "event" || type == "out" || type == "vacation" ||
-                type == "break" || type == "holiday" || type == "absent" || type == ""
-            } || lessonJson.field("main").safeBoolean() == true ||
+            val typeStr = lessonJson.field("type").safeString()
+            val isEvent = (typeStr == "event" || typeStr == "out" || typeStr == "vacation" ||
+                typeStr == "break" || typeStr == "holiday" || typeStr == "absent" || typeStr == "") ||
+                lessonJson.field("main").safeBoolean() == true ||
                 subjectId.isNullOrEmpty()
 
             val onlineLessonLink = lessonJson.field("ol_url").safeString()
@@ -190,25 +193,18 @@ internal class Timetables(private val session: EdupageSession) {
 
             val curriculum = dp0?.field("note_wd").safeString()
                 ?: flags?.get("event").safeObj()?.field("name").safeString()
+                ?: flags?.get("event").safeObj()?.field("title").safeString()
+                ?: flags?.get("substitutions").safeObj()?.field("name").safeString()
+                ?: flags?.get("subst").safeObj()?.field("name").safeString()
                 ?: lessonJson.field("name").safeString()
                 ?: lessonJson.field("text").safeString()
                 ?: lessonJson.field("note").safeString()
                 ?: lessonJson.field("curriculum").safeString()
+                ?: lessonJson.get("data")?.safeObj()?.field("subjectName").safeString()
+                ?: lessonJson.get("data")?.safeObj()?.field("subject").safeString()
                 ?: dp0?.field("note").safeString()
                 ?: flags?.field("note").safeString()
-
-            if (isEvent || subjectId.isNullOrEmpty()) {
-                println("DEBUG Timetable Event:")
-                println("  type: ${lessonJson.field("type").safeString()}")
-                println("  isEvent: $isEvent")
-                println("  subjectId: $subjectId")
-                println("  subject: ${subject?.name}")
-                println("  curriculum: $curriculum")
-                println("  startTime: $startTime")
-                println("  endTime: $endTime")
-                if (flags != null) println("  flags: $flags")
-                println("  ---")
-            }
+                ?: if (subjectId != null && subjectId.isNotBlank()) subjectId else null
 
             val isCancelled = dp0?.field("cancelled").safeBoolean() == true ||
                     lessonJson.field("removed").safeBoolean() == true ||
@@ -252,6 +248,7 @@ internal class Timetables(private val session: EdupageSession) {
                     teachers = teachers?.ifEmpty { null },
                     classrooms = lessonClassrooms?.ifEmpty { null },
                     curriculum = curriculum,
+                    type = typeStr,
                     onlineLessonLink = onlineLessonLink,
                     isCancelled = isCancelled,
                     isEvent = isEvent,
@@ -305,3 +302,4 @@ internal class Timetables(private val session: EdupageSession) {
         }
     }
 }
+

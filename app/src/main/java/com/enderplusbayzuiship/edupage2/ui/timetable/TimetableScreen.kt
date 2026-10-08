@@ -26,13 +26,9 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -81,7 +77,12 @@ import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.BreakVisibility
 import com.enderplusbayzuiship.edupage2.data.CancelledLessonStyle
+import com.enderplusbayzuiship.edupage2.data.LessonGrouping
+
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
+import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
+import com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate
+import com.enderplusbayzuiship.edupage2.ui.modifiers.scrollMotionBlur
 import com.enderplusbayzuiship.edupage2.ui.util.ShimmerBox
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 
@@ -96,7 +97,10 @@ fun TimetableScreen(
     val currentTime by viewModel.currentTime.collectAsState()
     val breakVisibility by viewModel.breakVisibility.collectAsState()
     val cancelledLessonStyle by viewModel.cancelledLessonStyle.collectAsState()
+    val lessonGrouping by viewModel.lessonGrouping.collectAsState()
     val showWeekends by viewModel.showWeekends.collectAsState()
+    val showSeconds by viewModel.showSeconds.collectAsState()
+    val compactTimetable by viewModel.compactTimetable.collectAsState()
     val haptics = rememberAppHaptics()
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
@@ -116,6 +120,7 @@ fun TimetableScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -128,7 +133,7 @@ fun TimetableScreen(
                     }
                 },
                 actions = {
-                    FilledTonalIconButton(onClick = { haptics.click(); viewModel.refresh() }) {
+                    FilledTonalIconButton(onClick = { haptics.virtualKey(); viewModel.refresh() }) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = stringResource(R.string.timetable_refresh),
@@ -166,9 +171,9 @@ fun TimetableScreen(
                     DateNavigationBar(
                         date = selectedDate,
                         showWeekends = showWeekends,
-                        onPreviousDay = { haptics.tick(); viewModel.setDate(selectedDate.minusDays(1)) },
-                        onNextDay = { haptics.tick(); viewModel.setDate(selectedDate.plusDays(1)) },
-                        onToday = { haptics.tick(); viewModel.setDate(LocalDate.now()) }
+                        onPreviousDay = { haptics.virtualKey(); viewModel.setDate(selectedDate.minusDays(1)) },
+                        onNextDay = { haptics.virtualKey(); viewModel.setDate(selectedDate.plusDays(1)) },
+                        onToday = { haptics.virtualKey(); viewModel.setDate(LocalDate.now()) }
                     )
 
                     when (val state = uiState) {
@@ -193,10 +198,23 @@ fun TimetableScreen(
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Button(
-                                        onClick = { haptics.click(); viewModel.refresh() },
-                                        shape = RoundedCornerShape(16.dp)
+                                        onClick = { haptics.virtualKey(); viewModel.refresh() },
+                                        shape = RoundedCornerShape(20.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
                                     ) {
-                                        Text(stringResource(R.string.timetable_retry))
+                                        Text(
+                                            text = stringResource(R.string.timetable_retry),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(24.dp),
+                                        )
                                     }
                                 }
                             }
@@ -210,7 +228,7 @@ fun TimetableScreen(
                                         verticalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         Icon(
-                                        imageVector = Icons.Default.DateRange,
+                                            imageVector = Icons.Default.DateRange,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -223,9 +241,17 @@ fun TimetableScreen(
                                     }
                                 }
                             } else {
+                                val startGroups = state.lessons.groupConsecutiveBy { it.startTime }
+                                val displayGroups = mergeLessonGroups(
+                                    startGroups = startGroups,
+                                    mode = lessonGrouping,
+                                    breakVisibility = breakVisibility,
+                                    selectedDate = selectedDate,
+                                    currentTime = currentTime,
+                                )
                                 val listState = rememberLazyListState()
 
-                                LaunchedEffect(state.lessons, selectedDate) {
+                                LaunchedEffect(state.lessons, selectedDate, displayGroups) {
                                     if (selectedDate != LocalDate.now()) return@LaunchedEffect
                                     val lessons = state.lessons
                                     val activeLessonIndex = lessons.indexOfFirst { lesson ->
@@ -233,7 +259,7 @@ fun TimetableScreen(
                                             !currentTime.isBefore(lesson.startTime) &&
                                             currentTime.isBefore(lesson.endTime)
                                     }
-                                    val targetIndex = if (activeLessonIndex >= 0) {
+                                    val flatIndex = if (activeLessonIndex >= 0) {
                                         activeLessonIndex
                                     } else {
                                         lessons.indexOfFirst { lesson ->
@@ -247,56 +273,83 @@ fun TimetableScreen(
                                                 currentTime.isBefore(thisStart)
                                         }
                                     }
-                                    if (targetIndex >= 0) {
-                                        listState.animateScrollToItem(targetIndex)
+                                    if (flatIndex >= 0) {
+                                        var acc = 0
+                                        var targetItem = 0
+                                        for ((groupIdx, group) in displayGroups.withIndex()) {
+                                            if (flatIndex < acc + group.size) {
+                                                targetItem = groupIdx
+                                                break
+                                            }
+                                            acc += group.size
+                                        }
+                                        listState.animateScrollToItem(targetItem)
                                     }
                                 }
                                 LazyColumn(
                                     state = listState,
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .scrollMotionBlur(
+                                            lazyListState = listState,
+                                            enabled = MotionBlurGate.enabled,
+                                        ),
                                     contentPadding = PaddingValues(
                                         start = 16.dp, end = 16.dp,
-                                        top = 12.dp,
-                                        bottom = 12.dp + bottomPadding.calculateBottomPadding()
+                                        top = if (compactTimetable) 8.dp else 16.dp,
+                                        bottom = if (compactTimetable) 8.dp else (16.dp + bottomPadding.calculateBottomPadding())
                                     ),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    verticalArrangement = Arrangement.spacedBy(if (compactTimetable) 8.dp else 14.dp)
                                 ) {
-                                    itemsIndexed(state.lessons) { index, lesson ->
-                                        if (index > 0) {
-                                            val prev = state.lessons[index - 1]
-                                            val prevEnd = prev.endTime
-                                            val thisStart = lesson.startTime
-                                            if (prevEnd != null && thisStart != null && thisStart > prevEnd) {
-                                                val breakMinutes = Duration.between(prevEnd, thisStart).toMinutes()
-                                                val isBreakNow = selectedDate == LocalDate.now() &&
-                                                    !currentTime.isBefore(prevEnd) &&
-                                                    currentTime.isBefore(thisStart)
-                                                val showBreak = when (breakVisibility) {
-                                                    BreakVisibility.ALL -> true
-                                                    BreakVisibility.ACTIVE_ONLY -> isBreakNow
-                                                    BreakVisibility.ACTIVE_OR_LONG ->
-                                                        isBreakNow || breakMinutes >= AppPreferences.LONG_BREAK_THRESHOLD_MINUTES
-                                                }
-                                                if (showBreak) {
-                                                    BreakSeparator(
-                                                        breakMinutes = breakMinutes,
-                                                        isActive = isBreakNow,
-                                                        breakEndsAt = if (isBreakNow) thisStart else null,
-                                                        currentTime = currentTime
-                                                    )
-                                                }
+                                    itemsIndexed(
+                                        displayGroups,
+                                        key = { _, group -> timetableGroupKey(group) },
+                                    ) { groupIndex, group ->
+                                        Box(Modifier.animateItem()) {
+                                            Column {
+                                        if (groupIndex > 0) {
+                                            val prevGroup = displayGroups[groupIndex - 1]
+                                            separatorBetween(
+                                                prev = prevGroup.last(),
+                                                next = group.first(),
+                                                breakVisibility = breakVisibility,
+                                                selectedDate = selectedDate,
+                                                currentTime = currentTime,
+                                            )?.let { info ->
+                                                BreakSeparator(
+                                                    breakMinutes = info.minutes,
+                                                    isActive = info.isActive,
+                                                    breakEndsAt = if (info.isActive) group.first().startTime else null,
+                                                    currentTime = currentTime
+                                                )
                                             }
                                         }
-                                        val isCurrentLesson = selectedDate == LocalDate.now() &&
-                                            lesson.startTime != null && lesson.endTime != null &&
-                                            !currentTime.isBefore(lesson.startTime) &&
-                                            currentTime.isBefore(lesson.endTime)
-                                        LessonCard(
-                                            lesson = lesson,
-                                            isCurrentLesson = isCurrentLesson,
-                                            currentTime = if (isCurrentLesson) currentTime else null,
-                                            cancelledLessonStyle = cancelledLessonStyle
-                                        )
+                                        if (group.size == 1) {
+                                            val lesson = group[0]
+                                            val isCurrentLesson = selectedDate == LocalDate.now() &&
+                                                lesson.startTime != null && lesson.endTime != null &&
+                                                !currentTime.isBefore(lesson.startTime) &&
+                                                currentTime.isBefore(lesson.endTime)
+                                            LessonCard(
+                                                lesson = lesson,
+                                                isCurrentLesson = isCurrentLesson,
+                                                currentTime = if (isCurrentLesson) currentTime else null,
+                                                cancelledLessonStyle = cancelledLessonStyle,
+                                                showSeconds = showSeconds,
+                                                compact = compactTimetable
+                                            )
+                                        } else {
+                                            GroupedLessonCard(
+                                                lessons = group,
+                                                currentTime = currentTime,
+                                                selectedDate = selectedDate,
+                                                cancelledLessonStyle = cancelledLessonStyle,
+                                                showSeconds = showSeconds,
+                                                compact = compactTimetable
+                                            )
+                                        }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -327,50 +380,64 @@ private fun DateNavigationBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        FilledTonalIconButton(onClick = onPreviousDay) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.timetable_previous_day))
-        }
-
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = dayName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = formatted,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceBright,
         ) {
-            if (showTodayChip) {
-                AssistChip(
-                    onClick = onToday,
-                    label = { Text(stringResource(R.string.timetable_today), style = MaterialTheme.typography.labelMedium) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.DateRange,
-                            contentDescription = null,
-                            modifier = Modifier.size(AssistChipDefaults.IconSize)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                FilledTonalIconButton(onClick = onPreviousDay) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.timetable_previous_day))
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = dayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = formatted,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (showTodayChip) {
+                        AssistChip(
+                            onClick = onToday,
+                            label = { Text(stringResource(R.string.timetable_today), style = MaterialTheme.typography.labelMedium) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(AssistChipDefaults.IconSize)
+                                )
+                            }
                         )
                     }
-                )
-            }
-            FilledTonalIconButton(onClick = onNextDay) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.timetable_next_day))
+                    FilledTonalIconButton(onClick = onNextDay) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.timetable_next_day))
+                    }
+                }
             }
         }
     }
-    HorizontalDivider()
 }
 
 @Composable
@@ -379,38 +446,93 @@ private fun LessonCard(
     isCurrentLesson: Boolean = false,
     currentTime: LocalTime? = null,
     cancelledLessonStyle: CancelledLessonStyle = CancelledLessonStyle.RED,
+    showSeconds: Boolean = false,
+    compact: Boolean = false,
+) {
+    val isCurrent = isCurrentLesson
+    val isError = lesson.isCancelled && cancelledLessonStyle == CancelledLessonStyle.RED
+    val isTertiary = lesson.hasChange()
+    val isSecondary = lesson.isOnlineLesson()
+
+    val containerColor = when {
+        isCurrent -> MaterialTheme.colorScheme.primaryContainer
+        isError -> MaterialTheme.colorScheme.errorContainer
+        lesson.isCancelled -> MaterialTheme.colorScheme.surfaceBright
+        isTertiary -> MaterialTheme.colorScheme.tertiaryContainer
+        isSecondary -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceBright
+    }
+
+    val contentColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer
+        isError -> MaterialTheme.colorScheme.onErrorContainer
+        isTertiary -> MaterialTheme.colorScheme.onTertiaryContainer
+        isSecondary -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = containerColor,
+        contentColor = contentColor
+    ) {
+        LessonCardContent(lesson, isCurrentLesson, currentTime, cancelledLessonStyle, showSeconds, compact)
+    }
+}
+
+@Composable
+private fun LessonCardContent(
+    lesson: Lesson,
+    isCurrentLesson: Boolean = false,
+    currentTime: LocalTime? = null,
+    cancelledLessonStyle: CancelledLessonStyle = CancelledLessonStyle.RED,
+    showSeconds: Boolean = false,
+    compact: Boolean = false,
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     val startStr = lesson.startTime?.format(timeFormatter) ?: "?"
     val endStr = lesson.endTime?.format(timeFormatter) ?: "?"
 
-    val containerColor = when {
-        isCurrentLesson -> MaterialTheme.colorScheme.primaryContainer
-        lesson.isCancelled && cancelledLessonStyle == CancelledLessonStyle.RED -> MaterialTheme.colorScheme.errorContainer
-        lesson.isCancelled -> MaterialTheme.colorScheme.surfaceContainerLow
-        lesson.hasChange() -> MaterialTheme.colorScheme.tertiaryContainer
-        lesson.isOnlineLesson() -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
+    val isCurrent = isCurrentLesson
+    val isError = lesson.isCancelled && cancelledLessonStyle == CancelledLessonStyle.RED
+    val isTertiary = lesson.hasChange()
+    val isSecondary = lesson.isOnlineLesson()
+
+    val primaryTextColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer
+        isError -> MaterialTheme.colorScheme.onErrorContainer
+        isTertiary -> MaterialTheme.colorScheme.onTertiaryContainer
+        isSecondary -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    val secondaryTextColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f)
+        isError -> MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.82f)
+        isTertiary -> MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.82f)
+        isSecondary -> MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.82f)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val periodColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer
+        isError -> MaterialTheme.colorScheme.onErrorContainer
+        isTertiary -> MaterialTheme.colorScheme.onTertiaryContainer
+        isSecondary -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.primary
     }
 
     val isGreyedOut = lesson.isCancelled && cancelledLessonStyle == CancelledLessonStyle.GREYED_OUT
     val contentAlpha = if (isGreyedOut) 0.45f else 1f
 
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = containerColor),
-        elevation = CardDefaults.elevatedCardElevation(
-            defaultElevation = if (isCurrentLesson) 6.dp else 2.dp
-        )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = if (compact) 10.dp else 18.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.width(52.dp)
@@ -420,19 +542,19 @@ private fun LessonCard(
                         text = "$it.",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
+                        color = periodColor.copy(alpha = contentAlpha)
                     )
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = startStr,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                    color = secondaryTextColor.copy(alpha = contentAlpha)
                 )
                 Text(
                     text = endStr,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                    color = secondaryTextColor.copy(alpha = contentAlpha)
                 )
             }
 
@@ -446,7 +568,7 @@ private fun LessonCard(
                 val origSubjectName = lesson.origSubject?.name
                 if (origSubjectName != null) {
                     Text(
-                        text = buildChangedText(old = origSubjectName, new = subjectName),
+                        text = buildChangedText(old = origSubjectName, new = subjectName, cancelled = lesson.isCancelled),
                         style = MaterialTheme.typography.titleMedium
                     )
                 } else {
@@ -454,7 +576,8 @@ private fun LessonCard(
                         text = subjectName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+                        color = primaryTextColor.copy(alpha = contentAlpha),
+                        textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else TextDecoration.None
                     )
                 }
 
@@ -470,7 +593,8 @@ private fun LessonCard(
                     Text(
                         text = teacherNames,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                        color = secondaryTextColor.copy(alpha = contentAlpha),
+                        textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else TextDecoration.None
                     )
                 }
 
@@ -485,7 +609,8 @@ private fun LessonCard(
                     Text(
                         text = classroomNames,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                        color = secondaryTextColor.copy(alpha = contentAlpha),
+                        textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else TextDecoration.None
                     )
                 }
 
@@ -494,7 +619,7 @@ private fun LessonCard(
                     Text(
                         text = lesson.curriculum!!,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                        color = secondaryTextColor.copy(alpha = contentAlpha)
                     )
                 }
             }
@@ -511,12 +636,12 @@ private fun LessonCard(
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-                    val minsLeft = if (currentTime != null && lesson.endTime != null)
-                        Duration.between(currentTime, lesson.endTime).toMinutes()
+                    val secsLeft = if (currentTime != null && lesson.endTime != null)
+                        Duration.between(currentTime, lesson.endTime).toSeconds()
                     else null
-                    if (minsLeft != null && minsLeft >= 0) {
+                    if (secsLeft != null && secsLeft >= 0) {
                         TimeLeftPill(
-                            label = stringResource(R.string.timetable_time_left, formatTimeLeft(minsLeft)),
+                            label = stringResource(R.string.timetable_time_left, formatTimeLeft(secsLeft, showSeconds)),
                             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                             contentColor = MaterialTheme.colorScheme.primary
                         )
@@ -552,7 +677,6 @@ private fun LessonCard(
             }
         }
     }
-}
 
 @Composable
 private fun BreakSeparator(
@@ -567,7 +691,7 @@ private fun BreakSeparator(
         else -> stringResource(R.string.timetable_break_hours_minutes, breakMinutes / 60, breakMinutes % 60)
     }
     val minsLeft = if (isActive && currentTime != null && breakEndsAt != null)
-        Duration.between(currentTime, breakEndsAt).toMinutes()
+        Duration.between(currentTime, breakEndsAt).toSeconds()
     else null
 
     val lineColor = if (isActive) MaterialTheme.colorScheme.primary
@@ -617,8 +741,9 @@ private fun BreakSeparator(
             }
         }
         if (isActive && minsLeft != null && minsLeft >= 0) {
+            val showSeconds = AppPreferences(LocalContext.current).showSeconds
             TimeLeftPill(
-                label = stringResource(R.string.timetable_time_left, formatTimeLeft(minsLeft)),
+                label = stringResource(R.string.timetable_time_left, formatTimeLeft(minsLeft, showSeconds)),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -626,11 +751,27 @@ private fun BreakSeparator(
     }
 }
 
-private fun formatTimeLeft(minutes: Long): String = when {
-    minutes < 1    -> "<1m"
-    minutes < 60   -> "${minutes}m"
+private fun formatTimeLeft(seconds: Long, showSeconds: Boolean): String = when {
+    seconds < 0 -> ""
+    !showSeconds -> formatWholeMinutes(seconds / 60)
+    else -> {
+        val m = seconds / 60
+        val s = seconds % 60
+        when {
+            m < 1 -> "${s}s"
+            m < 60 -> "${m}m ${s}s"
+            s == 0L && m % 60 == 0L -> "${m / 60}h"
+            m % 60 == 0L -> "${m / 60}h ${s}s"
+            else -> "${m / 60}h ${m % 60}m ${s}s"
+        }
+    }
+}
+
+private fun formatWholeMinutes(minutes: Long): String = when {
+    minutes < 1 -> "<1m"
+    minutes < 60 -> "${minutes}m"
     minutes % 60 == 0L -> "${minutes / 60}h"
-    else           -> "${minutes / 60}h ${minutes % 60}m"
+    else -> "${minutes / 60}h ${minutes % 60}m"
 }
 
 @Composable
@@ -654,7 +795,7 @@ private fun TimeLeftPill(
 }
 
 @Composable
-private fun buildChangedText(old: String, new: String) = buildAnnotatedString {
+private fun buildChangedText(old: String, new: String, cancelled: Boolean = false) = buildAnnotatedString {
     withStyle(
         SpanStyle(
             textDecoration = TextDecoration.LineThrough,
@@ -663,7 +804,10 @@ private fun buildChangedText(old: String, new: String) = buildAnnotatedString {
     ) { append(old) }
     append("  →  ")
     withStyle(
-        SpanStyle(fontWeight = FontWeight.Bold)
+        SpanStyle(
+            fontWeight = FontWeight.Bold,
+            textDecoration = if (cancelled) TextDecoration.LineThrough else TextDecoration.None
+        )
     ) { append(new) }
 }
 
@@ -695,6 +839,7 @@ private fun previewLesson(
     teachers = listOf(previewTeacher(teacherName)),
     classrooms = listOf(Classroom(classroomId = 1, name = classroomName, shortName = classroomName)),
     curriculum = null,
+    type = null,
     onlineLessonLink = if (isOnline) "https://meet.example.com/abc" else null,
     isCancelled = isCancelled,
     isEvent = false,
@@ -725,13 +870,10 @@ private fun TimetableSkeleton(
 
 @Composable
 private fun LessonCardSkeleton() {
-    ElevatedCard(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceBright
     ) {
         Row(
             modifier = Modifier
@@ -870,6 +1012,151 @@ private fun BreakSeparatorActivePreview() {
     }
 }
 
+private fun timetableGroupKey(group: List<Lesson>): String {
+    val first = group.firstOrNull() ?: return "empty"
+    return "${group.size}|${first.period}|${first.subject?.name}|${first.startTime}|${first.endTime}"
+}
+
+private data class BreakInfo(
+    val minutes: Long,
+    val isActive: Boolean,
+)
+
+private fun separatorBetween(
+    prev: Lesson,
+    next: Lesson,
+    breakVisibility: BreakVisibility,
+    selectedDate: LocalDate,
+    currentTime: LocalTime,
+): BreakInfo? {
+    val prevEnd = prev.endTime ?: return null
+    val thisStart = next.startTime ?: return null
+    if (thisStart <= prevEnd) return null
+    val breakMinutes = Duration.between(prevEnd, thisStart).toMinutes()
+    val isBreakNow = selectedDate == LocalDate.now() &&
+        !currentTime.isBefore(prevEnd) &&
+        currentTime.isBefore(thisStart)
+    val showBreak = when (breakVisibility) {
+        BreakVisibility.ALL -> true
+        BreakVisibility.ACTIVE_ONLY -> isBreakNow
+        BreakVisibility.ACTIVE_OR_LONG ->
+            isBreakNow || breakMinutes >= AppPreferences.LONG_BREAK_THRESHOLD_MINUTES
+    }
+    return if (showBreak) BreakInfo(breakMinutes, isBreakNow) else null
+}
+
+private fun shouldMergeDouble(prev: Lesson, next: Lesson): Boolean {
+    if (prev.isCancelled != next.isCancelled) return false
+    val prevEnd = prev.endTime ?: return false
+    val nextStart = next.startTime ?: return false
+    val gapMinutes = Duration.between(prevEnd, nextStart).toMinutes()
+    if (gapMinutes < 0 || gapMinutes > 15) return false
+    if (prev.subject?.name != next.subject?.name) return false
+    val subjectBlank = prev.subject?.name.isNullOrBlank()
+    if (subjectBlank && prev.curriculum != next.curriculum) return false
+    if (prev.teachers?.map { it.name } != next.teachers?.map { it.name }) return false
+    if (prev.classrooms?.map { it.name } != next.classrooms?.map { it.name }) return false
+    return true
+}
+
+private fun mergeLessonGroups(
+    startGroups: List<List<Lesson>>,
+    mode: LessonGrouping,
+    breakVisibility: BreakVisibility,
+    selectedDate: LocalDate,
+    currentTime: LocalTime,
+): List<List<Lesson>> {
+    if (startGroups.isEmpty() || mode == LessonGrouping.OFF) return startGroups
+    val out = mutableListOf<List<Lesson>>()
+    var current = startGroups[0].toMutableList()
+    var chainable = startGroups[0].size == 1
+    for (i in 1..startGroups.lastIndex) {
+        val next = startGroups[i]
+        val canExtend = chainable && next.size == 1 && when (mode) {
+            LessonGrouping.OFF -> false
+            LessonGrouping.DOUBLES -> shouldMergeDouble(current.last(), next.first())
+            LessonGrouping.ALL -> separatorBetween(
+                prev = current.last(),
+                next = next.first(),
+                breakVisibility = breakVisibility,
+                selectedDate = selectedDate,
+                currentTime = currentTime,
+            ) == null
+        }
+        if (canExtend) {
+            current.add(next.first())
+        } else {
+            out.add(current)
+            current = next.toMutableList()
+            chainable = next.size == 1
+        }
+    }
+    out.add(current)
+    return out
+}
+
+private fun <T> List<T>.groupConsecutiveBy(selector: (T) -> Any?): List<List<T>> {
+    if (isEmpty()) return emptyList()
+    val groups = mutableListOf<MutableList<T>>()
+    var currentGroup = mutableListOf(first())
+    var currentKey = selector(first())
+    for (i in 1..lastIndex) {
+        val key = selector(get(i))
+        if (key == currentKey) {
+            currentGroup.add(get(i))
+        } else {
+            groups.add(currentGroup)
+            currentGroup = mutableListOf(get(i))
+            currentKey = key
+        }
+    }
+    groups.add(currentGroup)
+    return groups
+}
+
+@Composable
+private fun GroupedLessonCard(
+    lessons: List<Lesson>,
+    currentTime: LocalTime?,
+    selectedDate: LocalDate,
+    cancelledLessonStyle: CancelledLessonStyle,
+    showSeconds: Boolean,
+    compact: Boolean,
+) {
+    val first = lessons.first()
+    val isCurrent = selectedDate == LocalDate.now() &&
+        first.startTime != null && first.endTime != null &&
+        !currentTime!!.isBefore(first.startTime) && currentTime.isBefore(first.endTime)
+
+    val containerColor = if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+    else MaterialTheme.colorScheme.surfaceBright
+    val contentColor = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
+    else MaterialTheme.colorScheme.onSurface
+
+    RoundedCardContainer(
+        modifier = Modifier.fillMaxWidth(),
+        spacing = 2.dp,
+        cornerRadius = 24.dp,
+    ) {
+        lessons.forEachIndexed { idx, lesson ->
+            val lessonIsCurrent = isCurrent && idx == 0
+            Surface(
+                color = containerColor,
+                contentColor = contentColor
+            ) {
+                LessonCardContent(
+                    lesson = lesson,
+                    isCurrentLesson = lessonIsCurrent,
+                    currentTime = if (lessonIsCurrent) currentTime else null,
+                    cancelledLessonStyle = cancelledLessonStyle,
+                    showSeconds = showSeconds,
+                    compact = compact
+                )
+            }
+        }
+    }
+}
+
 @Preview(name = "BreakSeparator – Inactive", showBackground = true, widthDp = 360)
 @Composable
 private fun BreakSeparatorInactivePreview() {
@@ -881,8 +1168,11 @@ private fun BreakSeparatorInactivePreview() {
 @Composable
 private fun getDisplayName(lesson: Lesson): String {
     return when {
-
         lesson.isEvent && !lesson.curriculum.isNullOrBlank() -> lesson.curriculum!!
+        lesson.isEvent -> {
+            val classNames = lesson.classes?.joinToString(", ") { it.name ?: "" }?.takeIf { it.isNotBlank() }
+            classNames ?: stringResource(R.string.timetable_event)
+        }
 
         else -> {
             val subjectName = lesson.subject?.name
@@ -898,3 +1188,4 @@ private fun getDisplayName(lesson: Lesson): String {
         }
     }
 }
+

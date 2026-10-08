@@ -17,3 +17,4 @@ class ExampleInstrumentedTest {
         assertEquals("com.enderplusbayzuiship.edupage2", appContext.packageName)
     }
 }
+

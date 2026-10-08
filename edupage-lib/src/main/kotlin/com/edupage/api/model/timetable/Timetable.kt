@@ -19,3 +19,4 @@ data class Timetable(val lessons: List<Lesson>) : Iterable<Lesson> {
 
     fun getLastLesson(): Lesson? = lessons.lastOrNull()
 }
+

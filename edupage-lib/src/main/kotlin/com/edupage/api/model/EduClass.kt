@@ -6,3 +6,4 @@ data class EduClass(
     val grade: Int?,
     val teacherId: Int?
 )
+

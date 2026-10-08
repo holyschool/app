@@ -10,7 +10,9 @@ import androidx.work.Configuration
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
 import com.enderplusbayzuiship.edupage2.notification.GradeMessageCheckWorker
+import com.enderplusbayzuiship.edupage2.ui.widgets.WidgetUpdater
 import com.enderplusbayzuiship.edupage2.util.LocaleHelper
+import com.enderplusbayzuiship.edupage2.ui.util.ConnectivityObserver
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.HiltAndroidApp
 import java.io.IOException
@@ -38,6 +40,7 @@ class EdupageApp : Application(), Configuration.Provider {
         super.onCreate()
         createNotificationChannels()
         installNetworkExceptionHandler()
+        ConnectivityObserver.init(this)
         appPreferences.appVersionName = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
         }.getOrNull().orEmpty()
@@ -46,6 +49,10 @@ class EdupageApp : Application(), Configuration.Provider {
             CoroutineScope(Dispatchers.IO).launch {
                 backendRegistrationManager.registerIfPossible(token)
             }
+        }
+        WidgetUpdater.schedulePeriodic(this)
+        if (appPreferences.liveClassNotif) {
+            com.enderplusbayzuiship.edupage2.notification.ClassLiveController.start(this)
         }
     }
 
@@ -68,7 +75,6 @@ class EdupageApp : Application(), Configuration.Provider {
     private fun createNotificationChannels() {
         val manager = getSystemService(NotificationManager::class.java)
 
-        // Grades
         val gradesChannel = NotificationChannel(
             GradeMessageCheckWorker.CHANNEL_GRADES,
             getString(R.string.notif_channel_grades_name),
@@ -77,7 +83,6 @@ class EdupageApp : Application(), Configuration.Provider {
             description = getString(R.string.notif_channel_grades_desc)
         }
 
-        // Messages
         val messagesChannel = NotificationChannel(
             GradeMessageCheckWorker.CHANNEL_MESSAGES,
             getString(R.string.notif_channel_messages_name),
@@ -86,7 +91,6 @@ class EdupageApp : Application(), Configuration.Provider {
             description = getString(R.string.notif_channel_messages_desc)
         }
 
-        // Substitutions
         val subsChannel = NotificationChannel(
             GradeMessageCheckWorker.CHANNEL_SUBSTITUTIONS,
             getString(R.string.notif_channel_substitutions_name),
@@ -98,3 +102,4 @@ class EdupageApp : Application(), Configuration.Provider {
         manager.createNotificationChannels(listOf(gradesChannel, messagesChannel, subsChannel))
     }
 }
+

@@ -5,3 +5,4 @@ data class EduCloudFile(
     val fileName: String,
     val uploadPath: String
 )
+

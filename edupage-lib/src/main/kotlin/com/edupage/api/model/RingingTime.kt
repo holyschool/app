@@ -8,3 +8,4 @@ data class RingingTime(
     val type: RingingType,
     val time: LocalTime
 )
+

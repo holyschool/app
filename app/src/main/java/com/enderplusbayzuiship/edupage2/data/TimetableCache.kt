@@ -182,6 +182,7 @@ class TimetableCache @Inject constructor(
             teachers = teachers,
             classrooms = classrooms,
             curriculum = curriculum,
+            type = null,
             onlineLessonLink = onlineLessonLink,
             isCancelled = isCancelled,
             isEvent = isEvent,
@@ -191,3 +192,4 @@ class TimetableCache @Inject constructor(
         )
     }
 }
+

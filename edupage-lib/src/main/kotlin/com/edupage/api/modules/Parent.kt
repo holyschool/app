@@ -18,6 +18,9 @@ internal class Parent(private val session: EdupageSession) {
 
     suspend fun switchToChild(personId: Int) {
         if (!session.isLoggedIn) throw NotLoggedInException()
+        val gsh = session.gsecHash ?: throw IllegalStateException(
+            "gsecHash is null — login may not have completed successfully"
+        )
 
         withContext(Dispatchers.IO) {
             val url = "https://${session.subdomain}.edupage.org/login/parentLogin.php"
@@ -28,7 +31,7 @@ internal class Parent(private val session: EdupageSession) {
                         addProperty("childid", personId.toString())
                     })
                 })
-                addProperty("__gsh", session.gsecHash)
+                addProperty("__gsh", gsh)
             }
             val requestBody = body.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder().url(url).post(requestBody).build()
@@ -50,3 +53,4 @@ internal class Parent(private val session: EdupageSession) {
         }
     }
 }
+

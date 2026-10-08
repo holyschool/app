@@ -25,3 +25,4 @@ class EduStudent(
     override fun toString(): String =
         "EduStudent(personId=$personId, name='$name', classId=$classId, numberInClass=$numberInClass)"
 }
+

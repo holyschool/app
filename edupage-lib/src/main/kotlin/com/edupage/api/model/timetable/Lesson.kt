@@ -20,6 +20,7 @@ data class Lesson(
     val classrooms: List<Classroom>?,
 
     val curriculum: String?,
+    val type: String?,
 
     val onlineLessonLink: String?,
     val isCancelled: Boolean,
@@ -35,3 +36,4 @@ data class Lesson(
 
     fun hasChange(): Boolean = origSubject != null || origTeachers != null || origClassrooms != null
 }
+

@@ -17,21 +17,23 @@ object DeepLinkHelper {
     const val TARGET_MESSAGES = "messages"
     const val TARGET_TIMETABLE = "timetable"
     const val TARGET_OVERVIEW = "overview"
+    const val TARGET_MEALS = "meals"
+    const val TARGET_HOMEWORK = "homework"
 
     const val NOTIFICATION_TYPE_GRADE = "grade"
     const val NOTIFICATION_TYPE_MESSAGE = "message"
     const val NOTIFICATION_TYPE_TIMETABLE = "timetable"
 
     fun createGradesIntent(context: Context, detailTitle: String? = null, detailText: String? = null, timelineId: Int = -1): PendingIntent {
-        return buildPendingIntent(context, TARGET_GRADES, NOTIFICATION_TYPE_GRADE, generateRequestCode(NOTIFICATION_TYPE_GRADE), detailTitle, detailText, timelineId)
+        return buildPendingIntent(context, TARGET_GRADES, NOTIFICATION_TYPE_GRADE, requestCodeFor(NOTIFICATION_TYPE_GRADE, timelineId), detailTitle, detailText, timelineId)
     }
 
     fun createMessagesIntent(context: Context, detailTitle: String? = null, detailText: String? = null, timelineId: Int = -1): PendingIntent {
-        return buildPendingIntent(context, TARGET_MESSAGES, NOTIFICATION_TYPE_MESSAGE, generateRequestCode(NOTIFICATION_TYPE_MESSAGE), detailTitle, detailText, timelineId)
+        return buildPendingIntent(context, TARGET_MESSAGES, NOTIFICATION_TYPE_MESSAGE, requestCodeFor(NOTIFICATION_TYPE_MESSAGE, timelineId), detailTitle, detailText, timelineId)
     }
 
     fun createTimetableIntent(context: Context, detailTitle: String? = null, detailText: String? = null, timelineId: Int = -1): PendingIntent {
-        return buildPendingIntent(context, TARGET_TIMETABLE, NOTIFICATION_TYPE_TIMETABLE, generateRequestCode(NOTIFICATION_TYPE_TIMETABLE), detailTitle, detailText, timelineId)
+        return buildPendingIntent(context, TARGET_TIMETABLE, NOTIFICATION_TYPE_TIMETABLE, requestCodeFor(NOTIFICATION_TYPE_TIMETABLE, timelineId), detailTitle, detailText, timelineId)
     }
 
     fun createOverviewIntent(context: Context): PendingIntent {
@@ -85,8 +87,13 @@ object DeepLinkHelper {
             NOTIFICATION_TYPE_MESSAGE -> 1002
             NOTIFICATION_TYPE_TIMETABLE -> 1003
             "overview" -> 1004
-            else -> type.hashCode()
+            else -> type.hashCode() and 0x0FFFFFFF
         }
+    }
+
+    private fun requestCodeFor(type: String, timelineId: Int): Int {
+        if (timelineId <= 0) return generateRequestCode(type)
+        return (generateRequestCode(type) * 31 + timelineId) and 0x0FFFFFFF
     }
 
     data class DeepLinkInfo(
@@ -97,3 +104,4 @@ object DeepLinkHelper {
         val timelineId: Int = -1
     )
 }
+

@@ -15,3 +15,8 @@
 local.properties
 **/google-services.json
 edupage-notify-backend/data/
+
+edupage-notify-backend/.env
+build/
+**/build/
+node_modules/

@@ -35,27 +35,27 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.MailOutline
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -68,7 +68,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -77,13 +82,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.graphics.shapes.CornerRounding
+import androidx.graphics.shapes.RoundedPolygon
+import androidx.graphics.shapes.toPath
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.edupage.api.model.Meal
 import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.grades.EduGrade
 import com.edupage.api.model.timetable.Lesson
 import com.enderplusbayzuiship.edupage2.R
+import com.enderplusbayzuiship.edupage2.ui.core.cards.FeatureCard
+import com.enderplusbayzuiship.edupage2.ui.core.cards.PastelIcon
+import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
+import com.enderplusbayzuiship.edupage2.ui.modifiers.scrollMotionBlur
+import com.enderplusbayzuiship.edupage2.ui.prepare.PrepareFullscreenDialog
+import com.enderplusbayzuiship.edupage2.ui.prepare.PrepareUiState
+import com.enderplusbayzuiship.edupage2.ui.prepare.PrepareViewModel
+import com.enderplusbayzuiship.edupage2.ui.prepare.PrepareWidgetCard
+import com.enderplusbayzuiship.edupage2.ui.core.containers.SectionLabel
 import com.enderplusbayzuiship.edupage2.ui.theme.Edupage2Theme
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -101,48 +120,55 @@ fun OverviewScreen(
     onGoToMessages: (() -> Unit)? = null,
     onGoToTimetable: (() -> Unit)? = null,
     onGoToGrades: (() -> Unit)? = null,
+    onGoToMeals: (() -> Unit)? = null,
+    onHomework: (() -> Unit)? = null,
+    mealsEnabled: Boolean = true,
     viewModel: OverviewViewModel = hiltViewModel(),
+    prepareViewModel: PrepareViewModel = hiltViewModel(),
 ) {
     val timetableState by viewModel.timetableState.collectAsState()
     val gradesState    by viewModel.gradesState.collectAsState()
     val messagesState  by viewModel.messagesState.collectAsState()
+    val mealsState     by viewModel.mealsState.collectAsState()
+    val homeworkItems  by viewModel.homeworkItems.collectAsState()
     val isRefreshing   by viewModel.isRefreshing.collectAsState()
     val currentTime    by viewModel.currentTime.collectAsState()
+    val showSeconds    by viewModel.showSeconds.collectAsState()
     val haptics        = rememberAppHaptics()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+    val overviewScroll = rememberScrollState()
+    var showPrepare    by remember { mutableStateOf(false) }
+
+    val prepareState by prepareViewModel.uiState.collectAsState()
+    val preparedMap  by prepareViewModel.preparedMap.collectAsState()
 
     val isInitialLoading = timetableState is TimetableOverviewState.Loading &&
         gradesState is GradesOverviewState.Loading &&
-        messagesState is MessagesOverviewState.Loading
-
-    val infiniteTransition = rememberInfiniteTransition(label = "refresh")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing)
-        ),
-        label = "rotation"
-    )
+        messagesState is MessagesOverviewState.Loading &&
+        (!mealsEnabled || mealsState is MealsOverviewState.Loading)
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         text = stringResource(R.string.overview_title),
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
                 },
                 actions = {
                     FilledTonalIconButton(onClick = { haptics.click(); viewModel.refresh() }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = stringResource(R.string.overview_refresh),
-                            modifier = Modifier.rotate(if (isRefreshing) rotation else 0f)
-                        )
+                        if (isRefreshing) {
+                            RotatingRefreshIcon()
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.overview_refresh),
+                            )
+                        }
                     }
                     Spacer(Modifier.width(4.dp))
                     FilledTonalIconButton(onClick = { haptics.click(); onSettings() }) {
@@ -151,7 +177,7 @@ fun OverviewScreen(
                     Spacer(Modifier.width(8.dp))
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.largeTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
@@ -161,17 +187,18 @@ fun OverviewScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(paddingValues),
         ) {
             AnimatedVisibility(visible = isRefreshing) {
                 androidx.compose.material3.LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 )
             }
 
-            if (isInitialLoading || isRefreshing) {
+            if (isInitialLoading) {
                 OverviewSkeleton(
                     bottomPadding = bottomPadding,
                     modifier = Modifier.fillMaxSize(),
@@ -180,23 +207,53 @@ fun OverviewScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .scrollMotionBlur(
+                            scrollState = overviewScroll,
+                            enabled = com.enderplusbayzuiship.edupage2.ui.modifiers.MotionBlurGate.enabled,
+                        )
+                        .verticalScroll(overviewScroll)
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
+
+                    OverviewHero(
+                        timetableState = timetableState,
+                        messagesState = messagesState,
+                        todoCount = homeworkItems.count { !it.done },
+                    )
+
+                    val prepareSuccess = prepareState as? PrepareUiState.Success
+                    val prepareTotal = prepareSuccess?.lessons?.size
+                    val prepareDone = prepareSuccess?.let { s ->
+                        (preparedMap[s.date.toString()]?.size ?: 0).coerceAtMost(s.lessons.size)
+                    } ?: 0
+                    PrepareWidgetCard(
+                        totalCount = prepareTotal,
+                        preparedCount = prepareDone,
+                        onClick = { showPrepare = true },
+                    )
 
                     TimetableCard(
                         state = timetableState,
                         currentTime = currentTime,
                         onGoToTimetable = onGoToTimetable,
                         haptics = haptics,
+                        showSeconds = showSeconds,
+                        onRetry = viewModel::refresh,
                     )
 
                     GradesCard(
                         state = gradesState,
                         onGoToGrades = onGoToGrades,
+                        haptics = haptics,
+                        onRetry = viewModel::refresh,
+                    )
+
+                    HomeworkCard(
+                        items = homeworkItems,
+                        onHomework = onHomework,
                         haptics = haptics,
                     )
 
@@ -204,17 +261,143 @@ fun OverviewScreen(
                         state = messagesState,
                         onGoToMessages = onGoToMessages,
                         haptics = haptics,
+                        onRetry = viewModel::refresh,
                     )
+
+                    if (mealsEnabled) {
+                        MealsCard(
+                            state = mealsState,
+                            onGoToMeals = onGoToMeals,
+                            haptics = haptics,
+                            onRetry = viewModel::refresh,
+                        )
+                    }
 
                     QuickActionsCard(
                         onCompose   = onGoToMessages,
                         onTimetable = onGoToTimetable,
                         onGrades    = onGoToGrades,
+                        onMeals     = if (mealsEnabled) onGoToMeals else null,
+                        onHomework  = onHomework,
                         haptics     = haptics,
                     )
                 }
             }
         }
+    }
+
+    if (showPrepare) {
+        PrepareFullscreenDialog(onClose = { showPrepare = false })
+    }
+}
+
+@Composable
+private fun RotatingRefreshIcon() {
+    val infiniteTransition = rememberInfiniteTransition(label = "refresh")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing)
+        ),
+        label = "rotation"
+    )
+    Icon(
+        imageVector = Icons.Default.Refresh,
+        contentDescription = stringResource(R.string.overview_refresh),
+        modifier = Modifier.rotate(rotation),
+    )
+}
+
+@Composable
+private fun OverviewHero(
+    timetableState: TimetableOverviewState,
+    messagesState: MessagesOverviewState,
+    todoCount: Int,
+) {
+    val today = LocalDate.now()
+    val dateTitle = today.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()))
+    val lessonCount = (timetableState as? TimetableOverviewState.Success)?.lessons?.size
+    val unreadCount = (messagesState as? MessagesOverviewState.Success)?.unreadCount
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        CookieBadge(number = today.dayOfMonth.toString())
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = dateTitle,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            val stats = buildList {
+                lessonCount?.let { add(stringResource(R.string.overview_stat_lessons, it)) }
+                unreadCount?.let { add(stringResource(R.string.overview_stat_unread, it)) }
+                add(stringResource(R.string.overview_stat_todo, todoCount))
+            }.joinToString(" · ")
+            Text(
+                text = stats,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CookieBadge(
+    number: String,
+    modifier: Modifier = Modifier,
+) {
+    val container = MaterialTheme.colorScheme.primaryContainer
+    val content = MaterialTheme.colorScheme.onPrimaryContainer
+    Box(
+        modifier = modifier
+            .size(64.dp)
+            .drawWithCache {
+                val poly = RoundedPolygon(
+                    numVertices = 6,
+                    rounding = CornerRounding(0.35f),
+                )
+                val androidPath = poly.toPath()
+                val path = Path()
+                val matrix = Matrix()
+                onDrawBehind {
+                    path.reset()
+                    path.addPath(androidPath.asComposePath())
+                    matrix.reset()
+                    val s = size.minDimension / 2f * 0.98f
+                    matrix.scale(s, s)
+                    matrix.translate(1f, 1f)
+                    path.transform(matrix)
+                    val bounds = path.getBounds()
+                    path.translate(
+                        Offset(
+                            (size.width - bounds.width) / 2f - bounds.left,
+                            (size.height - bounds.height) / 2f - bounds.top,
+                        )
+                    )
+                    drawPath(path, color = container)
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = number,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = content,
+        )
     }
 }
 
@@ -224,20 +407,23 @@ private fun TimetableCard(
     currentTime: LocalTime,
     onGoToTimetable: (() -> Unit)?,
     haptics: com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
+    showSeconds: Boolean,
+    onRetry: () -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     OverviewCard {
         when (state) {
             is TimetableOverviewState.Loading -> TimetableCardLoading()
-            is TimetableOverviewState.Error   -> TimetableCardError()
+            is TimetableOverviewState.Error   -> TimetableCardError(onRetry = onRetry)
             is TimetableOverviewState.Success -> TimetableCardContent(
                 state        = state,
                 currentTime  = currentTime,
                 expanded     = expanded,
-                onToggle     = { haptics.tick(); expanded = !expanded },
+                onToggle     = { haptics.virtualKey(); expanded = !expanded },
                 onGoToTimetable = onGoToTimetable,
                 haptics      = haptics,
+                showSeconds  = showSeconds,
             )
         }
     }
@@ -257,16 +443,39 @@ private fun TimetableCardLoading() {
 }
 
 @Composable
-private fun TimetableCardError() {
+private fun TimetableCardError(onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         CardSectionHeader(
             title = stringResource(R.string.overview_today_schedule),
             icon  = Icons.Default.DateRange,
         )
+        ErrorMessageBanner(text = stringResource(R.string.overview_error_timetable))
+        RetryButton(onRetry = onRetry)
+    }
+}
+
+@Composable
+private fun RetryButton(onRetry: () -> Unit) {
+    OutlinedButton(
+        onClick = onRetry,
+        shape = RoundedCornerShape(20.dp),
+    ) {
+        Text(stringResource(R.string.overview_retry))
+    }
+}
+
+@Composable
+private fun ErrorMessageBanner(text: String) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Text(
-            text  = stringResource(R.string.overview_error_timetable),
+            text = text,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
         )
     }
 }
@@ -279,6 +488,7 @@ private fun TimetableCardContent(
     onToggle: () -> Unit,
     onGoToTimetable: (() -> Unit)?,
     haptics: com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
+    showSeconds: Boolean,
 ) {
     val lessons = state.lessons
     val title = when {
@@ -348,8 +558,25 @@ private fun TimetableCardContent(
                 currentTime < it.startTime!! }
         else null
 
+        if (!state.isNextDay) {
+            val nextTransition = currentLesson?.endTime
+                ?: nextLesson?.startTime
+            if (nextTransition != null) {
+                val secondsTo = Duration.between(currentTime, nextTransition).toSeconds()
+                if (secondsTo in 0..(180 * 60)) {
+                    val label = if (currentLesson != null) {
+                        stringResource(R.string.overview_ends_in, formatTimeLeft(secondsTo, showSeconds))
+                    } else {
+                        val name = getDisplayName(nextLesson!!)
+                        stringResource(R.string.overview_next_starts_in, name, formatTimeLeft(secondsTo, showSeconds))
+                    }
+                    NextBellBar(label = label)
+                }
+            }
+        }
+
         if (currentLesson != null) {
-            CurrentLessonBanner(lesson = currentLesson, currentTime = currentTime)
+            CurrentLessonBanner(lesson = currentLesson, currentTime = currentTime, showSeconds = showSeconds)
             Spacer(Modifier.height(10.dp))
         }
 
@@ -377,7 +604,7 @@ private fun TimetableCardContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(
-                    onClick = { haptics.tick(); onToggle() },
+                    onClick = { haptics.virtualKey(); onToggle() },
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                 ) {
                     Text(
@@ -396,7 +623,7 @@ private fun TimetableCardContent(
                 }
                 if (onGoToTimetable != null) {
                     TextButton(
-                        onClick = { haptics.tick(); onGoToTimetable() },
+                        onClick = { haptics.virtualKey(); onGoToTimetable() },
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                     ) {
                         Text(
@@ -417,7 +644,7 @@ private fun TimetableCardContent(
             Spacer(Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(
-                    onClick = { haptics.tick(); onGoToTimetable() },
+                    onClick = { haptics.virtualKey(); onGoToTimetable() },
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                 ) {
                     Text(
@@ -438,9 +665,9 @@ private fun TimetableCardContent(
 }
 
 @Composable
-private fun CurrentLessonBanner(lesson: Lesson, currentTime: LocalTime) {
+private fun CurrentLessonBanner(lesson: Lesson, currentTime: LocalTime, showSeconds: Boolean) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.primaryContainer,
     ) {
         Row(
@@ -479,7 +706,7 @@ private fun CurrentLessonBanner(lesson: Lesson, currentTime: LocalTime) {
                 }
             }
             lesson.endTime?.let { end ->
-                val minsLeft = java.time.Duration.between(currentTime, end).toMinutes()
+                val minsLeft = java.time.Duration.between(currentTime, end).toSeconds()
                 if (minsLeft >= 0) {
                     Spacer(Modifier.width(10.dp))
                     Surface(
@@ -487,7 +714,7 @@ private fun CurrentLessonBanner(lesson: Lesson, currentTime: LocalTime) {
                         color = MaterialTheme.colorScheme.primary,
                     ) {
                         Text(
-                            text       = formatTimeLeft(minsLeft),
+                            text       = formatTimeLeft(minsLeft, showSeconds),
                             style      = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color      = MaterialTheme.colorScheme.onPrimary,
@@ -510,7 +737,12 @@ private fun CompactLessonRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 7.dp, horizontal = 2.dp),
+            .then(
+                if (isCurrent) {
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer)
+                } else Modifier
+            )
+            .padding(vertical = 7.dp, horizontal = if (isCurrent) 10.dp else 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -518,7 +750,7 @@ private fun CompactLessonRow(
             text       = lesson.period?.let { "$it." } ?: "–",
             style      = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color      = if (isCurrent) MaterialTheme.colorScheme.primary
+            color      = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
                          else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
             modifier   = Modifier.width(26.dp),
         )
@@ -527,7 +759,8 @@ private fun CompactLessonRow(
                 text       = getDisplayName(lesson),
                 style      = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isCurrent || isNext) FontWeight.SemiBold else FontWeight.Normal,
-                color      = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                color      = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
+                             else MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                 maxLines   = 1,
                 overflow   = TextOverflow.Ellipsis,
             )
@@ -538,7 +771,8 @@ private fun CompactLessonRow(
                 Text(
                     text     = meta,
                     style    = MaterialTheme.typography.bodySmall,
-                    color    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                    color    = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                              else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -550,7 +784,8 @@ private fun CompactLessonRow(
             Text(
                 text  = "$startStr–$endStr",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
             )
             if (lesson.isCancelled) {
                 Text(
@@ -576,6 +811,7 @@ private fun GradesCard(
     state: GradesOverviewState,
     onGoToGrades: (() -> Unit)?,
     haptics: com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
+    onRetry: () -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -589,7 +825,7 @@ private fun GradesCard(
                     .let { m ->
                         val grades = (state as? GradesOverviewState.Success)?.recentGrades
                         if (grades != null && grades.size > GRADES_COLLAPSED_COUNT)
-                            m.clickable { haptics.tick(); expanded = !expanded }
+                            m.clickable { haptics.virtualKey(); expanded = !expanded }
                         else m
                     },
                 verticalAlignment = Alignment.CenterVertically,
@@ -627,11 +863,8 @@ private fun GradesCard(
             when (state) {
                 is GradesOverviewState.Loading -> repeat(3) { GradeRowSkeleton() }
                 is GradesOverviewState.Unavailable -> {
-                    Text(
-                        text  = stringResource(R.string.overview_no_grades),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    ErrorMessageBanner(text = stringResource(R.string.overview_no_grades))
+                    RetryButton(onRetry = onRetry)
                 }
                 is GradesOverviewState.Success -> {
                     if (state.recentGrades.isEmpty()) {
@@ -661,7 +894,7 @@ private fun GradesCard(
                             ) {
                                 if (hiddenCount > 0) {
                                     TextButton(
-                                        onClick = { haptics.tick(); expanded = !expanded },
+                                        onClick = { haptics.virtualKey(); expanded = !expanded },
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                                     ) {
                                         Text(
@@ -683,7 +916,7 @@ private fun GradesCard(
                                 }
                                 if (onGoToGrades != null) {
                                     TextButton(
-                                        onClick = { haptics.tick(); onGoToGrades() },
+                                        onClick = { haptics.virtualKey(); onGoToGrades() },
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                                     ) {
                                         Text(
@@ -769,18 +1002,151 @@ private fun GradeRow(grade: EduGrade) {
 }
 
 @Composable
-private fun MessagesCard(
-    state: MessagesOverviewState,
-    onGoToMessages: (() -> Unit)?,
+private fun HomeworkCard(
+    items: List<com.enderplusbayzuiship.edupage2.data.HomeworkItem>,
+    onHomework: (() -> Unit)?,
     haptics: com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
 ) {
     OverviewCard {
         Column {
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .let { m -> if (onGoToMessages != null) m.clip(RoundedCornerShape(12.dp)).clickable { haptics.tick(); onGoToMessages() } else m },
+                    .let { m -> if (onHomework != null) m.clip(RoundedCornerShape(12.dp)).clickable { haptics.virtualKey(); onHomework() } else m },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Assignment,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(R.string.overview_my_homework),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                if (onHomework != null) {
+                    FilledTonalIconButton(
+                        onClick = { haptics.virtualKey(); onHomework() },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.overview_action_homework),
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            val pendingHomework = items
+                .filter { !it.done }
+                .sortedBy { it.date }
+
+            if (pendingHomework.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.overview_no_homework),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                pendingHomework.take(3).forEach { item ->
+                    HomeworkOverviewRow(item = item)
+                }
+                Spacer(Modifier.height(4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(
+                        onClick = { haptics.virtualKey(); onHomework?.invoke() },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.overview_see_homework),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeworkOverviewRow(item: com.enderplusbayzuiship.edupage2.data.HomeworkItem) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PastelIcon(
+            icon = Icons.AutoMirrored.Filled.Assignment,
+            key = item.subject.ifBlank { item.title },
+            containerSize = 40.dp,
+            iconSize = 20.dp,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (item.subject.isNotBlank()) {
+                Text(
+                    text = item.subject,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Text(
+            text = formatOverviewDate(item.date),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun formatOverviewDate(iso: String): String {
+    return try {
+        java.time.LocalDate.parse(iso).format(dateFmt)
+    } catch (e: Exception) {
+        iso
+    }
+}
+
+@Composable
+private fun MessagesCard(
+    state: MessagesOverviewState,
+    onGoToMessages: (() -> Unit)?,
+    haptics: com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
+    onRetry: () -> Unit,
+) {
+    OverviewCard {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .let { m -> if (onGoToMessages != null) m.clip(RoundedCornerShape(12.dp)).clickable { haptics.virtualKey(); onGoToMessages() } else m },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
@@ -832,11 +1198,8 @@ private fun MessagesCard(
             when (state) {
                 is MessagesOverviewState.Loading -> repeat(3) { MessageRowSkeleton() }
                 is MessagesOverviewState.Unavailable -> {
-                    Text(
-                        text  = stringResource(R.string.overview_no_messages),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    ErrorMessageBanner(text = stringResource(R.string.overview_no_messages))
+                    RetryButton(onRetry = onRetry)
                 }
                 is MessagesOverviewState.Success -> {
                     if (state.recentMessages.isEmpty()) {
@@ -859,7 +1222,7 @@ private fun MessagesCard(
                             Spacer(Modifier.height(4.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                 TextButton(
-                                    onClick = { haptics.tick(); onGoToMessages() },
+                                    onClick = { haptics.virtualKey(); onGoToMessages() },
                                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                                 ) {
                                     Text(
@@ -898,20 +1261,12 @@ private fun MessageRow(event: TimelineEvent) {
             ?.mapNotNull { it.firstOrNull()?.uppercaseChar() }
             ?.take(2)
             ?.joinToString("") ?: "?"
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            modifier = Modifier.size(36.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text  = initials,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-        }
+        PastelIcon(
+            icon = Icons.Rounded.MailOutline,
+            key = event.authorName ?: initials,
+            containerSize = 40.dp,
+            iconSize = 20.dp,
+        )
 
         Column(modifier = Modifier.weight(1f)) {
             Row(
@@ -953,46 +1308,97 @@ private fun MessageRow(event: TimelineEvent) {
 }
 
 @Composable
-private fun QuickActionsCard(
-    onCompose:   (() -> Unit)?,
-    onTimetable: (() -> Unit)?,
-    onGrades:    (() -> Unit)?,
-    haptics:     com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
+private fun MealsCard(
+    state: MealsOverviewState,
+    onGoToMeals: (() -> Unit)?,
+    haptics: com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
+    onRetry: () -> Unit,
 ) {
     OverviewCard {
-        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            CardSectionHeader(
-                title = stringResource(R.string.overview_quick_actions),
-                icon  = Icons.AutoMirrored.Filled.Assignment,
-            )
-            Spacer(Modifier.height(12.dp))
+        Column {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .let { m -> if (onGoToMeals != null) m.clip(RoundedCornerShape(12.dp)).clickable { haptics.virtualKey(); onGoToMeals() } else m },
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (onCompose != null) {
-                    QuickActionButton(
-                        label    = stringResource(R.string.overview_action_compose),
-                        icon     = Icons.Default.Edit,
-                        modifier = Modifier.weight(1f),
-                        onClick  = { haptics.click(); onCompose() },
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Restaurant,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text       = stringResource(R.string.overview_today_meals),
+                        style      = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
-                if (onTimetable != null) {
-                    QuickActionButton(
-                        label    = stringResource(R.string.overview_action_timetable),
-                        icon     = Icons.Default.DateRange,
-                        modifier = Modifier.weight(1f),
-                        onClick  = { haptics.click(); onTimetable() },
+                if (onGoToMeals != null) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (onGrades != null) {
-                    QuickActionButton(
-                        label    = stringResource(R.string.overview_action_grades),
-                        icon     = Icons.Default.Star,
-                        modifier = Modifier.weight(1f),
-                        onClick  = { haptics.click(); onGrades() },
-                    )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            when (state) {
+                is MealsOverviewState.Loading -> {
+                    repeat(2) { MealCardRowSkeleton() }
+                }
+                is MealsOverviewState.Unavailable -> {
+                    ErrorMessageBanner(text = stringResource(R.string.overview_no_meals))
+                    RetryButton(onRetry = onRetry)
+                }
+                is MealsOverviewState.Success -> {
+                    if (state.meals.isEmpty()) {
+                        Text(
+                            text  = stringResource(R.string.overview_no_meals),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        val visibleMeals = state.meals.take(3)
+                        visibleMeals.forEachIndexed { index, meal ->
+                            MealsCardRow(meal = meal)
+                            if (index < visibleMeals.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                )
+                            }
+                        }
+                        if (onGoToMeals != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(
+                                    onClick = { haptics.virtualKey(); onGoToMeals() },
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                ) {
+                                    Text(
+                                        text  = stringResource(R.string.overview_see_meals),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1000,33 +1406,130 @@ private fun QuickActionsCard(
 }
 
 @Composable
-private fun QuickActionButton(
-    label:    String,
-    icon:     ImageVector,
-    modifier: Modifier = Modifier,
-    onClick:  () -> Unit,
-) {
-    FilledTonalButton(
-        onClick  = onClick,
-        modifier = modifier,
-        shape    = RoundedCornerShape(16.dp),
-        colors   = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor   = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 14.dp),
+private fun MealsCardRow(meal: Meal) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        PastelIcon(
+            icon = Icons.Default.Restaurant,
+            key = meal.name,
+            containerSize = 40.dp,
+            iconSize = 20.dp,
+        )
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text       = label,
-                style      = MaterialTheme.typography.labelSmall,
+                text       = meal.name,
+                style      = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                maxLines   = 1,
+                maxLines   = 2,
+                overflow   = TextOverflow.Ellipsis,
             )
+            val details = buildList {
+                meal.weight?.let { add(it) }
+                meal.allergens?.let { add("A: ${it.joinToString(", ")}") }
+            }.joinToString(" · ")
+            if (details.isNotBlank()) {
+                Text(
+                    text     = details,
+                    style    = MaterialTheme.typography.bodySmall,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MealCardRowSkeleton() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(14.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                        RoundedCornerShape(4.dp),
+                    ),
+            )
+            Spacer(Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .height(10.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                        RoundedCornerShape(4.dp),
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionsCard(
+    onCompose:   (() -> Unit)?,
+    onTimetable: (() -> Unit)?,
+    onGrades:    (() -> Unit)?,
+    onMeals:     (() -> Unit)?,
+    onHomework:  (() -> Unit)?,
+    haptics:     com.enderplusbayzuiship.edupage2.ui.util.AppHaptics,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        CardSectionHeader(
+            title = stringResource(R.string.overview_quick_actions),
+            icon  = Icons.AutoMirrored.Filled.Assignment,
+        )
+        Spacer(Modifier.height(4.dp))
+
+        RoundedCardContainer(modifier = Modifier.fillMaxWidth()) {
+            if (onCompose != null) {
+                FeatureCard(
+                    title = stringResource(R.string.overview_action_compose),
+                    icon  = Icons.Default.Edit,
+                    onClick = onCompose,
+                )
+            }
+            if (onHomework != null) {
+                FeatureCard(
+                    title = stringResource(R.string.overview_action_homework),
+                    icon  = Icons.AutoMirrored.Filled.Assignment,
+                    onClick = onHomework,
+                )
+            }
+            if (onTimetable != null) {
+                FeatureCard(
+                    title = stringResource(R.string.overview_action_timetable),
+                    icon  = Icons.Default.DateRange,
+                    onClick = onTimetable,
+                )
+            }
+            if (onGrades != null) {
+                FeatureCard(
+                    title = stringResource(R.string.overview_action_grades),
+                    icon  = Icons.Default.Star,
+                    onClick = onGrades,
+                )
+            }
+            if (onMeals != null) {
+                FeatureCard(
+                    title = stringResource(R.string.meals_action_meals),
+                    icon  = Icons.Default.Restaurant,
+                    onClick = onMeals,
+                )
+            }
         }
     }
 }
@@ -1036,39 +1539,27 @@ private const val GRADES_COLLAPSED_COUNT    = 3
 
 @Composable
 private fun OverviewCard(content: @Composable () -> Unit) {
-    ElevatedCard(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(20.dp),
-        colors    = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
-    ) {
-        Box(modifier = Modifier.padding(16.dp)) {
-            content()
+    RoundedCardContainer(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceBright,
+        ) {
+            Box(modifier = Modifier.padding(16.dp)) {
+                content()
+            }
         }
     }
 }
 
 @Composable
 private fun CardSectionHeader(title: String, icon: ImageVector) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint     = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text       = title,
-            style      = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color      = MaterialTheme.colorScheme.onSurface,
-        )
-    }
+    SectionLabel(
+        text = title,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        startPadding = 0.dp,
+        topPadding = 0.dp,
+    )
 }
 
 @Composable
@@ -1080,11 +1571,55 @@ private fun gradeColor(grade: Double): Color = when {
     else         -> MaterialTheme.colorScheme.error
 }
 
-private fun formatTimeLeft(minutes: Long): String = when {
-    minutes < 1        -> "<1m"
-    minutes < 60       -> "${minutes}m"
+@Composable
+private fun NextBellBar(label: String) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Notifications,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+}
+
+private fun formatTimeLeft(seconds: Long, showSeconds: Boolean): String = when {
+    seconds < 0 -> ""
+    !showSeconds -> formatWholeMinutes(seconds / 60)
+    else -> {
+        val m = seconds / 60
+        val s = seconds % 60
+        when {
+            m < 1 -> "${s}s"
+            m < 60 -> "${m}m ${s}s"
+            s == 0L && m % 60 == 0L -> "${m / 60}h"
+            m % 60 == 0L -> "${m / 60}h ${s}s"
+            else -> "${m / 60}h ${m % 60}m ${s}s"
+        }
+    }
+}
+
+private fun formatWholeMinutes(minutes: Long): String = when {
+    minutes < 1 -> "<1m"
+    minutes < 60 -> "${minutes}m"
     minutes % 60 == 0L -> "${minutes / 60}h"
-    else               -> "${minutes / 60}h ${minutes % 60}m"
+    else -> "${minutes / 60}h ${minutes % 60}m"
 }
 
 @Preview(name = "Overview – Light", showBackground = true)
@@ -1116,3 +1651,4 @@ private fun getDisplayName(lesson: Lesson): String {
         }
     }
 }
+

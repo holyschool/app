@@ -42,3 +42,4 @@ data class EduGrade(
     val percent: Double?,
     val classGradeAvg: Double?
 )
+

@@ -31,7 +31,7 @@ object FirebaseNotificationHandler {
             else -> DeepLinkHelper.createMessagesIntent(context, resolvedTitle, resolvedBody, timelineId)
         }
 
-        val notificationId = if (timelineId > 0) timelineId else System.currentTimeMillis().toInt()
+        val notificationId = if (timelineId > 0) timelineId else (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
         val markPending = createMarkReadPendingIntent(context, timelineId, notificationId, channel)
 
         val builder = NotificationCompat.Builder(context, channel)
@@ -78,7 +78,6 @@ object FirebaseNotificationHandler {
         )
     }
 
-    /** @deprecated Use [NotificationType.iconFor] */
     fun getNotificationIcon(type: String?): Int = NotificationType.iconFor(type)
 
     private fun defaultTitle(context: Context, type: String, data: Map<String, String>): String {
@@ -106,6 +105,21 @@ object FirebaseNotificationHandler {
             } else {
                 context.getString(R.string.notif_message_title_multiple)
             }
+            "payment" -> if (sender != null) {
+                context.getString(R.string.notif_payment_title, sender)
+            } else context.getString(R.string.notif_payment_title, "")
+            "signin" -> if (sender != null) {
+                context.getString(R.string.notif_signin_title, sender)
+            } else context.getString(R.string.notif_signin_title, "")
+            "album" -> if (sender != null) {
+                context.getString(R.string.notif_album_title, sender)
+            } else context.getString(R.string.notif_album_title, "")
+            "behaviour" -> if (sender != null) {
+                context.getString(R.string.notif_behaviour_title, sender)
+            } else context.getString(R.string.notif_behaviour_title, "")
+            "notification" -> if (sender != null) {
+                context.getString(R.string.notif_notification_title, sender)
+            } else context.getString(R.string.notif_notification_title, "")
             else -> context.getString(R.string.notif_message_title_multiple)
         }
     }
@@ -129,3 +143,4 @@ object FirebaseNotificationHandler {
         }
     }
 }
+

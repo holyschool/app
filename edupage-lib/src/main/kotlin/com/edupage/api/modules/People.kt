@@ -195,3 +195,4 @@ internal class Subjects(private val session: EdupageSession) {
         )
     }
 }
+

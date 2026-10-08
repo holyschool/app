@@ -77,3 +77,4 @@ class BatteryOptimizationHelper(private val context: Context) {
         }
     }
 }
+

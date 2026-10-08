@@ -11,6 +11,7 @@ import com.enderplusbayzuiship.edupage2.R
 import com.edupage.api.model.grades.SLOVAK_GRADE_MAP
 import com.enderplusbayzuiship.edupage2.data.AppPreferences
 import com.enderplusbayzuiship.edupage2.data.GradesCache
+import com.enderplusbayzuiship.edupage2.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -26,6 +27,7 @@ data class GradeSubjectGroup(
     val subjectName: String,
     val grades: List<EduGrade>,
     val average: Double?,
+    val classGradeAvg: Double?,
     val allVerbal: Boolean,
     val hasNewGrades: Boolean = false,
 )
@@ -193,7 +195,10 @@ class GradesViewModel @Inject constructor(
                 } else {
                     Log.e(TAG, "failed to load grades: ${e.message}", e)
                     _uiState.value = GradesUiState.Error(
-                        e.message ?: context.getString(R.string.grades_error_failed_to_load)
+                        if (e.isNetworkError())
+                            context.getString(R.string.network_error)
+                        else
+                            e.message ?: context.getString(R.string.grades_error_failed_to_load)
                     )
                 }
             }
@@ -229,6 +234,15 @@ class GradesViewModel @Inject constructor(
     }
 
     private suspend fun fetchAndUpdate(term: Term, backgroundUpdate: Boolean) {
+        if (!com.enderplusbayzuiship.edupage2.ui.util.ConnectivityObserver.isOnline.value) {
+            val offline = _uiState.value
+            if (offline is GradesUiState.Success) {
+                _uiState.value = offline.copy(isRefreshing = false)
+            } else {
+                _uiState.value = GradesUiState.Error(context.getString(R.string.network_error))
+            }
+            return
+        }
         try {
             val year = edupage.getSchoolYear()
                 ?: throw IllegalStateException(context.getString(R.string.grades_error_failed_to_load))
@@ -265,11 +279,12 @@ class GradesViewModel @Inject constructor(
                 val avg = computeAverage(sorted)
                 val hasNew = sorted.any { it.eventId !in seenIds }
                 GradeSubjectGroup(
-                    subjectName  = subject,
-                    grades       = sorted,
-                    average      = avg,
-                    allVerbal    = sorted.all { it.verbal },
-                    hasNewGrades = hasNew,
+                    subjectName   = subject,
+                    grades        = sorted,
+                    average       = avg,
+                    classGradeAvg = sorted.firstOrNull { it.classGradeAvg != null }?.classGradeAvg,
+                    allVerbal     = sorted.all { it.verbal },
+                    hasNewGrades  = hasNew,
                 )
             }
             .sortedWith(compareByDescending<GradeSubjectGroup> { it.hasNewGrades }.thenBy { it.subjectName })
@@ -298,3 +313,4 @@ class GradesViewModel @Inject constructor(
         }
     }
 }
+

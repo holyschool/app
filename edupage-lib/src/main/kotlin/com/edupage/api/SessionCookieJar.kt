@@ -23,6 +23,10 @@ class SessionCookieJar : CookieJar {
     fun getSessionId(host: String): String? =
         cookieStore[host]?.firstOrNull { it.name == "PHPSESSID" }?.value
 
+    fun clear() {
+        cookieStore.clear()
+    }
+
     fun setSessionId(host: String, sessionId: String) {
         val hostCookies = cookieStore.getOrPut(host) { mutableListOf() }
         hostCookies.removeIf { it.name == "PHPSESSID" }
@@ -35,3 +39,4 @@ class SessionCookieJar : CookieJar {
         hostCookies.add(cookie)
     }
 }
+

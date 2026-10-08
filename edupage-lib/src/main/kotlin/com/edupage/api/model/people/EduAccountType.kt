@@ -5,3 +5,4 @@ enum class EduAccountType(val value: String) {
     TEACHER("Teacher"),
     PARENT("Rodic")
 }
+

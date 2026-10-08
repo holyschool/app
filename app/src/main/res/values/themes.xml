@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base app theme — no action bar, used before Compose takes over -->
+
     <style name="Theme.Edupage2" parent="android:Theme.Material.Light.NoActionBar"/>
 
-    <!--
-        Splash screen theme applied to MainActivity.
-        Uses Theme.SplashScreen as parent so the core-splashscreen API works.
-        The icon is set to a blank drawable so the OS splash is visually invisible —
-        our Compose SplashScreen renders immediately after and is the real loading UI.
-        windowSplashScreenBackground matches our M3 surface color so there's no flash.
-    -->
     <style name="Theme.Edupage2.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#010202</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
         <item name="postSplashScreenTheme">@style/Theme.Edupage2</item>
     </style>
+
+    <style name="Theme.OssLicenses" parent="Theme.AppCompat.Light.NoActionBar"/>
 </resources>
+
