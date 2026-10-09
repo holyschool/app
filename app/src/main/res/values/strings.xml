@@ -173,6 +173,14 @@
     <string name="messages_comment_hint">Write a comment…</string>
     <string name="messages_send_as_poll">Send as poll</string>
 
+    <string name="attachment_loading">Loading preview…</string>
+    <string name="attachment_download_failed">Couldn\'t load this attachment.</string>
+    <string name="attachment_open_with">Open with another app</string>
+    <string name="attachment_no_app">No app can open this file.</string>
+    <string name="attachment_no_preview">No built-in preview for this file type.</string>
+    <string name="attachment_pdf_page">Page %d</string>
+    <string name="action_close">Close</string>
+
     <string name="overview_title">Overview</string>
     <string name="overview_coming_soon">Coming soon</string>
     <string name="overview_today_schedule">Today\'s Schedule</string>

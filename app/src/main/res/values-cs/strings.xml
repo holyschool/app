@@ -158,6 +158,14 @@
     <string name="messages_comment_hint">Napsat komentář…</string>
     <string name="messages_send_as_poll">Odeslat jako anketu</string>
 
+    <string name="attachment_loading">Načítání náhledu…</string>
+    <string name="attachment_download_failed">Tuto přílohu se nepodařilo načíst.</string>
+    <string name="attachment_open_with">Otevřít v jiné aplikaci</string>
+    <string name="attachment_no_app">Tento soubor neumí žádná aplikace otevřít.</string>
+    <string name="attachment_no_preview">Pro tento typ souboru není vestavěný náhled.</string>
+    <string name="attachment_pdf_page">Strana %d</string>
+    <string name="action_close">Zavřít</string>
+
     <string name="overview_title">Přehled</string>
     <string name="overview_coming_soon">Už brzy</string>
     <string name="overview_today_schedule">Dnešní rozvrh</string>

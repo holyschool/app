@@ -157,6 +157,14 @@
     <string name="messages_comment_hint">Napísať komentár…</string>
     <string name="messages_send_as_poll">Odoslať ako anketu</string>
 
+    <string name="attachment_loading">Načítavanie náhľadu…</string>
+    <string name="attachment_download_failed">Túto prílohu sa nepodarilo načítať.</string>
+    <string name="attachment_open_with">Otvoriť v inej aplikácii</string>
+    <string name="attachment_no_app">Tento súbor nevie otvoriť žiadna aplikácia.</string>
+    <string name="attachment_no_preview">Pre tento typ súboru nie je vstavaný náhľad.</string>
+    <string name="attachment_pdf_page">Strana %d</string>
+    <string name="action_close">Zavrieť</string>
+
     <string name="overview_title">Prehľaď</string>
     <string name="overview_coming_soon">Už čoskoro</string>
     <string name="overview_today_schedule">Dnešný rozvrh</string>

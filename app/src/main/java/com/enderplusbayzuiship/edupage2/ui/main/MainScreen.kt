@@ -147,6 +147,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     }
 
     var detailGroup by remember { mutableStateOf<com.enderplusbayzuiship.edupage2.ui.messages.MessageGroup?>(null) }
+    var viewerAttachment by remember { mutableStateOf<com.edupage.api.model.MessageAttachment?>(null) }
     var deepLinkDetail by remember { mutableStateOf<DeepLinkHelper.DeepLinkInfo?>(null) }
 
     var showAbout    by remember { mutableStateOf(false) }
@@ -242,8 +243,15 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
             onReply = { },
             onStarToggle = { _, _ -> },
             onVote = { _, _ -> },
-            onOpenAttachment = { messagesVm.openAttachment(it) },
+            onOpenAttachment = { viewerAttachment = it },
             currentUserId = null,
+        )
+    }
+
+    viewerAttachment?.let { attachment ->
+        com.enderplusbayzuiship.edupage2.ui.attachments.AttachmentViewerSheet(
+            attachment = attachment,
+            onDismiss = { viewerAttachment = null },
         )
     }
 

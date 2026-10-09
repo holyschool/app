@@ -80,6 +80,7 @@ fun AssignmentsScreen(
     val detailState by viewModel.detailState.collectAsState()
     val haptics = rememberAppHaptics()
     var detailAssignment by remember { mutableStateOf<Assignment?>(null) }
+    var viewerAttachment by remember { mutableStateOf<com.edupage.api.model.MessageAttachment?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -212,7 +213,14 @@ fun AssignmentsScreen(
                 detailAssignment = null
                 viewModel.resetDetail()
             },
-            onOpenAttachment = { viewModel.openAttachment(it) },
+            onOpenAttachment = { viewerAttachment = it },
+        )
+    }
+
+    viewerAttachment?.let { attachment ->
+        com.enderplusbayzuiship.edupage2.ui.attachments.AttachmentViewerSheet(
+            attachment = attachment,
+            onDismiss = { viewerAttachment = null },
         )
     }
 }

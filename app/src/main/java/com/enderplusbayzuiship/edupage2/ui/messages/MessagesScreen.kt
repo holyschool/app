@@ -247,6 +247,7 @@ fun MessagesScreen(
 
     var showCompose    by remember { mutableStateOf(false) }
     var detailGroup    by remember { mutableStateOf<MessageGroup?>(null) }
+    var viewerAttachment by remember { mutableStateOf<com.edupage.api.model.MessageAttachment?>(null) }
     var selectedFilter by remember { mutableStateOf<Int?>(null) }
     var unreadOnly     by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -593,8 +594,15 @@ fun MessagesScreen(
             },
             onStarToggle = { timelineId, starred -> viewModel.toggleMessageStarred(timelineId, starred) },
             onVote = { timelineId, answerIds -> viewModel.voteOnPoll(timelineId, answerIds) },
-            onOpenAttachment = { attachment -> viewModel.openAttachment(attachment) },
+            onOpenAttachment = { attachment -> viewerAttachment = attachment },
             currentUserId = viewModel.getCurrentUserId(),
+        )
+    }
+
+    viewerAttachment?.let { attachment ->
+        com.enderplusbayzuiship.edupage2.ui.attachments.AttachmentViewerSheet(
+            attachment = attachment,
+            onDismiss = { viewerAttachment = null },
         )
     }
 

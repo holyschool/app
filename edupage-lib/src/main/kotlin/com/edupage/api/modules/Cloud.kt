@@ -106,7 +106,12 @@ internal class Cloud(private val session: EdupageSession) {
         } else {
             "https://${session.subdomain}.edupage.org$uploadPath"
         }
-        val request = Request.Builder().url(url).get().build()
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .header("Referer", "https://${session.subdomain}.edupage.org/")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .build()
         val response = session.httpClient.newCall(request).execute()
         if (!response.isSuccessful) throw RuntimeException("HTTP ${response.code}")
         destination.parentFile?.mkdirs()
