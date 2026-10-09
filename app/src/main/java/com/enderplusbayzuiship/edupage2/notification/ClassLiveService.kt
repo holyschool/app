@@ -197,11 +197,12 @@ class ClassLiveService : Service() {
     }
 
     private fun describeLesson(lesson: com.enderplusbayzuiship.edupage2.ui.widgets.WidgetLesson): String {
+        val subject = lesson.displaySubject(prefs.liveClassShortSubject)
         val parts = mutableListOf<String>()
-        if (prefs.liveClassShowSubject) parts.add(lesson.subject)
+        if (prefs.liveClassShowSubject) parts.add(subject)
         if (prefs.liveClassShowRoom) lesson.room?.let { parts.add(it) }
         if (prefs.liveClassShowTeacher) lesson.teacher?.let { parts.add(it) }
-        if (parts.isEmpty()) parts.add(lesson.subject)
+        if (parts.isEmpty()) parts.add(subject)
         return parts.joinToString(" · ")
     }
 

@@ -73,6 +73,7 @@ import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.ShortText
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerticalAlignTop
@@ -1134,6 +1135,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
             val notifCheckIntervalMinutes by viewModel.notifCheckIntervalMinutes.collectAsState()
             val liveClassNotif by viewModel.liveClassNotif.collectAsState()
             val liveClassShowSubject by viewModel.liveClassShowSubject.collectAsState()
+            val liveClassShortSubject by viewModel.liveClassShortSubject.collectAsState()
             val liveClassShowRoom by viewModel.liveClassShowRoom.collectAsState()
             val liveClassShowTeacher by viewModel.liveClassShowTeacher.collectAsState()
             val liveClassShowProgress by viewModel.liveClassShowProgress.collectAsState()
@@ -1202,6 +1204,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.notificationsDetail(
                         title = stringResource(R.string.settings_live_class_show_subject),
                         checked = liveClassShowSubject,
                         onCheckedChange = { viewModel.setLiveClassShowSubject(it) },
+                    )
+                    IconToggleItem(
+                        icon = Icons.Rounded.ShortText,
+                        title = stringResource(R.string.settings_live_class_short_subject),
+                        description = stringResource(R.string.settings_live_class_short_subject_desc),
+                        checked = liveClassShortSubject,
+                        onCheckedChange = { viewModel.setLiveClassShortSubject(it) },
                     )
                     IconToggleItem(
                         icon = Icons.Rounded.Home,

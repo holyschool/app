@@ -212,6 +212,7 @@ class AppPreferences @Inject constructor(
         private const val KEY_MOTION_BLUR_SCOPE = "motion_blur_scope"
         private const val KEY_MOTION_BLUR_STRENGTH = "motion_blur_strength"
         private const val KEY_LIVE_CLASS_SHOW_SUBJECT = "live_class_show_subject"
+        private const val KEY_LIVE_CLASS_SHORT_SUBJECT = "live_class_short_subject"
         private const val KEY_LIVE_CLASS_SHOW_ROOM = "live_class_show_room"
         private const val KEY_LIVE_CLASS_SHOW_TEACHER = "live_class_show_teacher"
         private const val KEY_LIVE_CLASS_SHOW_PROGRESS = "live_class_show_progress"
@@ -456,6 +457,11 @@ class AppPreferences @Inject constructor(
     var liveClassShowSubject: Boolean
         get() = prefs.getBoolean(KEY_LIVE_CLASS_SHOW_SUBJECT, true)
         set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_SHOW_SUBJECT, value).apply()
+
+    /** Use the abbreviated subject name in the live class notification. */
+    var liveClassShortSubject: Boolean
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_SHORT_SUBJECT, false)
+        set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_SHORT_SUBJECT, value).apply()
 
     var liveClassShowRoom: Boolean
         get() = prefs.getBoolean(KEY_LIVE_CLASS_SHOW_ROOM, true)

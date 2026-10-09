@@ -617,6 +617,8 @@
     <string name="settings_live_class_desc">Keep an ongoing notification with countdown, progress and the next classroom.</string>
     <string name="settings_live_class_display">Live notification content</string>
     <string name="settings_live_class_show_subject">Show subject</string>
+    <string name="settings_live_class_short_subject">Short subject name</string>
+    <string name="settings_live_class_short_subject_desc">Use the abbreviated subject name (e.g. MAT) in the notification.</string>
     <string name="settings_live_class_show_room">Show classroom</string>
     <string name="settings_live_class_show_teacher">Show teacher</string>
     <string name="settings_live_class_show_progress">Countdown and progress bar</string>

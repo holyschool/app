@@ -253,6 +253,9 @@ class SettingsViewModel @Inject constructor(
     private val _liveClassShowSubject = MutableStateFlow(appPreferences.liveClassShowSubject)
     val liveClassShowSubject: StateFlow<Boolean> = _liveClassShowSubject.asStateFlow()
 
+    private val _liveClassShortSubject = MutableStateFlow(appPreferences.liveClassShortSubject)
+    val liveClassShortSubject: StateFlow<Boolean> = _liveClassShortSubject.asStateFlow()
+
     private val _liveClassShowRoom = MutableStateFlow(appPreferences.liveClassShowRoom)
     val liveClassShowRoom: StateFlow<Boolean> = _liveClassShowRoom.asStateFlow()
 
@@ -595,6 +598,11 @@ class SettingsViewModel @Inject constructor(
     fun setLiveClassShowSubject(value: Boolean) {
         appPreferences.liveClassShowSubject = value
         _liveClassShowSubject.value = value
+    }
+
+    fun setLiveClassShortSubject(value: Boolean) {
+        appPreferences.liveClassShortSubject = value
+        _liveClassShortSubject.value = value
     }
 
     fun setLiveClassShowRoom(value: Boolean) {

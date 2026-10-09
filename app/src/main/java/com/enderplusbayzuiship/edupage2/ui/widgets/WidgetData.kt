@@ -12,10 +12,15 @@ data class WidgetLesson(
     val start: LocalTime?,
     val end: LocalTime?,
     val subject: String,
+    val subjectShortName: String? = null,
     val room: String?,
     val teacher: String?,
     val cancelled: Boolean,
-)
+) {
+    /** Subject text for display, using the abbreviated name when requested. */
+    fun displaySubject(short: Boolean): String =
+        if (short) subjectShortName?.takeIf { it.isNotBlank() } ?: subject else subject
+}
 
 data class WidgetMeal(
     val name: String,
@@ -37,6 +42,7 @@ private data class WidgetCachedLesson(
     val endTimeHour: Int?,
     val endTimeMinute: Int?,
     val subjectName: String?,
+    val subjectShortName: String?,
     val teacherNames: List<String>?,
     val classroomNames: List<String>?,
     val curriculum: String?,
@@ -88,6 +94,7 @@ fun readWidgetLessons(context: Context, date: LocalDate = LocalDate.now()): List
                     LocalTime.of(lesson.endTimeHour, lesson.endTimeMinute)
                 } else null,
                 subject = subject,
+                subjectShortName = lesson.subjectShortName,
                 room = lesson.classroomNames?.firstOrNull(),
                 teacher = lesson.teacherNames?.firstOrNull(),
                 cancelled = lesson.isCancelled,
