@@ -59,14 +59,14 @@ class ChatStore @Inject constructor(
     fun add(message: ChatMessage) {
         messages.add(message)
         trim()
-        persist()
+        publish()
     }
 
     fun update(id: String, transform: (ChatMessage) -> ChatMessage) {
         val idx = messages.indexOfFirst { it.id == id }
         if (idx < 0) return
         messages[idx] = transform(messages[idx])
-        persist()
+        publish()
     }
 
     fun remove(id: String) {
@@ -99,9 +99,22 @@ class ChatStore @Inject constructor(
     private fun loadFromDisk(): List<ChatMessage>? = runCatching {
         if (!file.exists()) return emptyList()
         val type = object : TypeToken<List<ChatMessage>>() {}.type
-        gson.fromJson<List<ChatMessage>>(file.readText(), type)
+        val loaded = gson.fromJson<List<ChatMessage>>(file.readText(), type)
+        loaded.map { it.sanitized() }
     }.getOrElse {
         Log.e(TAG, "failed to load chat", it)
         null
     }
+
+    /**
+     * Gson bypasses constructors, so transcripts written before a field existed can hold
+     * nulls for Kotlin non-null properties (e.g. [ChatMessage.attachments]). Normalise
+     * such values so the UI never sees a null collection.
+     */
+    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+    private fun ChatMessage.sanitized(): ChatMessage = copy(
+        content = content ?: "",
+        role = role ?: "assistant",
+        attachments = attachments ?: emptyList(),
+    )
 }

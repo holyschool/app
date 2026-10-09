@@ -135,10 +135,10 @@ fun AiChatScreen(
     }
 
     val gradient = Brush.verticalGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-            MaterialTheme.colorScheme.surface,
-            MaterialTheme.colorScheme.surface,
+        colorStops = arrayOf(
+            0f to MaterialTheme.colorScheme.primaryContainer,
+            0.4f to MaterialTheme.colorScheme.surface,
+            1f to MaterialTheme.colorScheme.surface,
         ),
     )
 
