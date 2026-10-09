@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.toArgb
 data class SubjectIconOption(
     val key: String,
     val vector: ImageVector,
+    /** Short human/AI-readable meaning, used to help the AI pick a fitting icon. */
+    val description: String = "",
 )
 
 /**
@@ -41,30 +43,30 @@ data class SubjectIconOption(
  */
 object SubjectIconCatalog {
     val icons: List<SubjectIconOption> = listOf(
-        SubjectIconOption("book", Icons.Rounded.MenuBook),
-        SubjectIconOption("language", Icons.Rounded.Language),
-        SubjectIconOption("math", Icons.Rounded.Calculate),
-        SubjectIconOption("science", Icons.Rounded.Science),
-        SubjectIconOption("physics", Icons.Rounded.Bolt),
-        SubjectIconOption("biology", Icons.Rounded.Biotech),
-        SubjectIconOption("history", Icons.Rounded.HistoryEdu),
-        SubjectIconOption("geography", Icons.Rounded.Public),
-        SubjectIconOption("art", Icons.Rounded.Palette),
-        SubjectIconOption("music", Icons.Rounded.MusicNote),
-        SubjectIconOption("sport", Icons.Rounded.SportsSoccer),
-        SubjectIconOption("fitness", Icons.Rounded.FitnessCenter),
-        SubjectIconOption("computer", Icons.Rounded.Computer),
-        SubjectIconOption("code", Icons.Rounded.Code),
-        SubjectIconOption("economics", Icons.Rounded.AccountBalance),
-        SubjectIconOption("technical", Icons.Rounded.Architecture),
-        SubjectIconOption("health", Icons.Rounded.MedicalServices),
-        SubjectIconOption("religion", Icons.Rounded.Church),
-        SubjectIconOption("agriculture", Icons.Rounded.Agriculture),
-        SubjectIconOption("drama", Icons.Rounded.TheaterComedy),
-        SubjectIconOption("law", Icons.Rounded.Gavel),
-        SubjectIconOption("psychology", Icons.Rounded.Psychology),
-        SubjectIconOption("ideas", Icons.Rounded.Lightbulb),
-        SubjectIconOption("design", Icons.Rounded.Brush),
+        SubjectIconOption("book", Icons.Rounded.MenuBook, "general subject, reading, literature"),
+        SubjectIconOption("language", Icons.Rounded.Language, "foreign languages, grammar, language class"),
+        SubjectIconOption("math", Icons.Rounded.Calculate, "mathematics, algebra, geometry"),
+        SubjectIconOption("science", Icons.Rounded.Science, "general science, chemistry, laboratory"),
+        SubjectIconOption("physics", Icons.Rounded.Bolt, "physics, mechanics, electricity"),
+        SubjectIconOption("biology", Icons.Rounded.Biotech, "biology, nature, living things"),
+        SubjectIconOption("history", Icons.Rounded.HistoryEdu, "history, past events"),
+        SubjectIconOption("geography", Icons.Rounded.Public, "geography, earth science, countries"),
+        SubjectIconOption("art", Icons.Rounded.Palette, "art, drawing, painting, visual arts"),
+        SubjectIconOption("music", Icons.Rounded.MusicNote, "music, singing, instruments"),
+        SubjectIconOption("sport", Icons.Rounded.SportsSoccer, "physical education, sports, games"),
+        SubjectIconOption("fitness", Icons.Rounded.FitnessCenter, "gym, fitness, training"),
+        SubjectIconOption("computer", Icons.Rounded.Computer, "computers, informatics, information technology"),
+        SubjectIconOption("code", Icons.Rounded.Code, "programming, coding, software"),
+        SubjectIconOption("economics", Icons.Rounded.AccountBalance, "economics, business, finance, civics"),
+        SubjectIconOption("technical", Icons.Rounded.Architecture, "technical drawing, engineering, construction"),
+        SubjectIconOption("health", Icons.Rounded.MedicalServices, "health, first aid, nursing, medicine"),
+        SubjectIconOption("religion", Icons.Rounded.Church, "religion, ethics, moral education"),
+        SubjectIconOption("agriculture", Icons.Rounded.Agriculture, "agriculture, farming, gardening"),
+        SubjectIconOption("drama", Icons.Rounded.TheaterComedy, "drama, theatre, acting"),
+        SubjectIconOption("law", Icons.Rounded.Gavel, "law, legal studies, civics"),
+        SubjectIconOption("psychology", Icons.Rounded.Psychology, "psychology, social studies, behaviour"),
+        SubjectIconOption("ideas", Icons.Rounded.Lightbulb, "philosophy, thinking skills, or anything that fits nothing else"),
+        SubjectIconOption("design", Icons.Rounded.Brush, "design, crafts, technology, workshop"),
     )
 
     fun byKey(key: String?): SubjectIconOption? =

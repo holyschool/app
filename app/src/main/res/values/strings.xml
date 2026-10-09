@@ -541,6 +541,9 @@
     <string name="subject_icons_error">Couldn\'t load subjects</string>
     <string name="subject_icons_step_select">Choose subjects</string>
     <string name="subject_icons_select_hint">Pick the subjects you want to customize.</string>
+    <string name="subject_icons_ai_assign">Auto-assign icons with AI</string>
+    <string name="subject_icons_ai_assigning">Assigning icons…</string>
+    <string name="subject_icons_ai_assigned">Assigned icons to %1$d subjects</string>
     <string name="subject_icons_group_mine">My subjects</string>
     <string name="subject_icons_group_more">Other subjects</string>
     <string name="subject_icons_group_all">All subjects</string>

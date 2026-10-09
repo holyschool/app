@@ -51,6 +51,8 @@ fun SubjectIconEditorSheet(
     val haptics = rememberAppHaptics()
     val styles by viewModel.styles.collectAsState()
     val subjectsState by viewModel.subjectsState.collectAsState()
+    val aiAvailable by viewModel.aiAvailable.collectAsState()
+    val aiState by viewModel.aiState.collectAsState()
 
     var selected by remember { mutableStateOf(listOf<String>()) }
     var editingIndex by remember { mutableStateOf(-1) }
@@ -110,6 +112,12 @@ fun SubjectIconEditorSheet(
                         mine = state.mine,
                         others = state.others,
                         selected = selected,
+                        aiAvailable = aiAvailable,
+                        aiState = aiState,
+                        onAutoAssign = {
+                            haptics.virtualKey()
+                            viewModel.autoAssignIcons()
+                        },
                         onToggle = { name ->
                             haptics.virtualKey()
                             selected = if (name in selected) selected - name else selected + name
@@ -161,6 +169,9 @@ private fun SelectSubjectsStep(
     mine: List<SubjectInfo>,
     others: List<SubjectInfo>,
     selected: List<String>,
+    aiAvailable: Boolean,
+    aiState: SubjectAiState,
+    onAutoAssign: () -> Unit,
     onToggle: (String) -> Unit,
     onToggleAll: () -> Unit,
     onNext: () -> Unit,
@@ -232,6 +243,44 @@ private fun SelectSubjectsStep(
         }
 
         Spacer(Modifier.height(12.dp))
+
+        if (aiAvailable) {
+            Button(
+                onClick = onAutoAssign,
+                enabled = aiState !is SubjectAiState.Running,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    stringResource(
+                        if (aiState is SubjectAiState.Running) {
+                            R.string.subject_icons_ai_assigning
+                        } else {
+                            R.string.subject_icons_ai_assign
+                        }
+                    )
+                )
+            }
+            when (aiState) {
+                is SubjectAiState.Done -> {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.subject_icons_ai_assigned, aiState.count),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                is SubjectAiState.Error -> {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = aiState.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                else -> Unit
+            }
+            Spacer(Modifier.height(4.dp))
+        }
 
         Button(
             onClick = onNext,
