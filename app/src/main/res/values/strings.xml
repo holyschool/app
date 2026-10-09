@@ -650,6 +650,8 @@
     <string name="update_downloading_progress">Downloading… %1$d%%</string>
     <string name="update_auto_check">Automatically check for updates</string>
     <string name="update_auto_check_desc">Check GitHub releases on boot. Current: %1$s.</string>
+    <string name="update_include_prerelease">Include pre-releases</string>
+    <string name="update_include_prerelease_desc">Also offer betas and pre-releases, so you always get the newest build.</string>
     <string name="update_download">Download</string>
     <string name="update_downloading">Downloading update…</string>
     <string name="update_download_started">Download started — tap the notification to install</string>

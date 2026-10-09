@@ -1822,6 +1822,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dataAboutDetail(
         fun UpdateRows() {
             val context = LocalContext.current
             val autoCheckUpdates by viewModel.autoCheckUpdates.collectAsState()
+            val prereleaseUpdates by viewModel.prereleaseUpdates.collectAsState()
             val updateState by viewModel.updateState.collectAsState()
             val checking = updateState is SettingsViewModel.UpdateCheckState.Checking
 
@@ -1860,6 +1861,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dataAboutDetail(
                 ),
                 checked = autoCheckUpdates,
                 onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
+            )
+            IconToggleItem(
+                icon = Icons.Rounded.Science,
+                title = stringResource(R.string.update_include_prerelease),
+                description = stringResource(R.string.update_include_prerelease_desc),
+                checked = prereleaseUpdates,
+                onCheckedChange = { viewModel.setPrereleaseUpdates(it) },
             )
             SettingsNavigationRow(
                 title = stringResource(R.string.settings_check_updates),

@@ -205,6 +205,7 @@ class AppPreferences @Inject constructor(
         private const val KEY_LIVE_CLASS_NOTIF = "live_class_notif"
         private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
         private const val KEY_SKIPPED_UPDATE_VERSION = "skipped_update_version"
+        private const val KEY_PRERELEASE_UPDATES = "prerelease_updates"
         private const val KEY_HAPTIC_INTENSITY = "haptic_intensity"
         private const val KEY_LAST_SEEN_VERSION = "last_seen_version"
         private const val KEY_MOTION_BLUR = "motion_blur"
@@ -426,6 +427,11 @@ class AppPreferences @Inject constructor(
     var skippedUpdateVersion: String
         get() = prefs.getString(KEY_SKIPPED_UPDATE_VERSION, "") ?: ""
         set(value) = prefs.edit().putString(KEY_SKIPPED_UPDATE_VERSION, value).apply()
+
+    /** When enabled, pre-releases (e.g. betas) are offered as updates too. */
+    var prereleaseUpdates: Boolean
+        get() = prefs.getBoolean(KEY_PRERELEASE_UPDATES, false)
+        set(value) = prefs.edit().putBoolean(KEY_PRERELEASE_UPDATES, value).apply()
 
     var hapticIntensity: HapticIntensity
         get() = HapticIntensity.fromKey(prefs.getString(KEY_HAPTIC_INTENSITY, null))

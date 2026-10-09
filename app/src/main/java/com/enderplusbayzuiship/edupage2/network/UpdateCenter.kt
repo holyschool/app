@@ -12,7 +12,7 @@ object UpdateCenter {
     suspend fun checkOnBoot(prefs: AppPreferences, currentVersion: String) {
         if (!prefs.autoCheckUpdates) return
         try {
-            val info = UpdateChecker().check(currentVersion) ?: return
+            val info = UpdateChecker().check(currentVersion, prefs.prereleaseUpdates) ?: return
             if (info.versionName == prefs.skippedUpdateVersion) return
             _pending.value = info
         } catch (_: Exception) {

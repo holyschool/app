@@ -83,7 +83,7 @@ class SettingsViewModel @Inject constructor(
             val current = runCatching {
                 context.packageManager.getPackageInfo(context.packageName, 0).versionName
             }.getOrNull().orEmpty()
-            val info = updateChecker.check(current)
+            val info = updateChecker.check(current, appPreferences.prereleaseUpdates)
             _updateState.value = if (info != null) {
                 UpdateCheckState.Available(info)
             } else {
@@ -264,6 +264,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _autoCheckUpdates = MutableStateFlow(appPreferences.autoCheckUpdates)
     val autoCheckUpdates: StateFlow<Boolean> = _autoCheckUpdates.asStateFlow()
+
+    private val _prereleaseUpdates = MutableStateFlow(appPreferences.prereleaseUpdates)
+    val prereleaseUpdates: StateFlow<Boolean> = _prereleaseUpdates.asStateFlow()
 
     private val _notificationsEnabled = MutableStateFlow(appPreferences.notificationsEnabled)
     val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
@@ -612,6 +615,11 @@ class SettingsViewModel @Inject constructor(
     fun setAutoCheckUpdates(value: Boolean) {
         appPreferences.autoCheckUpdates = value
         _autoCheckUpdates.value = value
+    }
+
+    fun setPrereleaseUpdates(value: Boolean) {
+        appPreferences.prereleaseUpdates = value
+        _prereleaseUpdates.value = value
     }
 
     fun skipUpdate(versionName: String) {
