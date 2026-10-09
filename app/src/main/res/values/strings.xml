@@ -861,6 +861,7 @@
     <string name="about_credit">An unofficial EduPage client. Built with Jetpack Compose and Material 3.</string>
     <string name="about_action_source">Source code</string>
     <string name="about_action_issue">Report an issue</string>
+    <string name="about_action_licenses">Licenses</string>
     <string name="settings_section_experimental">Experimental</string>
 
     <string name="settings_my_homework">My homework</string>
