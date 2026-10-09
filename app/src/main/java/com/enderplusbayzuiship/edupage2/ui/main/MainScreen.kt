@@ -265,8 +265,9 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
         scope.launch { pagerState.animateScrollToPage(index) }
     }
 
-    val backEnabled = showAbout || showSettings || showDeveloperOptions || showHomework ||
-        showAssignments || showAcademics || showCloud || pagerState.currentPage != 0
+    val anyOverlayOpen = showAbout || showSettings || showDeveloperOptions || showHomework ||
+        showAssignments || showAcademics || showCloud || showAiQuiz || showAiFlashcards || showAiChat
+    val backEnabled = anyOverlayOpen || pagerState.currentPage != 0
     deepLinkDetail?.let { detail ->
         DeepLinkSheet(
             detail = detail,
@@ -286,6 +287,9 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
 
     BackHandler(enabled = backEnabled) {
         when {
+            showAiQuiz   -> showAiQuiz = false
+            showAiFlashcards -> showAiFlashcards = false
+            showAiChat   -> showAiChat = false
             showAbout    -> showAbout = false
             showDeveloperOptions -> showDeveloperOptions = false
             showHomework -> showHomework = false
@@ -299,35 +303,37 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
 
     Scaffold(
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                tabs.forEachIndexed { index, item ->
-                    val label = stringResource(item.labelRes)
-                    NavigationBarItem(
-                        selected = pagerState.currentPage == index,
-                        onClick = { goToTab(index) },
-                        icon = {
-                            if (index == 1 && unreadMessages > 0) {
-                                BadgedBox(
-                                    badge = {
-                                        Badge(
-                                            containerColor = MaterialTheme.colorScheme.error,
-                                            contentColor = MaterialTheme.colorScheme.onError,
-                                        ) {
-                                            Text(
-                                                text = if (unreadMessages > 99) "99+" else unreadMessages.toString(),
-                                                style = MaterialTheme.typography.labelSmall,
-                                            )
+            if (!anyOverlayOpen) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    tabs.forEachIndexed { index, item ->
+                        val label = stringResource(item.labelRes)
+                        NavigationBarItem(
+                            selected = pagerState.currentPage == index,
+                            onClick = { goToTab(index) },
+                            icon = {
+                                if (index == 1 && unreadMessages > 0) {
+                                    BadgedBox(
+                                        badge = {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = MaterialTheme.colorScheme.onError,
+                                            ) {
+                                                Text(
+                                                    text = if (unreadMessages > 99) "99+" else unreadMessages.toString(),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
+                                            }
                                         }
+                                    ) {
+                                        Icon(item.icon, contentDescription = label)
                                     }
-                                ) {
+                                } else {
                                     Icon(item.icon, contentDescription = label)
                                 }
-                            } else {
-                                Icon(item.icon, contentDescription = label)
-                            }
-                        },
-                        label = { Text(label) }
-                    )
+                            },
+                            label = { Text(label) }
+                        )
+                    }
                 }
             }
         }
