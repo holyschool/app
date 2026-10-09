@@ -20,3 +20,7 @@ edupage-notify-backend/.env
 build/
 **/build/
 node_modules/
+
+.idea/
+.vscode/
+/edupage-notify-backend/
