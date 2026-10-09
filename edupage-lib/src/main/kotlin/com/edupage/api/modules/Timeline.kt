@@ -112,6 +112,22 @@ internal class Timeline(private val session: EdupageSession) {
         return try { el.asString } catch (_: Exception) { null }
     }
 
+    /**
+     * Reads an object-valued field that EduPage may send either as a real JSON object or
+     * as a JSON-encoded string (as it does for the `data` field on timeline items).
+     */
+    private fun com.google.gson.JsonObject.rawObj(key: String): com.google.gson.JsonObject? {
+        val el = get(key) ?: return null
+        if (el.isJsonNull) return null
+        if (el.isJsonObject) return el.asJsonObject
+        val s = runCatching { el.asString }.getOrNull()
+            ?.takeIf { it.isNotBlank() && it != "[]" && it != "null" }
+            ?: return null
+        return runCatching { JsonParser.parseString(s) }.getOrNull()
+            ?.takeIf { it.isJsonObject }
+            ?.asJsonObject
+    }
+
     private fun parseItems(items: com.google.gson.JsonArray, userProps: Map<Int, JsonObject> = emptyMap()): List<TimelineEvent> {
         return items.mapNotNull { elem ->
             if (elem == null || elem.isJsonNull) return@mapNotNull null
@@ -135,21 +151,23 @@ internal class Timeline(private val session: EdupageSession) {
             val authorId   = item.str("vlastnik")
             val authorName = item.str("vlastnik_meno")
 
-            var text = item.str("text")?.takeIf { it.isNotBlank() }
-            val isImportant = text?.startsWith("Dôležitá správa") == true ||
-                text?.startsWith("Dôležitá správa") == true
+            val dataObj = item.rawObj("data")
 
-            if (isImportant) {
-                val dataStr = item.str("data")
-                if (!dataStr.isNullOrBlank()) {
-                    runCatching {
-                        val dataObj = JsonParser.parseString(dataStr)
-                        if (dataObj.isJsonObject) {
-                            dataObj.asJsonObject.str("messageContent")?.takeIf { it.isNotBlank() }
-                                ?.let { text = it }
-                        }
-                    }
-                }
+            // Important messages arrive with a localized placeholder in `text` and the
+            // real body in data.messageContent. Prefer the body regardless of the
+            // account language (the placeholder may be Slovak, Czech or English).
+            val messageContent = dataObj?.str("messageContent")?.takeIf { it.isNotBlank() }
+            val isMessage = type == "sprava"
+            val looksLikeImportantPlaceholder = item.str("text")?.let {
+                it.contains("Dôležitá správa") ||
+                    it.contains("Důležitá zpráva") ||
+                    it.contains("Important message")
+            } == true
+            val isImportant = isMessage && looksLikeImportantPlaceholder
+            var text = if (isMessage && messageContent != null) {
+                messageContent
+            } else {
+                item.str("text")?.takeIf { it.isNotBlank() }
             }
 
             val title = item.str("titulok")?.takeIf { it.isNotBlank() }
@@ -160,12 +178,7 @@ internal class Timeline(private val session: EdupageSession) {
             var pollMultiple = true
             var myVotes = emptyList<String>()
 
-            val rawDataStr = item.str("data")
-            val dataObj = rawDataStr?.takeIf { it.isNotBlank() && it != "[]" }
-                ?.let { runCatching { JsonParser.parseString(it) }.getOrNull() }
-                ?.takeIf { it.isJsonObject }
-
-            val d = dataObj?.asJsonObject
+            val d = dataObj
             val votingParams = d?.get("votingParams")?.takeIf { it.isJsonObject }?.asJsonObject
             var answersJson = votingParams?.get("answers")?.takeIf { it.isJsonArray }?.asJsonArray
 
@@ -193,21 +206,15 @@ internal class Timeline(private val session: EdupageSession) {
             }
 
             if (text.isNullOrBlank()) {
-                val dataStr = rawDataStr
-                if (!dataStr.isNullOrBlank() && dataStr != "[]") {
-                    runCatching {
-                        val d2 = JsonParser.parseString(dataStr).takeIf { it.isJsonObject }?.asJsonObject
-                        when (type) {
-                            "homework", "hw" -> {
-                                val nazov = d2?.str("nazov")?.takeIf { it.isNotBlank() }
-                                val due   = d2?.str("date")?.takeIf { it.isNotBlank() }
-                                text = when {
-                                    nazov != null && due != null -> "$nazov (due $due)"
-                                    nazov != null               -> nazov
-                                    due   != null               -> "Due $due"
-                                    else                        -> null
-                                }
-                            }
+                when (type) {
+                    "homework", "hw" -> {
+                        val nazov = dataObj?.str("nazov")?.takeIf { it.isNotBlank() }
+                        val due   = dataObj?.str("date")?.takeIf { it.isNotBlank() }
+                        text = when {
+                            nazov != null && due != null -> "$nazov (due $due)"
+                            nazov != null               -> nazov
+                            due   != null               -> "Due $due"
+                            else                        -> null
                         }
                     }
                 }
