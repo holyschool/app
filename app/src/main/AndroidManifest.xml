@@ -67,7 +67,7 @@
         <receiver
                 android:name=".notification.MarkAsReadReceiver"
                 android:exported="false">            <intent-filter>
-                <action android:name="com.enderplusbayzuiship.edupage2.MARK_AS_READ"/>
+                <action android:name="com.wiffles.edupage.MARK_AS_READ"/>
             </intent-filter>
         </receiver>
 

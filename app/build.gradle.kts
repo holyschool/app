@@ -18,11 +18,11 @@ java {
 }
 
 android {
-    namespace = "com.enderplusbayzuiship.edupage2"
+    namespace = "com.wiffles.edupage"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.enderplusbayzuiship.edupage2"
+        applicationId = "com.wiffles.edupage"
         minSdk = 26
         targetSdk = 36
         versionCode = 6
