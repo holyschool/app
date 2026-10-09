@@ -4,6 +4,7 @@ import com.edupage.api.EdupageSession
 import com.edupage.api.exceptions.NotLoggedInException
 import com.edupage.api.model.Meal
 import com.edupage.api.model.MealOrderInfo
+import com.edupage.api.model.MealRating
 import com.edupage.api.model.Meals
 import com.edupage.api.model.MenuChoice
 import com.google.gson.JsonElement
@@ -36,6 +37,8 @@ internal class Lunches(private val session: EdupageSession) {
             val url = mealPageUrl(date)
             val response = session.httpClient.newCall(Request.Builder().url(url).get().build()).execute()
             val html = response.body?.string() ?: return@withContext null
+            // EduPage occasionally sends an empty edupageData list -> no menu.
+            if (isEdupageDataEmpty(html)) return@withContext null
             val json = extractJsonViaMarker(html)
             if (json != null) return@withContext parseFullMealsJson(json, date)
             log.info("edupageData not found, HTML fallback")
@@ -51,6 +54,52 @@ internal class Lunches(private val session: EdupageSession) {
     suspend fun cancelMeal(date: LocalDate, mealTypeIndex: String, boarderId: String): Boolean {
         if (!session.isLoggedIn) throw NotLoggedInException()
         return postMealChoice(date, mealTypeIndex, "AX", boarderId)
+    }
+
+    /**
+     * Rates the meal of [mealTypeIndex] (quality/quantity, 1..5). Mirrors EduPage's
+     * `menu/?akcia=ulozHodnotenia` request. Returns true on success.
+     */
+    suspend fun rateMeal(
+        date: LocalDate,
+        mealTypeIndex: String,
+        boarderId: String,
+        quality: Int,
+        quantity: Int,
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (!session.isLoggedIn) throw NotLoggedInException()
+        try {
+            val formBody = FormBody.Builder()
+                .add("akcia", "ulozHodnotenia")
+                .add("stravnikid", boarderId)
+                .add("mysqlDate", date.format(jsonDateFmt))
+                .add("jedlo_dna", mealTypeIndex)
+                .add("kvalita", quality.toString())
+                .add("mnozstvo", quantity.toString())
+                .build()
+            val request = Request.Builder().url(mealPageUrl(date)).post(formBody).build()
+            val body = session.httpClient.newCall(request).execute().body?.string()
+                ?: return@withContext false
+            val json = runCatching { JsonParser.parseString(body).asJsonObject }.getOrNull()
+                ?: return@withContext false
+            val error = json.get("error")?.safeStr()
+            val ok = error.isNullOrEmpty()
+            log.info("rate type $mealTypeIndex $date: ${if (ok) "ok" else "err: $error"}")
+            ok
+        } catch (e: Exception) {
+            log.warning("rateMeal failed: ${e.message}")
+            false
+        }
+    }
+
+    private fun isEdupageDataEmpty(html: String): Boolean {
+        for (marker in listOf("edupageData: ", "edupageData = ")) {
+            val idx = html.indexOf(marker)
+            if (idx == -1) continue
+            val rest = html.substring(idx + marker.length).trimStart()
+            if (rest.startsWith("[]") || rest.startsWith("null")) return true
+        }
+        return false
     }
 
     private fun mealPageUrl(date: LocalDate): String =
@@ -102,6 +151,9 @@ internal class Lunches(private val session: EdupageSession) {
                 val servedTo = typeObj.get("vydaj_do")?.safeStr()
 
                 val menuChoices = mutableListOf<MenuChoice>()
+                val ratingsObj = typeObj.get("hodnotenia")?.takeIf { !it.isJsonNull }?.let {
+                    runCatching { it.asJsonObject }.getOrNull()
+                }
                 for (row in rows) {
                     if (row.isJsonNull) continue
                     val obj = row.asJsonObject
@@ -113,7 +165,8 @@ internal class Lunches(private val session: EdupageSession) {
                     val allergens = parseAllergens(obj)
                     val weight = obj.get("hmotnostiStr")?.safeStr() ?: obj.get("weight")?.safeStr()
                     if (!letter.isNullOrBlank()) {
-                        menuChoices.add(MenuChoice(letter, name, allergens, weight))
+                        val rating = ratingsObj?.get(letter)?.let { parseRating(it) }
+                        menuChoices.add(MenuChoice(letter, name, allergens, weight, rating))
                     }
                 }
 
@@ -127,6 +180,9 @@ internal class Lunches(private val session: EdupageSession) {
                             canChangeUntil = canChangeUntil,
                             servedFrom = servedFrom,
                             servedTo = servedTo,
+                            amountOfFoods = typeObj.get("druhov_jedal")?.let {
+                                runCatching { it.asInt }.getOrNull()
+                            },
                         )
                     )
                 }
@@ -205,6 +261,26 @@ internal class Lunches(private val session: EdupageSession) {
         val str = obj.get("alergenyStr")?.safeStr()
         if (!str.isNullOrBlank()) return str.split(Regex(",\\s*")).map { it.trim() }.filter { it.isNotBlank() }
         return null
+    }
+
+    /**
+     * EduPage stores ratings per menu letter as `hodnotenia[letter] = [quality, quantity]`,
+     * each `{ "priemer": Double, "pocet": Int }`.
+     */
+    private fun parseRating(el: JsonElement?): MealRating? {
+        val arr = el?.takeIf { !it.isJsonNull && it.isJsonArray }?.asJsonArray ?: return null
+        if (arr.size() < 2) return null
+        val quality = arr[0].takeIf { it.isJsonObject }?.asJsonObject
+        val quantity = arr[1].takeIf { it.isJsonObject }?.asJsonObject
+        val rating = MealRating(
+            qualityAverage = quality?.get("priemer")?.safeStr()?.toDoubleOrNull()
+                ?: quality?.get("priemer")?.let { runCatching { it.asDouble }.getOrNull() },
+            qualityCount = quality?.get("pocet")?.let { runCatching { it.asInt }.getOrNull() },
+            quantityAverage = quantity?.get("priemer")?.safeStr()?.toDoubleOrNull()
+                ?: quantity?.get("priemer")?.let { runCatching { it.asDouble }.getOrNull() },
+            quantityCount = quantity?.get("pocet")?.let { runCatching { it.asInt }.getOrNull() },
+        )
+        return rating.takeIf { it.hasRatings }
     }
 
     private fun htmlFallbackMeals(date: LocalDate): Meals {

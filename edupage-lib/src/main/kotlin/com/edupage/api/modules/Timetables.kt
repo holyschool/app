@@ -14,6 +14,7 @@ import com.edupage.api.model.Classroom
 import com.edupage.api.model.people.EduStudent
 import com.edupage.api.model.people.EduTeacher
 import com.google.gson.JsonElement
+import com.google.gson.JsonArray
 import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -82,7 +83,7 @@ internal class Timetables(private val session: EdupageSession) {
         }
     }
 
-    private suspend fun getDatePlan(date: LocalDate): List<JsonObject> {
+    private suspend fun fetchPlanDates(dateFrom: LocalDate, dateTo: LocalDate): JsonObject {
         return withContext(Dispatchers.IO) {
 
             val csrfUrl = "https://${session.subdomain}.edupage.org/dashboard/eb.php?mode=ttday"
@@ -96,7 +97,6 @@ internal class Timetables(private val session: EdupageSession) {
             val gsh = csrfHtml.substringAfter("gsh=").substringBefore("\"")
 
             val nextGpid = gpid + 1
-            val dateStr = date.format(dateFmt)
             val userId = session.getUserId() ?: throw MissingDataException("No user id")
 
             val gcallUrl = "https://${session.subdomain}.edupage.org/gcall"
@@ -106,8 +106,8 @@ internal class Timetables(private val session: EdupageSession) {
                 .add("action", "loadData")
                 .add("user", userId)
                 .add("changes", "{}")
-                .add("date", dateStr)
-                .add("dateto", dateStr)
+                .add("date", dateFrom.format(dateFmt))
+                .add("dateto", dateTo.format(dateFmt))
                 .add("_LJSL", "4096")
                 .build()
 
@@ -127,11 +127,176 @@ internal class Timetables(private val session: EdupageSession) {
                 throw MissingDataException("Could not parse gcall response: ${e.message}")
             }
 
-            val dates = data.getAsJsonObject("dates") ?: throw MissingDataException("No dates in gcall response")
-            val datePlan = dates.getAsJsonObject(dateStr) ?: return@withContext emptyList()
-            val plan = datePlan.getAsJsonArray("plan") ?: return@withContext emptyList()
-            plan.map { it.asJsonObject }
+            data.getAsJsonObject("dates") ?: throw MissingDataException("No dates in gcall response")
         }
+    }
+
+    private suspend fun getDatePlan(date: LocalDate): List<JsonObject> {
+        val dates = fetchPlanDates(date, date)
+        val dateStr = date.format(dateFmt)
+        val datePlan = dates.getAsJsonObject(dateStr) ?: return emptyList()
+        val plan = datePlan.getAsJsonArray("plan") ?: return emptyList()
+        return plan.map { it.asJsonObject }
+    }
+
+    /**
+     * Dated curriculum topics (past = taught, future = planned) recovered from the
+     * daily plan. Each lesson's `flags.dp0.note_wd` is the topic note; school events
+     * fall back to their name. Attachments found anywhere in the lesson are included.
+     */
+    suspend fun getCurriculumPlan(dateFrom: LocalDate, dateTo: LocalDate): List<com.edupage.api.model.CurriculumTopic> {
+        if (!session.isLoggedIn) throw NotLoggedInException()
+        if (dateTo.isBefore(dateFrom)) return emptyList()
+
+        val fromStr = dateFrom.format(dateFmt)
+        val toStr = dateTo.format(dateFmt)
+        val merged = LinkedHashMap<String, JsonObject>()
+
+        runCatching { fetchPlanDates(dateFrom, dateTo) }.getOrNull()
+            ?.let { merged.putAll(it.datesInRange(fromStr, toStr)) }
+
+        // EduPage's daily-plan endpoint is documented for a single day. If the range
+        // request didn't return a plausible number of weekdays, fall back to weekly
+        // chunks so the whole requested period is still covered.
+        val calendarDays = java.time.temporal.ChronoUnit.DAYS.between(dateFrom, dateTo) + 1
+        val weekdayEstimate = calendarDays * 5 / 7
+        if (calendarDays > 1 && merged.size < weekdayEstimate * 0.6) {
+            var chunkStart = dateFrom
+            while (!chunkStart.isAfter(dateTo)) {
+                val chunkEnd = if (chunkStart.plusDays(6).isAfter(dateTo)) dateTo else chunkStart.plusDays(6)
+                runCatching { fetchPlanDates(chunkStart, chunkEnd) }.getOrNull()?.let {
+                    merged.putAll(it.datesInRange(chunkStart.format(dateFmt), chunkEnd.format(dateFmt)))
+                }
+                chunkStart = chunkEnd.plusDays(1)
+            }
+        }
+
+        val subjects = runCatching { Subjects(session).getSubjects() }.getOrNull()
+            ?.associateBy { it.subjectId } ?: emptyMap()
+        val people = People(session)
+        val today = LocalDate.now()
+
+        val out = mutableListOf<com.edupage.api.model.CurriculumTopic>()
+        for ((key, dayObj) in merged) {
+            val day = runCatching { LocalDate.parse(key, dateFmt) }.getOrNull() ?: continue
+            val plan = dayObj.getAsJsonArray("plan") ?: continue
+            collectDayTopics(day, plan, subjects, people, today, out)
+        }
+        return out.sortedByDescending { it.date }
+    }
+
+    private fun JsonObject.datesInRange(fromStr: String, toStr: String): Map<String, JsonObject> {
+        val map = LinkedHashMap<String, JsonObject>()
+        for (key in keySet()) {
+            if (key < fromStr || key > toStr) continue
+            get(key)?.takeIf { it.isJsonObject }?.let { map[key] = it.asJsonObject }
+        }
+        return map
+    }
+
+    private suspend fun collectDayTopics(
+        day: LocalDate,
+        plan: JsonArray,
+        subjects: Map<Int, com.edupage.api.model.Subject>,
+        people: People,
+        today: LocalDate,
+        out: MutableList<com.edupage.api.model.CurriculumTopic>,
+    ) {
+        var index = 0
+        for (element in plan) {
+            index++
+            val lesson = element.takeIf { it.isJsonObject }?.asJsonObject ?: continue
+
+            val header = lesson.get("header")?.takeIf { !it.isJsonNull }?.let {
+                runCatching { it.asJsonArray }.getOrNull()
+            }
+            if (header != null) {
+                if (header.size() == 0) continue
+                if (header[0]?.asJsonObject?.get("cmd")?.asString == "addlesson_t") continue
+            }
+
+            val typeStr = lesson.field("type").safeString()
+            if (lesson.field("removed").safeBoolean() == true || typeStr == "absent") continue
+
+            val flags = lesson.get("flags").safeObj()
+            val dp0 = flags?.get("dp0").safeObj()
+            if (dp0?.field("cancelled").safeBoolean() == true) continue
+
+            val note = dp0?.field("note_wd").safeString()?.takeIf { it.isNotBlank() }
+            val eventName = flags?.get("event").safeObj()?.field("name").safeString()
+                ?.takeIf { it.isNotBlank() }
+            val topic = note ?: eventName ?: continue
+
+            val subjectId = lesson.field("subjectid").safeString()?.toIntOrNull()
+            val teacherId = lesson.get("teacherids")?.takeIf { !it.isJsonNull }
+                ?.let { runCatching { it.asJsonArray }.getOrNull() }
+                ?.firstOrNull()?.let { runCatching { it.asString }.getOrNull() }?.toIntOrNull()
+            val teacher = teacherId?.let { people.getTeacher(it)?.name }
+
+            out.add(
+                com.edupage.api.model.CurriculumTopic(
+                    id = "$day-$index",
+                    subjectId = subjectId,
+                    subjectName = subjectId?.let { subjects[it]?.name },
+                    topic = topic,
+                    date = day.atStartOfDay(),
+                    teacher = teacher,
+                    period = lesson.field("uniperiod").safeString()?.toIntOrNull(),
+                    isTaught = !day.isAfter(today),
+                    attachments = collectPlanAttachments(lesson),
+                )
+            )
+        }
+    }
+
+    /** Best-effort recursive collection of any `files` / `attachements` on a plan lesson. */
+    private fun collectPlanAttachments(root: JsonElement?): List<com.edupage.api.model.MessageAttachment> {
+        val out = mutableListOf<com.edupage.api.model.MessageAttachment>()
+
+        fun absolute(src: String): String =
+            if (src.startsWith("http")) src else "https://${session.subdomain}.edupage.org$src"
+
+        fun walk(node: JsonElement?) {
+            when {
+                node == null || node.isJsonNull -> return
+                node.isJsonArray -> node.asJsonArray.forEach { walk(it) }
+                node.isJsonObject -> {
+                    val obj = node.asJsonObject
+                    obj.get("files")?.takeIf { it.isJsonArray }?.asJsonArray?.forEach { fileEl ->
+                        val file = fileEl.takeIf { it.isJsonObject }?.asJsonObject ?: return@forEach
+                        val src = file.field("src").safeString()?.takeIf { it.isNotBlank() }
+                            ?: file.field("url").safeString()?.takeIf { it.isNotBlank() }
+                            ?: return@forEach
+                        val name = file.field("name").safeString()?.takeIf { it.isNotBlank() }
+                            ?: src.substringAfterLast('/').ifBlank { "attachment" }
+                        val url = absolute(src)
+                        if (out.none { it.url == url }) {
+                            out.add(com.edupage.api.model.MessageAttachment(url, name))
+                        }
+                    }
+                    for (key in listOf("attachements", "attachments")) {
+                        val att = obj.get(key)?.takeIf { !it.isJsonNull } ?: continue
+                        if (att.isJsonObject) {
+                            att.asJsonObject.entrySet().forEach { (k, v) ->
+                                if (!k.startsWith("http") && !k.startsWith("/")) return@forEach
+                                val url = absolute(k)
+                                val name = runCatching { v.asString }.getOrNull()?.takeIf { it.isNotBlank() }
+                                    ?: k.substringAfterLast('/').ifBlank { "attachment" }
+                                if (out.none { it.url == url }) {
+                                    out.add(com.edupage.api.model.MessageAttachment(url, name))
+                                }
+                            }
+                        } else if (att.isJsonArray) {
+                            att.asJsonArray.forEach { walk(it) }
+                        }
+                    }
+                    obj.entrySet().forEach { (_, value) -> walk(value) }
+                }
+            }
+        }
+
+        walk(root)
+        return out
     }
 
     private suspend fun parseTimetable(plan: List<JsonObject>): Timetable {

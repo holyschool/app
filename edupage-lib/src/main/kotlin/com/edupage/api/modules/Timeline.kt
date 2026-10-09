@@ -30,6 +30,34 @@ internal class Timeline(private val session: EdupageSession) {
         return fetchTimeline(dateFrom, filterTab = "messages")
     }
 
+    /**
+     * Taught-curriculum entries recorded in the timeline over [dateFrom]. EduPage
+     * stores these as `ucivo` (and `ucivo_reminder`) timeline events whose text is
+     * the topic covered.
+     */
+    suspend fun getCurriculum(dateFrom: LocalDate): List<com.edupage.api.model.CurriculumTopic> {
+        if (!session.isLoggedIn) throw NotLoggedInException()
+        val events = fetchTimeline(dateFrom)
+        val topics = events.filter { event ->
+            val t = event.type
+            (t == "ucivo" || t == "ucivo_reminder" || t == "plan") && !event.text.isNullOrBlank()
+        }
+        if (topics.isEmpty()) return emptyList()
+        val subjects = runCatching { com.edupage.api.modules.Subjects(session).getSubjects() }
+            .getOrNull()?.associateBy { it.subjectId } ?: emptyMap()
+        return topics.map { event ->
+            com.edupage.api.model.CurriculumTopic(
+                id = "tl-${event.timelineId}",
+                subjectId = event.subjectId,
+                subjectName = event.subjectId?.let { subjects[it]?.name },
+                topic = event.text.orEmpty(),
+                date = event.createdAt ?: event.timestamp,
+                teacher = event.authorName,
+                attachments = event.attachments,
+            )
+        }.sortedByDescending { it.date }
+    }
+
     fun searchHistory(events: List<TimelineEvent>, query: String): List<TimelineEvent> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return events
@@ -112,6 +140,48 @@ internal class Timeline(private val session: EdupageSession) {
         return try { el.asString } catch (_: Exception) { null }
     }
 
+    private fun com.google.gson.JsonObject.rawObj(key: String): com.google.gson.JsonObject? {
+        val el = get(key) ?: return null
+        if (el.isJsonNull) return null
+        if (el.isJsonObject) return el.asJsonObject
+        val s = runCatching { el.asString }.getOrNull()
+            ?.takeIf { it.isNotBlank() && it != "[]" && it != "null" }
+            ?: return null
+        return runCatching { JsonParser.parseString(s) }.getOrNull()
+            ?.takeIf { it.isJsonObject }
+            ?.asJsonObject
+    }
+
+    /**
+     * Reads EduPage's `attachements` map (URL/path -> file name) from a `data` or
+     * `moredata` object. Accepts both an object and an array of single-entry objects,
+     * and normalises relative paths to absolute URLs.
+     */
+    private fun parseAttachments(container: com.google.gson.JsonObject?): List<com.edupage.api.model.MessageAttachment> {
+        val el = container?.get("attachements")?.takeIf { !it.isJsonNull }
+            ?: container?.get("attachments")?.takeIf { !it.isJsonNull }
+            ?: return emptyList()
+        val out = mutableListOf<com.edupage.api.model.MessageAttachment>()
+        fun addFrom(obj: com.google.gson.JsonObject) {
+            obj.entrySet().forEach { (key, value) ->
+                if (!key.startsWith("http") && !key.startsWith("/")) return@forEach
+                val url = if (key.startsWith("http")) key
+                else "https://${session.subdomain}.edupage.org$key"
+                val storedName = runCatching { value.asString }.getOrNull()
+                val name = storedName?.takeIf { it.isNotBlank() }
+                    ?: key.substringAfterLast('/').ifBlank { "attachment" }
+                out.add(com.edupage.api.model.MessageAttachment(url = url, name = name))
+            }
+        }
+        when {
+            el.isJsonObject -> addFrom(el.asJsonObject)
+            el.isJsonArray -> el.asJsonArray.forEach { item ->
+                item.takeIf { it.isJsonObject }?.let { addFrom(it.asJsonObject) }
+            }
+        }
+        return out
+    }
+
     private fun parseItems(items: com.google.gson.JsonArray, userProps: Map<Int, JsonObject> = emptyMap()): List<TimelineEvent> {
         return items.mapNotNull { elem ->
             if (elem == null || elem.isJsonNull) return@mapNotNull null
@@ -135,22 +205,38 @@ internal class Timeline(private val session: EdupageSession) {
             val authorId   = item.str("vlastnik")
             val authorName = item.str("vlastnik_meno")
 
-            var text = item.str("text")?.takeIf { it.isNotBlank() }
-            val isImportant = text?.startsWith("Dôležitá správa") == true ||
-                text?.startsWith("Dôležitá správa") == true
+            val dataObj = item.rawObj("data")
 
-            if (isImportant) {
-                val dataStr = item.str("data")
-                if (!dataStr.isNullOrBlank()) {
-                    runCatching {
-                        val dataObj = JsonParser.parseString(dataStr)
-                        if (dataObj.isJsonObject) {
-                            dataObj.asJsonObject.str("messageContent")?.takeIf { it.isNotBlank() }
-                                ?.let { text = it }
-                        }
-                    }
-                }
+            // Important messages arrive with a localized placeholder in `text` and the
+            // real body in data.messageContent. Prefer the body regardless of the
+            // account language (the placeholder may be Slovak, Czech or English).
+            val messageContent = dataObj?.str("messageContent")?.takeIf { it.isNotBlank() }
+            val isMessage = type == "sprava"
+            val looksLikeImportantPlaceholder = item.str("text")?.let {
+                it.contains("Dôležitá správa") ||
+                    it.contains("Důležitá zpráva") ||
+                    it.contains("Important message")
+            } == true
+            // `receipt == "1"` is EduPage's own "sent as important" flag; the placeholder
+            // check is a language-independent fallback for older/hidden payloads.
+            val flaggedImportant = dataObj?.str("receipt") == "1" ||
+                dataObj?.str("importantReply") == "1"
+            val isImportant = isMessage && (flaggedImportant || looksLikeImportantPlaceholder)
+            var text = if (isMessage && messageContent != null) {
+                messageContent
+            } else {
+                item.str("text")?.takeIf { it.isNotBlank() }
             }
+
+            val subjectId = item.str("predmetid")?.toIntOrNull()
+                ?: dataObj?.str("predmetid")?.toIntOrNull()
+            val attachments = (
+                parseAttachments(dataObj) +
+                    parseAttachments(
+                        dataObj?.get("moredata")?.takeIf { it.isJsonObject }?.asJsonObject
+                            ?: dataObj,
+                    )
+                ).distinctBy { it.url }
 
             val title = item.str("titulok")?.takeIf { it.isNotBlank() }
             val reactionTo = item.str("reakcia_na")?.toIntOrNull()
@@ -160,12 +246,7 @@ internal class Timeline(private val session: EdupageSession) {
             var pollMultiple = true
             var myVotes = emptyList<String>()
 
-            val rawDataStr = item.str("data")
-            val dataObj = rawDataStr?.takeIf { it.isNotBlank() && it != "[]" }
-                ?.let { runCatching { JsonParser.parseString(it) }.getOrNull() }
-                ?.takeIf { it.isJsonObject }
-
-            val d = dataObj?.asJsonObject
+            val d = dataObj
             val votingParams = d?.get("votingParams")?.takeIf { it.isJsonObject }?.asJsonObject
             var answersJson = votingParams?.get("answers")?.takeIf { it.isJsonArray }?.asJsonArray
 
@@ -193,21 +274,15 @@ internal class Timeline(private val session: EdupageSession) {
             }
 
             if (text.isNullOrBlank()) {
-                val dataStr = rawDataStr
-                if (!dataStr.isNullOrBlank() && dataStr != "[]") {
-                    runCatching {
-                        val d2 = JsonParser.parseString(dataStr).takeIf { it.isJsonObject }?.asJsonObject
-                        when (type) {
-                            "homework", "hw" -> {
-                                val nazov = d2?.str("nazov")?.takeIf { it.isNotBlank() }
-                                val due   = d2?.str("date")?.takeIf { it.isNotBlank() }
-                                text = when {
-                                    nazov != null && due != null -> "$nazov (due $due)"
-                                    nazov != null               -> nazov
-                                    due   != null               -> "Due $due"
-                                    else                        -> null
-                                }
-                            }
+                when (type) {
+                    "homework", "hw" -> {
+                        val nazov = dataObj?.str("nazov")?.takeIf { it.isNotBlank() }
+                        val due   = dataObj?.str("date")?.takeIf { it.isNotBlank() }
+                        text = when {
+                            nazov != null && due != null -> "$nazov (due $due)"
+                            nazov != null               -> nazov
+                            due   != null               -> "Due $due"
+                            else                        -> null
                         }
                     }
                 }
@@ -236,6 +311,8 @@ internal class Timeline(private val session: EdupageSession) {
                 reactionCount = reactionCount,
                 createdAt = createdAt,
                 isRemoved = isRemoved,
+                subjectId = subjectId,
+                attachments = attachments,
             )
         }
     }
