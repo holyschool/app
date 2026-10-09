@@ -30,6 +30,33 @@ internal class Timeline(private val session: EdupageSession) {
         return fetchTimeline(dateFrom, filterTab = "messages")
     }
 
+    /**
+     * Taught-curriculum entries recorded in the timeline over [dateFrom]. EduPage
+     * stores these as `ucivo` (and `ucivo_reminder`) timeline events whose text is
+     * the topic covered.
+     */
+    suspend fun getCurriculum(dateFrom: LocalDate): List<com.edupage.api.model.CurriculumTopic> {
+        if (!session.isLoggedIn) throw NotLoggedInException()
+        val events = fetchTimeline(dateFrom)
+        val topics = events.filter { event ->
+            val t = event.type
+            (t == "ucivo" || t == "ucivo_reminder" || t == "plan") && !event.text.isNullOrBlank()
+        }
+        if (topics.isEmpty()) return emptyList()
+        val subjects = runCatching { com.edupage.api.modules.Subjects(session).getSubjects() }
+            .getOrNull()?.associateBy { it.subjectId } ?: emptyMap()
+        return topics.map { event ->
+            com.edupage.api.model.CurriculumTopic(
+                timelineId = event.timelineId,
+                subjectId = event.subjectId,
+                subjectName = event.subjectId?.let { subjects[it]?.name },
+                topic = event.text.orEmpty(),
+                date = event.createdAt ?: event.timestamp,
+                teacher = event.authorName,
+            )
+        }.sortedByDescending { it.date }
+    }
+
     fun searchHistory(events: List<TimelineEvent>, query: String): List<TimelineEvent> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return events
@@ -112,10 +139,6 @@ internal class Timeline(private val session: EdupageSession) {
         return try { el.asString } catch (_: Exception) { null }
     }
 
-    /**
-     * Reads an object-valued field that EduPage may send either as a real JSON object or
-     * as a JSON-encoded string (as it does for the `data` field on timeline items).
-     */
     private fun com.google.gson.JsonObject.rawObj(key: String): com.google.gson.JsonObject? {
         val el = get(key) ?: return null
         if (el.isJsonNull) return null
@@ -126,6 +149,36 @@ internal class Timeline(private val session: EdupageSession) {
         return runCatching { JsonParser.parseString(s) }.getOrNull()
             ?.takeIf { it.isJsonObject }
             ?.asJsonObject
+    }
+
+    /**
+     * Reads EduPage's `attachements` map (URL/path -> file name) from a `data` or
+     * `moredata` object. Accepts both an object and an array of single-entry objects,
+     * and normalises relative paths to absolute URLs.
+     */
+    private fun parseAttachments(container: com.google.gson.JsonObject?): List<com.edupage.api.model.MessageAttachment> {
+        val el = container?.get("attachements")?.takeIf { !it.isJsonNull }
+            ?: container?.get("attachments")?.takeIf { !it.isJsonNull }
+            ?: return emptyList()
+        val out = mutableListOf<com.edupage.api.model.MessageAttachment>()
+        fun addFrom(obj: com.google.gson.JsonObject) {
+            obj.entrySet().forEach { (key, value) ->
+                if (!key.startsWith("http") && !key.startsWith("/")) return@forEach
+                val url = if (key.startsWith("http")) key
+                else "https://${session.subdomain}.edupage.org$key"
+                val storedName = runCatching { value.asString }.getOrNull()
+                val name = storedName?.takeIf { it.isNotBlank() }
+                    ?: key.substringAfterLast('/').ifBlank { "attachment" }
+                out.add(com.edupage.api.model.MessageAttachment(url = url, name = name))
+            }
+        }
+        when {
+            el.isJsonObject -> addFrom(el.asJsonObject)
+            el.isJsonArray -> el.asJsonArray.forEach { item ->
+                item.takeIf { it.isJsonObject }?.let { addFrom(it.asJsonObject) }
+            }
+        }
+        return out
     }
 
     private fun parseItems(items: com.google.gson.JsonArray, userProps: Map<Int, JsonObject> = emptyMap()): List<TimelineEvent> {
@@ -163,12 +216,26 @@ internal class Timeline(private val session: EdupageSession) {
                     it.contains("Důležitá zpráva") ||
                     it.contains("Important message")
             } == true
-            val isImportant = isMessage && looksLikeImportantPlaceholder
+            // `receipt == "1"` is EduPage's own "sent as important" flag; the placeholder
+            // check is a language-independent fallback for older/hidden payloads.
+            val flaggedImportant = dataObj?.str("receipt") == "1" ||
+                dataObj?.str("importantReply") == "1"
+            val isImportant = isMessage && (flaggedImportant || looksLikeImportantPlaceholder)
             var text = if (isMessage && messageContent != null) {
                 messageContent
             } else {
                 item.str("text")?.takeIf { it.isNotBlank() }
             }
+
+            val subjectId = item.str("predmetid")?.toIntOrNull()
+                ?: dataObj?.str("predmetid")?.toIntOrNull()
+            val attachments = (
+                parseAttachments(dataObj) +
+                    parseAttachments(
+                        dataObj?.get("moredata")?.takeIf { it.isJsonObject }?.asJsonObject
+                            ?: dataObj,
+                    )
+                ).distinctBy { it.url }
 
             val title = item.str("titulok")?.takeIf { it.isNotBlank() }
             val reactionTo = item.str("reakcia_na")?.toIntOrNull()
@@ -243,6 +310,8 @@ internal class Timeline(private val session: EdupageSession) {
                 reactionCount = reactionCount,
                 createdAt = createdAt,
                 isRemoved = isRemoved,
+                subjectId = subjectId,
+                attachments = attachments,
             )
         }
     }

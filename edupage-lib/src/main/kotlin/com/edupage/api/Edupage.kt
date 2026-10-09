@@ -149,6 +149,12 @@ class Edupage(timeoutSeconds: Long = 15L) {
     suspend fun getAssignmentData(superId: String): com.google.gson.JsonObject? =
         com.edupage.api.modules.Assignments(session).getAssignmentData(superId)
 
+    suspend fun getAssignmentAttachments(superId: String): List<com.edupage.api.model.MessageAttachment> =
+        com.edupage.api.modules.Assignments(session).getAssignmentAttachments(superId)
+
+    suspend fun getCurriculum(dateFrom: LocalDate): List<com.edupage.api.model.CurriculumTopic> =
+        Timeline(session).getCurriculum(dateFrom)
+
     suspend fun getPlans(): List<com.edupage.api.model.SchoolPlan> =
         com.edupage.api.modules.Plans(session).getPlans()
 

@@ -2,6 +2,7 @@ package com.enderplusbayzuiship.edupage2.data
 
 import android.content.Context
 import android.util.Log
+import com.edupage.api.model.MessageAttachment
 import com.edupage.api.model.TimelineEvent
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -12,6 +13,11 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private data class CachedAttachment(
+    val url: String?,
+    val name: String?,
+)
+
 private data class CachedTimelineEvent(
     val timelineId: Int,
     val type: String?,
@@ -21,6 +27,8 @@ private data class CachedTimelineEvent(
     val title: String?,
     val text: String?,
     val reactionTo: Int?,
+    val subjectId: Int? = null,
+    val attachments: List<CachedAttachment> = emptyList(),
 )
 
 private data class TimelineCacheFile(
@@ -55,6 +63,8 @@ class TimelineCache @Inject constructor(
                 title        = e.title,
                 text         = e.text,
                 reactionTo   = e.reactionTo,
+                subjectId    = e.subjectId,
+                attachments  = e.attachments.map { CachedAttachment(it.url, it.name) },
             )
         }
         val cacheFile = TimelineCacheFile(
@@ -101,6 +111,11 @@ class TimelineCache @Inject constructor(
             title      = title,
             text       = text,
             reactionTo = reactionTo,
+            subjectId  = subjectId,
+            attachments = attachments.mapNotNull { att ->
+                val url = att.url ?: return@mapNotNull null
+                MessageAttachment(url = url, name = att.name ?: "attachment")
+            },
         )
     }
 }

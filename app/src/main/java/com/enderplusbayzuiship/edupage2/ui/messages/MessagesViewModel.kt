@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -357,6 +358,47 @@ class MessagesViewModel @Inject constructor(
     }
 
     suspend fun uploadFile(file: java.io.File): EduCloudFile = edupage.cloudUpload(file)
+
+    /** Downloads a message/reply/homework attachment and opens it with the system viewer. */
+    fun openAttachment(attachment: com.edupage.api.model.MessageAttachment) {
+        viewModelScope.launch {
+            try {
+                val downloaded = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val dir = java.io.File(context.cacheDir, "attachments").apply { mkdirs() }
+                    val safeName = attachment.name.ifBlank { "attachment" }
+                        .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    edupage.cloudDownload(attachment.url, java.io.File(dir, safeName))
+                }
+                launchAttachment(downloaded)
+            } catch (e: Exception) {
+                Log.e(TAG, "attachment open failed: ${e.message}", e)
+                android.widget.Toast.makeText(
+                    context, R.string.messages_attachment_failed, android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
+
+    private fun launchAttachment(file: java.io.File) {
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", file,
+            )
+            val mime = android.webkit.MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "no activity to open attachment", e)
+            android.widget.Toast.makeText(
+                context, R.string.messages_attachment_failed, android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
 
     suspend fun sendPoll(
         recipients: List<EduAccount>,

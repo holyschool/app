@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -63,6 +64,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -591,6 +593,7 @@ fun MessagesScreen(
             },
             onStarToggle = { timelineId, starred -> viewModel.toggleMessageStarred(timelineId, starred) },
             onVote = { timelineId, answerIds -> viewModel.voteOnPoll(timelineId, answerIds) },
+            onOpenAttachment = { attachment -> viewModel.openAttachment(attachment) },
             currentUserId = viewModel.getCurrentUserId(),
         )
     }
@@ -1373,6 +1376,7 @@ fun DetailSheet(
     onReply: (String) -> Unit,
     onStarToggle: (Int, Boolean) -> Unit,
     onVote: (Int, List<String>) -> Unit,
+    onOpenAttachment: (com.edupage.api.model.MessageAttachment) -> Unit,
     currentUserId: String?,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -1406,6 +1410,7 @@ fun DetailSheet(
             },
             onReply = onReply,
             onVote = onVote,
+            onOpenAttachment = onOpenAttachment,
         )
     }
 
@@ -1450,6 +1455,7 @@ private fun DetailSheetContent(
     onStarToggle: (Int, Boolean) -> Unit,
     onReply: (String) -> Unit,
     onVote: (Int, List<String>) -> Unit,
+    onOpenAttachment: (com.edupage.api.model.MessageAttachment) -> Unit,
 ) {
     val typeInfo  = typeInfoFor(event.type)
     val typeLabel = stringResource(typeInfo.labelRes)
@@ -1597,6 +1603,14 @@ private fun DetailSheetContent(
                 )
             }
 
+            if (event.attachments.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                AttachmentsCard(
+                    attachments = event.attachments,
+                    onOpen = onOpenAttachment,
+                )
+            }
+
             val hasPoll = !event.pollAnswers.isNullOrEmpty()
             if (hasPoll) {
                 Spacer(Modifier.height(16.dp))
@@ -1615,7 +1629,7 @@ private fun DetailSheetContent(
                 )
                 RoundedCardContainer {
                     group.replies.forEach { reply ->
-                        ReplyItem(reply = reply)
+                        ReplyItem(reply = reply, onOpenAttachment = onOpenAttachment)
                     }
                 }
             }
@@ -1843,7 +1857,10 @@ private fun ActionIconButton(
 }
 
 @Composable
-private fun ReplyItem(reply: TimelineEvent) {
+private fun ReplyItem(
+    reply: TimelineEvent,
+    onOpenAttachment: (com.edupage.api.model.MessageAttachment) -> Unit,
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceBright,
@@ -1875,6 +1892,58 @@ private fun ReplyItem(reply: TimelineEvent) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (reply.attachments.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                AttachmentsCard(attachments = reply.attachments, onOpen = onOpenAttachment)
+            }
+        }
+    }
+}
+
+/** A tappable list of message/reply attachments. */
+@Composable
+private fun AttachmentsCard(
+    attachments: List<com.edupage.api.model.MessageAttachment>,
+    onOpen: (com.edupage.api.model.MessageAttachment) -> Unit,
+) {
+    val haptics = rememberAppHaptics()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        attachments.forEach { attachment ->
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { haptics.virtualKey(); onOpen(attachment) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.AttachFile,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = attachment.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        Icons.Rounded.Download,
+                        contentDescription = stringResource(R.string.messages_attachment_open),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
         }
     }
 }

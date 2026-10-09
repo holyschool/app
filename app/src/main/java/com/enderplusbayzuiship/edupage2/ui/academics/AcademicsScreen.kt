@@ -1,5 +1,6 @@
 package com.enderplusbayzuiship.edupage2.ui.academics
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -40,6 +43,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -50,9 +56,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.edupage.api.model.Absence
 import com.edupage.api.model.AbsenceStatus
+import com.edupage.api.model.CurriculumTopic
 import com.edupage.api.model.SchoolPlan
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
+import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
 import com.enderplusbayzuiship.edupage2.ui.util.ShimmerBox
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.format.DateTimeFormatter
@@ -68,7 +76,9 @@ fun AcademicsScreen(
     val selectedTab by viewModel.selectedTab.collectAsState()
     val absences by viewModel.absences.collectAsState()
     val plans by viewModel.plans.collectAsState()
+    val topics by viewModel.topics.collectAsState()
     val haptics = rememberAppHaptics()
+    var detailPlan by remember { mutableStateOf<SchoolPlan?>(null) }
 
     val tabs = listOf(
         AcademicsTab.ABSENCES to stringResource(R.string.academics_tab_absences),
@@ -119,9 +129,28 @@ fun AcademicsScreen(
             }
             when (selectedTab) {
                 AcademicsTab.ABSENCES -> AbsencesContent(absences, onRetry = { viewModel.refreshAbsences() })
-                AcademicsTab.CURRICULUM -> CurriculumContent(plans, onRetry = { viewModel.refreshPlans() })
+                AcademicsTab.CURRICULUM -> CurriculumContent(
+                    state = plans,
+                    onRetry = { viewModel.refreshPlans() },
+                    onSelectPlan = { plan ->
+                        haptics.virtualKey()
+                        detailPlan = plan
+                        viewModel.loadTopics(plan.subjectId, plan.subjectName)
+                    },
+                )
             }
         }
+    }
+
+    detailPlan?.let { plan ->
+        SubjectTopicsSheet(
+            plan = plan,
+            state = topics,
+            onDismiss = {
+                detailPlan = null
+                viewModel.resetTopics()
+            },
+        )
     }
 }
 
@@ -237,7 +266,11 @@ private fun StatItem(label: String, value: String, color: androidx.compose.ui.gr
 }
 
 @Composable
-private fun CurriculumContent(state: PlansUiState, onRetry: () -> Unit) {
+private fun CurriculumContent(
+    state: PlansUiState,
+    onRetry: () -> Unit,
+    onSelectPlan: (SchoolPlan) -> Unit,
+) {
     when (state) {
         is PlansUiState.Loading -> ContentSkeleton()
         is PlansUiState.Error -> ErrorState(state.message, onRetry)
@@ -264,7 +297,7 @@ private fun CurriculumContent(state: PlansUiState, onRetry: () -> Unit) {
                             RoundedCardContainer {
                                 list.forEach {
                                     key(it.planId) {
-                                        PlanCard(it)
+                                        PlanCard(it, onClick = { onSelectPlan(it) })
                                     }
                                 }
                             }
@@ -277,9 +310,9 @@ private fun CurriculumContent(state: PlansUiState, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun PlanCard(plan: SchoolPlan) {
+private fun PlanCard(plan: SchoolPlan, onClick: () -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surfaceBright,
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -377,4 +410,123 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 }
 
 private val mediumDateFmt = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault())
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SubjectTopicsSheet(
+    plan: SchoolPlan,
+    state: TopicsUiState,
+    onDismiss: () -> Unit,
+) {
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = plan.subjectName ?: stringResource(R.string.curriculum_unknown_subject),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            plan.teacherName?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = stringResource(R.string.curriculum_taught_topics),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            when (state) {
+                is TopicsUiState.Idle,
+                is TopicsUiState.Loading -> Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = stringResource(R.string.curriculum_topics_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                is TopicsUiState.Error -> Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                is TopicsUiState.Success -> {
+                    if (state.topics.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.curriculum_topics_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            items(state.topics.size, key = { state.topics[it].timelineId }) { index ->
+                                val topic = state.topics[index]
+                                TopicRow(topic)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopicRow(topic: CurriculumTopic) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceBright,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                Icons.Rounded.MenuBook,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp).padding(top = 2.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = topic.topic,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                val meta = buildList {
+                    topic.date?.let { add(it.format(mediumDateFmt)) }
+                    topic.teacher?.takeIf { it.isNotBlank() }?.let { add(it) }
+                }.joinToString(" · ")
+                if (meta.isNotBlank()) {
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+}
 

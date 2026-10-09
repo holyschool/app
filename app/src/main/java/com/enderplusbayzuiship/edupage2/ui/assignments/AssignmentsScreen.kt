@@ -1,5 +1,6 @@
 package com.enderplusbayzuiship.edupage2.ui.assignments
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Assignment
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Refresh
@@ -42,6 +45,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -55,6 +61,7 @@ import com.edupage.api.model.grades.Assignment
 import com.edupage.api.model.grades.AssignmentType
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
+import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
 import com.enderplusbayzuiship.edupage2.ui.util.ShimmerBox
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.format.DateTimeFormatter
@@ -70,7 +77,9 @@ fun AssignmentsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val historyMonths by viewModel.historyMonths.collectAsState()
+    val detailState by viewModel.detailState.collectAsState()
     val haptics = rememberAppHaptics()
+    var detailAssignment by remember { mutableStateOf<Assignment?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -149,7 +158,17 @@ fun AssignmentsScreen(
                                 RoundedCardContainer {
                                     filtered.forEach { a ->
                                         key(a.id ?: "${a.title}-${a.date}-${a.type}") {
-                                            AssignmentCard(a)
+                                            AssignmentCard(
+                                                assignment = a,
+                                                onClick = {
+                                                    haptics.virtualKey()
+                                                    val superId = a.superId
+                                                    if (superId != null) {
+                                                        detailAssignment = a
+                                                        viewModel.loadDetail(superId)
+                                                    }
+                                                },
+                                            )
                                         }
                                     }
                                 }
@@ -178,6 +197,145 @@ fun AssignmentsScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    detailAssignment?.let { assignment ->
+        AssignmentDetailSheet(
+            assignment = assignment,
+            detailState = detailState,
+            onDismiss = {
+                detailAssignment = null
+                viewModel.resetDetail()
+            },
+            onOpenAttachment = { viewModel.openAttachment(it) },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AssignmentDetailSheet(
+    assignment: Assignment,
+    detailState: AssignmentDetailState,
+    onDismiss: () -> Unit,
+    onOpenAttachment: (com.edupage.api.model.MessageAttachment) -> Unit,
+) {
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = assignment.title?.ifBlank { "–" } ?: "–",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            assignment.subjectName?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            val meta = buildList {
+                assignment.date?.let { add(it.format(dateFmt)) }
+                add(typeLabel(assignment.type))
+            }.joinToString(" · ")
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            assignment.details?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.assignments_attachments),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            when (detailState) {
+                is AssignmentDetailState.Idle,
+                is AssignmentDetailState.Loading -> Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = stringResource(R.string.assignments_attachments_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                is AssignmentDetailState.Error -> Text(
+                    text = detailState.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                is AssignmentDetailState.Ready -> {
+                    if (detailState.attachments.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.assignments_no_attachments),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    } else {
+                        detailState.attachments.forEach { attachment ->
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceBright,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onOpenAttachment(attachment) }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.AttachFile,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Text(
+                                        text = attachment.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        Icons.Rounded.Download,
+                                        contentDescription = stringResource(R.string.messages_attachment_open),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
                         }
                     }
                 }
@@ -225,14 +383,20 @@ private fun FilterSelector(
 }
 
 @Composable
-private fun AssignmentCard(assignment: Assignment) {
+private fun AssignmentCard(assignment: Assignment, onClick: () -> Unit) {
     val accent = typeColor(assignment.type)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceBright,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (assignment.superId != null) Modifier.clickable(onClick = onClick)
+                    else Modifier
+                )
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {

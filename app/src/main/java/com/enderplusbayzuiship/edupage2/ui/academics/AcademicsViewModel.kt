@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
 import com.edupage.api.exceptions.NotLoggedInException
 import com.edupage.api.model.Absence
+import com.edupage.api.model.CurriculumTopic
 import com.edupage.api.model.SchoolPlan
 import com.edupage.api.model.TimelineEvent
 import com.enderplusbayzuiship.edupage2.R
@@ -42,6 +43,16 @@ sealed interface PlansUiState {
     ) : PlansUiState
 }
 
+sealed interface TopicsUiState {
+    object Idle : TopicsUiState
+    object Loading : TopicsUiState
+    data class Error(val message: String) : TopicsUiState
+    data class Success(
+        val subjectName: String?,
+        val topics: List<CurriculumTopic>,
+    ) : TopicsUiState
+}
+
 @HiltViewModel
 class AcademicsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -59,6 +70,9 @@ class AcademicsViewModel @Inject constructor(
 
     private val _plans = MutableStateFlow<PlansUiState>(PlansUiState.Loading)
     val plans: StateFlow<PlansUiState> = _plans.asStateFlow()
+
+    private val _topics = MutableStateFlow<TopicsUiState>(TopicsUiState.Idle)
+    val topics: StateFlow<TopicsUiState> = _topics.asStateFlow()
 
     init {
         refresh()
@@ -135,6 +149,41 @@ class AcademicsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Loads taught-curriculum entries recorded in the timeline and filters them
+     * to a single subject (the selected plan). EduPage has no per-plan topics
+     * endpoint, so topics are recovered from `ucivo` timeline events.
+     */
+    fun loadTopics(subjectId: Int?, subjectName: String?) {
+        viewModelScope.launch {
+            _topics.value = TopicsUiState.Loading
+            try {
+                val dateFrom = LocalDate.now().minusMonths(12)
+                val all = try {
+                    edupage.getCurriculum(dateFrom)
+                } catch (e: NotLoggedInException) {
+                    Log.w(TAG, "session expired, re-authenticating and retrying once")
+                    sessionRepository.ensureValidSession()
+                    edupage.getCurriculum(dateFrom)
+                }
+                val filtered = if (subjectId != null) all.filter { it.subjectId == subjectId } else all
+                val resolvedName = subjectName ?: filtered.firstOrNull()?.subjectName
+                _topics.value = TopicsUiState.Success(resolvedName, filtered)
+                Log.i(TAG, "loaded ${filtered.size} topics for subject $subjectId")
+            } catch (e: Exception) {
+                Log.e(TAG, "failed to load topics: ${e.message}", e)
+                _topics.value = TopicsUiState.Error(
+                    if (e.isNetworkError()) context.getString(R.string.network_error)
+                    else e.message ?: context.getString(R.string.curriculum_error_loading)
+                )
+            }
+        }
+    }
+
+    fun resetTopics() {
+        _topics.value = TopicsUiState.Idle
     }
 }
 

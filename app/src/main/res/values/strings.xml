@@ -163,6 +163,8 @@
     <string name="messages_important_label">Important</string>
     <string name="messages_attachment">Attachment</string>
     <string name="messages_attachment_pick">Pick attachment</string>
+    <string name="messages_attachment_open">Open attachment</string>
+    <string name="messages_attachment_failed">Couldn\'t open the attachment.</string>
     <string name="messages_attachment_error">Failed to attach file</string>
     <string name="messages_attachment_count">%d attachment(s)</string>
     <string name="messages_comments">Comments</string>
@@ -846,6 +848,9 @@
     <string name="assignments_error_loading">Could not load assignments.</string>
     <string name="assignments_empty">No assignments found for this period.</string>
     <string name="assignments_load_more">Load older</string>
+    <string name="assignments_attachments">Attachments</string>
+    <string name="assignments_attachments_loading">Loading attachments…</string>
+    <string name="assignments_no_attachments">No attachments for this item.</string>
     <string name="assignments_retry">Retry</string>
     <string name="assignments_finished">Finished</string>
     <string name="assignments_filter_all">All</string>
@@ -874,6 +879,9 @@
     <string name="absence_unexcused_label">Unexcused</string>
     <string name="curriculum_error_loading">Could not load curriculum.</string>
     <string name="curriculum_empty">No curriculum plans available.</string>
+    <string name="curriculum_taught_topics">Taught topics from your lessons</string>
+    <string name="curriculum_topics_loading">Loading topics…</string>
+    <string name="curriculum_topics_empty">No taught topics recorded for this subject yet.</string>
     <string name="curriculum_unknown_subject">Unknown subject</string>
     <string name="curriculum_progress">Taught %1$d of %2$d topics</string>
 

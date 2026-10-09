@@ -8,6 +8,12 @@ data class PollAnswer(
     val votes: List<String> = emptyList(),
 )
 
+/** A file attached to a message, reply or homework. [url] is absolute. */
+data class MessageAttachment(
+    val url: String,
+    val name: String,
+)
+
 data class TimelineEvent(
     val timelineId: Int,
     val type: String?,
@@ -27,5 +33,7 @@ data class TimelineEvent(
     val reactionCount: Int = 0,
     val createdAt: LocalDateTime? = null,
     val isRemoved: Boolean = false,
+    val subjectId: Int? = null,
+    val attachments: List<MessageAttachment> = emptyList(),
 )
 

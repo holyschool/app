@@ -148,6 +148,8 @@
     <string name="messages_important_label">Důležitá</string>
     <string name="messages_attachment">Příloha</string>
     <string name="messages_attachment_pick">Vybrat přílohu</string>
+    <string name="messages_attachment_open">Otevřít přílohu</string>
+    <string name="messages_attachment_failed">Přílohu se nepodařilo otevřít.</string>
     <string name="messages_attachment_error">Nepodařilo se připojit soubor</string>
     <string name="messages_attachment_count">%d příloh(y)</string>
     <string name="messages_comments">Komentáře</string>
@@ -474,6 +476,9 @@
     <string name="assignments_error_loading">Nepodařilo se načíst úkoly.</string>
     <string name="assignments_empty">Žádné úkoly pro toto období.</string>
     <string name="assignments_load_more">Načíst starší</string>
+    <string name="assignments_attachments">Přílohy</string>
+    <string name="assignments_attachments_loading">Načítání příloh…</string>
+    <string name="assignments_no_attachments">Pro tuto položku nejsou žádné přílohy.</string>
     <string name="assignments_retry">Znovu</string>
     <string name="assignments_finished">Dokončeno</string>
     <string name="assignments_filter_all">Vše</string>
@@ -502,6 +507,9 @@
     <string name="absence_unexcused_label">Neomluvené</string>
     <string name="curriculum_error_loading">Nepodařilo se načíst učební plán.</string>
     <string name="curriculum_empty">Žádné učební plány.</string>
+    <string name="curriculum_taught_topics">Probraná témata z výuky</string>
+    <string name="curriculum_topics_loading">Načítání témat…</string>
+    <string name="curriculum_topics_empty">Pro tento předmět zatím nejsou zapsána žádná probraná témata.</string>
     <string name="curriculum_unknown_subject">Neznámý předmět</string>
     <string name="curriculum_progress">Probráno %1$d z %2$d témat</string>
 

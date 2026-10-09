@@ -147,6 +147,8 @@
     <string name="messages_important_label">Dôležitá</string>
     <string name="messages_attachment">Príloha</string>
     <string name="messages_attachment_pick">Vybrať prílohu</string>
+    <string name="messages_attachment_open">Otvoriť prílohu</string>
+    <string name="messages_attachment_failed">Prílohu sa nepodarilo otvoriť.</string>
     <string name="messages_attachment_error">Nepodarilo sa pripojiť súbor</string>
     <string name="messages_attachment_count">%d príloh(y)</string>
     <string name="messages_comments">Komentáre</string>
@@ -471,6 +473,9 @@
     <string name="assignments_error_loading">Nepodarilo sa načítať úlohy.</string>
     <string name="assignments_empty">Žiadne úlohy pre toto obdobie.</string>
     <string name="assignments_load_more">Načítať staršie</string>
+    <string name="assignments_attachments">Prílohy</string>
+    <string name="assignments_attachments_loading">Načítavanie príloh…</string>
+    <string name="assignments_no_attachments">Pre túto položku nie sú žiadne prílohy.</string>
     <string name="assignments_retry">Znovu</string>
     <string name="assignments_finished">Dokončené</string>
     <string name="assignments_filter_all">Všetko</string>
@@ -499,6 +504,9 @@
     <string name="absence_unexcused_label">Neospravedlnené</string>
     <string name="curriculum_error_loading">Nepodarilo sa načítať učebný plán.</string>
     <string name="curriculum_empty">Žiadne učebné plány.</string>
+    <string name="curriculum_taught_topics">Prebrané témy z výučby</string>
+    <string name="curriculum_topics_loading">Načítavanie tém…</string>
+    <string name="curriculum_topics_empty">Pre tento predmet zatiaľ nie sú zapísané žiadne prebrané témy.</string>
     <string name="curriculum_unknown_subject">Neznámy predmet</string>
     <string name="curriculum_progress">Prebrané %1$d z %2$d tém</string>
 

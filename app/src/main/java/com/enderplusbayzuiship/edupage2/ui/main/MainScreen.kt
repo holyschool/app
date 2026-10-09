@@ -242,6 +242,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
             onReply = { },
             onStarToggle = { _, _ -> },
             onVote = { _, _ -> },
+            onOpenAttachment = { messagesVm.openAttachment(it) },
             currentUserId = null,
         )
     }
