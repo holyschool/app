@@ -61,6 +61,9 @@ class AiQuizViewModel @Inject constructor(
 
     fun hasApiKey(): Boolean = aiCredentialsStore.current().apiKey.isNotBlank()
 
+    /** Language instruction from the AI study settings, or null to mirror the input. */
+    private fun languageHint(): String? = aiCredentialsStore.studySettings.value.language.promptHint
+
     fun attemptsFor(quizId: String): List<QuizAttempt> = attemptStore.forQuiz(quizId)
 
     fun homeworkMaterials(): List<StudyMaterial> = materialLoader.homework()
@@ -98,7 +101,7 @@ class AiQuizViewModel @Inject constructor(
         viewModelScope.launch {
             _generateState.value = GenerateState.Generating
             try {
-                val questions = aiService.generateQuiz(config, topic.trim(), count, difficulty, material)
+                val questions = aiService.generateQuiz(config, topic.trim(), count, difficulty, material, languageHint())
                 val quiz = AiQuiz(
                     topic = topic.trim(),
                     difficulty = difficulty,
@@ -145,7 +148,7 @@ class AiQuizViewModel @Inject constructor(
         viewModelScope.launch {
             _explainState.value = ExplainState.Loading
             try {
-                val text = aiService.explainQuiz(config, quiz.topic, quiz.questions, answers)
+                val text = aiService.explainQuiz(config, quiz.topic, quiz.questions, answers, languageHint())
                 _explainState.value = if (text.isBlank()) {
                     ExplainState.Error(context.getString(R.string.quiz_explain_empty))
                 } else {

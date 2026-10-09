@@ -1,5 +1,6 @@
 package com.wiffles.edupage.network
 
+import android.util.Base64
 import com.wiffles.edupage.data.Flashcard
 import com.wiffles.edupage.data.QuizQuestion
 import com.google.gson.Gson
@@ -178,7 +179,82 @@ class AiService @Inject constructor(
         return text
     }
 
+    // --------------------------------------------------------------- vision (Gemini)
+
+    /**
+     * Sends a conversation plus binary attachments (images or PDFs) to a Gemini
+     * multimodal model and returns the text reply. Only Gemini is supported; the
+     * caller should check [AiConfig.hasVision] first.
+     */
+    suspend fun completeWithAttachments(
+        config: AiConfig,
+        messages: List<AiMessage>,
+        attachments: List<AiAttachment>,
+        model: String,
+    ): String = withContext(Dispatchers.IO) {
+        require(config.provider.isGemini) { "Attachments are only supported with Google Gemini" }
+        val system = messages.filter { it.role == "system" }.joinToString("\n") { it.content }
+        val convo = messages.filter { it.role != "system" }
+        val contents = JsonArray().apply {
+            convo.forEachIndexed { index, msg ->
+                add(JsonObject().apply {
+                    addProperty("role", if (msg.role == "assistant") "model" else "user")
+                    add("parts", JsonArray().apply {
+                        if (msg.content.isNotBlank()) {
+                            add(JsonObject().apply { addProperty("text", msg.content) })
+                        }
+                        if (index == convo.lastIndex && msg.role == "user") {
+                            attachments.forEach { attachment ->
+                                add(JsonObject().apply {
+                                    add("inline_data", JsonObject().apply {
+                                        addProperty("mime_type", attachment.mimeType)
+                                        addProperty(
+                                            "data",
+                                            Base64.encodeToString(attachment.data, Base64.NO_WRAP),
+                                        )
+                                    })
+                                })
+                            }
+                        }
+                    })
+                })
+            }
+        }
+        val body = JsonObject().apply {
+            if (system.isNotBlank()) {
+                add("systemInstruction", JsonObject().apply {
+                    add("parts", JsonArray().apply {
+                        add(JsonObject().apply { addProperty("text", system) })
+                    })
+                })
+            }
+            add("contents", contents)
+        }
+        val raw = execute(
+            Request.Builder()
+                .url("${config.effectiveBaseUrl}/models/$model:generateContent")
+                .addHeader("x-goog-api-key", config.apiKey)
+                .post(gson.toJson(body).toRequestBody(JSON))
+                .build()
+        )
+        val json = JsonParser.parseString(raw).asJsonObject
+        val candidates = json.getAsJsonArray("candidates")
+            ?: throw RuntimeException("The model returned no answer")
+        val parts = candidates.firstOrNull()
+            ?.asJsonObject?.getAsJsonObject("content")
+            ?.getAsJsonArray("parts")
+            ?: throw RuntimeException("The model returned no answer")
+        val text = parts.mapNotNull { part ->
+            runCatching { part.asJsonObject.get("text")?.asString }.getOrNull()
+        }.joinToString("")
+        if (text.isBlank()) throw RuntimeException("The model returned an empty answer")
+        text
+    }
+
     // --------------------------------------------------------------- quiz
+
+    private fun languageRule(hint: String?, fallback: String): String =
+        hint?.takeIf { it.isNotBlank() } ?: fallback
 
     suspend fun generateQuiz(
         config: AiConfig,
@@ -186,6 +262,7 @@ class AiService @Inject constructor(
         count: Int,
         difficulty: String,
         material: String? = null,
+        languageHint: String? = null,
     ): List<QuizQuestion> {
         val prompt = buildString {
             append("Create a multiple-choice quiz with exactly ")
@@ -205,7 +282,9 @@ class AiService @Inject constructor(
             append("- correctIndex is the 0-based index of the correct option.\n")
             append("- Add a short, educational explanation for why the correct answer is right.\n")
             append("- Make questions varied and non-repetitive; test understanding, not trivia.\n")
-            append("- Write in the same language as the topic; if unclear, use English.\n")
+            append("- ")
+            append(languageRule(languageHint, "Write in the same language as the topic; if unclear, use English."))
+            append("\n")
             append("Return JSON only, with this shape: {\"questions\":[{\"question\":\"…\",")
             append("\"options\":[\"…\"],\"correctIndex\":0,\"explanation\":\"…\"}]}")
         }
@@ -251,6 +330,7 @@ class AiService @Inject constructor(
         topic: String,
         count: Int,
         material: String? = null,
+        languageHint: String? = null,
     ): List<Flashcard> {
         val prompt = buildString {
             append("Create exactly ")
@@ -269,7 +349,9 @@ class AiService @Inject constructor(
             append("- \"back\" is the answer or definition (max ~300 chars).\n")
             append("- \"hint\" is an optional short memory aid; use \"\" when not useful.\n")
             append("- Cover the most important, testable facts and concepts.\n")
-            append("- Write in the same language as the topic; if unclear, use English.\n")
+            append("- ")
+            append(languageRule(languageHint, "Write in the same language as the topic; if unclear, use English."))
+            append("\n")
             append("Return JSON only, with this shape: {\"cards\":[{\"front\":\"…\",\"back\":\"…\",\"hint\":\"…\"}]}")
         }
         val text = complete(
@@ -308,6 +390,7 @@ class AiService @Inject constructor(
         topic: String,
         questions: List<QuizQuestion>,
         answers: List<Int?>,
+        languageHint: String? = null,
     ): String {
         if (questions.isEmpty()) return ""
         val wrongCount = questions.indices.count { answers.getOrNull(it) != questions[it].correctIndex }
@@ -332,7 +415,8 @@ class AiService @Inject constructor(
             append("Write a short, encouraging study review. For each question the student got wrong, ")
             append("explain why their answer was wrong and why the correct one is right, in 1–2 sentences. ")
             append("Then list the key concepts they should revise and end with one practical study tip. ")
-            append("Use clear, age-appropriate language and write in the same language as the questions.")
+            append("Use clear, age-appropriate language and ")
+            append(languageRule(languageHint, "write in the same language as the questions."))
         }
         return complete(
             config,

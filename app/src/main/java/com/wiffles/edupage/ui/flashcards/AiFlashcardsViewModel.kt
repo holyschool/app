@@ -45,6 +45,8 @@ class AiFlashcardsViewModel @Inject constructor(
 
     fun hasApiKey(): Boolean = aiCredentialsStore.current().apiKey.isNotBlank()
 
+    private fun languageHint(): String? = aiCredentialsStore.studySettings.value.language.promptHint
+
     fun homeworkMaterials(): List<StudyMaterial> = materialLoader.homework()
 
     fun loadExamMaterials(force: Boolean = false) {
@@ -78,7 +80,7 @@ class AiFlashcardsViewModel @Inject constructor(
         viewModelScope.launch {
             _generateState.value = GenerateState.Generating
             try {
-                val cards = aiService.generateFlashcards(config, topic.trim(), count, material)
+                val cards = aiService.generateFlashcards(config, topic.trim(), count, material, languageHint())
                 val deck = FlashcardDeck(topic = topic.trim(), cards = cards)
                 flashcardStore.add(deck)
                 _generateState.value = GenerateState.Idle
