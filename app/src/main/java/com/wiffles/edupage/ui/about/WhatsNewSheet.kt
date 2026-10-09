@@ -10,11 +10,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
-import androidx.compose.material.icons.rounded.Widgets
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,23 +70,23 @@ fun WhatsNewHost(
             RoundedCardContainer {
                 WhatsNewRow(
                     icon = Icons.Rounded.School,
-                    title = stringResource(R.string.prepare_title),
-                    description = stringResource(R.string.prepare_hint),
+                    title = stringResource(R.string.whats_new_ai_study),
+                    description = stringResource(R.string.whats_new_ai_study_desc),
                 )
                 WhatsNewRow(
-                    icon = Icons.Rounded.Widgets,
-                    title = stringResource(R.string.widget_prepare_title),
-                    description = stringResource(R.string.settings_hub_data_desc),
+                    icon = Icons.Rounded.Tune,
+                    title = stringResource(R.string.whats_new_ai_settings),
+                    description = stringResource(R.string.whats_new_ai_settings_desc),
                 )
                 WhatsNewRow(
-                    icon = Icons.Rounded.Schedule,
-                    title = stringResource(R.string.settings_lesson_grouping),
-                    description = stringResource(R.string.settings_lesson_grouping_doubles_desc),
+                    icon = Icons.Rounded.Category,
+                    title = stringResource(R.string.whats_new_ai_icons),
+                    description = stringResource(R.string.whats_new_ai_icons_desc),
                 )
                 WhatsNewRow(
                     icon = Icons.Rounded.Notifications,
-                    title = stringResource(R.string.settings_live_class),
-                    description = stringResource(R.string.settings_live_class_desc),
+                    title = stringResource(R.string.whats_new_important),
+                    description = stringResource(R.string.whats_new_important_desc),
                 )
             }
             Button(

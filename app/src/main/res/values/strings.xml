@@ -786,6 +786,14 @@
     <string name="whats_new_title">What\'s new</string>
     <string name="whats_new_dismiss">Let me in</string>
     <string name="whats_new_retrigger_desc">Show the highlights again</string>
+    <string name="whats_new_ai_study">AI study chat</string>
+    <string name="whats_new_ai_study_desc">Ask questions with Markdown, math formulas and file attachments.</string>
+    <string name="whats_new_ai_settings">Custom AI study settings</string>
+    <string name="whats_new_ai_settings_desc">Choose answer style, tone, language and your own instructions.</string>
+    <string name="whats_new_ai_icons">AI subject icons</string>
+    <string name="whats_new_ai_icons_desc">Let AI pick an icon for every subject in one tap.</string>
+    <string name="whats_new_important">Important messages stand out</string>
+    <string name="whats_new_important_desc">Important messages are highlighted and previewed safely.</string>
     <string name="settings_check_updates">Check for updates</string>
     <string name="settings_checking_updates">Checking…</string>
     <string name="update_up_to_date">You\'re on the latest version</string>
