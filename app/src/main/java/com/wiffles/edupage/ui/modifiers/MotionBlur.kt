@@ -19,6 +19,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.isActive
@@ -125,10 +126,21 @@ fun <T> BlurStepTransition(
     }
 
     androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .clipToBounds(),
     ) {
-        content(renderState)
         if (transitioning) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = -dir * progress.value * size.width
+                    }
+                    .transitionMotionBlur(progress.value),
+            ) {
+                content(renderState)
+            }
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -139,6 +151,8 @@ fun <T> BlurStepTransition(
             ) {
                 content(targetState)
             }
+        } else {
+            content(renderState)
         }
     }
 }
