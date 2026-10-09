@@ -1,9 +1,14 @@
 package com.enderplusbayzuiship.edupage2.ui.chat
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AiCredentialsStore
+import com.enderplusbayzuiship.edupage2.data.ChatAttachment
 import com.enderplusbayzuiship.edupage2.data.ChatMessage
 import com.enderplusbayzuiship.edupage2.data.ChatStore
 import com.enderplusbayzuiship.edupage2.data.LocalHomeworkStore
@@ -11,12 +16,14 @@ import com.enderplusbayzuiship.edupage2.network.AiMessage
 import com.enderplusbayzuiship.edupage2.network.AiService
 import com.enderplusbayzuiship.edupage2.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
-import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -28,10 +35,21 @@ class AiChatViewModel @Inject constructor(
     private val homeworkStore: LocalHomeworkStore,
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "AiChatViewModel"
+        private const val MAX_TEXT_ATTACHMENT_CHARS = 6000
+    }
+
     val messages: StateFlow<List<ChatMessage>> = chatStore.flow
 
     private val _thinking = MutableStateFlow(false)
     val thinking: StateFlow<Boolean> = _thinking.asStateFlow()
+
+    private val _attachments = MutableStateFlow<List<ChatAttachment>>(emptyList())
+    val attachments: StateFlow<List<ChatAttachment>> = _attachments.asStateFlow()
+
+    private val _attachError = MutableStateFlow<String?>(null)
+    val attachError: StateFlow<String?> = _attachError.asStateFlow()
 
     private val basePrompt = """
         You are a friendly, patient study assistant built into a school app.
@@ -40,6 +58,8 @@ class AiChatViewModel @Inject constructor(
         Prefer clear, age-appropriate language. If a question is unrelated to learning,
         gently steer back to studying. Be concise but genuinely educational.
         If you are unsure, say so rather than inventing facts.
+        Format answers with Markdown. Write any maths as LaTeX inside $...$ (inline)
+        or $$...$$ (block) so it renders nicely.
     """.trimIndent()
 
     /** Adds a short, local-only summary of pending homework so answers are more relevant. */
@@ -62,20 +82,84 @@ class AiChatViewModel @Inject constructor(
 
     fun hasApiKey(): Boolean = aiCredentialsStore.current().apiKey.isNotBlank()
 
+    fun clearAttachError() {
+        _attachError.value = null
+    }
+
+    /** Copies a picked document into app storage and queues it for the next message. */
+    fun attachUri(uri: Uri) {
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val resolver = context.contentResolver
+                    val name = queryDisplayName(uri) ?: "attachment"
+                    val mime = resolver.getType(uri) ?: "application/octet-stream"
+                    val dir = File(context.filesDir, "chat_attachments").apply { mkdirs() }
+                    val target = uniqueFile(dir, name)
+                    resolver.openInputStream(uri)?.use { input ->
+                        target.outputStream().use { output -> input.copyTo(output) }
+                    } ?: throw IllegalStateException("Could not read the selected file")
+                    ChatAttachment(
+                        name = name,
+                        localPath = target.absolutePath,
+                        mimeType = mime,
+                        sizeBytes = target.length(),
+                    )
+                }
+            }.onSuccess { attachment ->
+                _attachments.value = _attachments.value + attachment
+            }.onFailure { e ->
+                Log.e(TAG, "attach failed: ${e.message}", e)
+                _attachError.value = context.getString(R.string.chat_attach_failed)
+            }
+        }
+    }
+
+    fun removeAttachment(id: String) {
+        val removed = _attachments.value.firstOrNull { it.id == id }
+        _attachments.value = _attachments.value.filterNot { it.id == id }
+        removed?.localPath?.let { runCatching { File(it).delete() } }
+    }
+
+    private fun queryDisplayName(uri: Uri): String? {
+        return runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+            }
+        }.getOrNull()
+    }
+
+    private fun uniqueFile(dir: File, name: String): File {
+        val candidate = File(dir, name)
+        if (!candidate.exists()) return candidate
+        val base = name.substringBeforeLast('.', name)
+        val ext = name.substringAfterLast('.', "")
+        var i = 1
+        while (true) {
+            val suffix = if (ext.isBlank()) "" else ".$ext"
+            val f = File(dir, "$base-$i$suffix")
+            if (!f.exists()) return f
+            i++
+        }
+    }
+
     fun send(text: String) {
         val prompt = text.trim()
-        if (prompt.isBlank() || _thinking.value) return
+        val pending = _attachments.value
+        if ((prompt.isBlank() && pending.isEmpty()) || _thinking.value) return
         if (!hasApiKey()) {
             chatStore.add(ChatMessage(role = "assistant", content = context.getString(R.string.chat_no_key), error = true))
             return
         }
-        chatStore.add(ChatMessage(role = "user", content = prompt))
+        _attachments.value = emptyList()
+        chatStore.add(ChatMessage(role = "user", content = prompt, attachments = pending))
         viewModelScope.launch {
             _thinking.value = true
             val history = chatStore.all()
                 .filter { !it.error }
                 .takeLast(20)
-                .map { AiMessage(it.role, it.content) }
+                .map { AiMessage(it.role, messageContentForModel(it)) }
             val payload = listOf(AiMessage("system", systemPrompt())) + history
             try {
                 val reply = aiService.complete(aiCredentialsStore.current(), payload, jsonMode = false)
@@ -90,5 +174,37 @@ class AiChatViewModel @Inject constructor(
         }
     }
 
-    fun clear() = chatStore.clear()
+    /** Folds attachment names (and small text-file contents) into what the model sees. */
+    private fun messageContentForModel(message: ChatMessage): String {
+        if (message.attachments.isEmpty()) return message.content
+        val sb = StringBuilder(message.content)
+        message.attachments.forEach { attachment ->
+            sb.append("\n\n[Attached file: ${attachment.name}]")
+            val text = readTextAttachment(attachment)
+            if (text != null) {
+                sb.append("\n```\n").append(text).append("\n```")
+            }
+        }
+        return sb.toString().trim()
+    }
+
+    private fun readTextAttachment(attachment: ChatAttachment): String? {
+        val mime = attachment.mimeType.lowercase()
+        val looksTextual = mime.startsWith("text/") ||
+            mime.contains("json") || mime.contains("csv") || mime.contains("xml") ||
+            attachment.name.substringAfterLast('.', "").lowercase() in
+            setOf("txt", "md", "csv", "json", "xml", "html", "kt", "java", "py", "js", "ts")
+        if (!looksTextual) return null
+        return runCatching {
+            val file = File(attachment.localPath)
+            if (!file.exists() || file.length() > 512_000) return null
+            file.readText().take(MAX_TEXT_ATTACHMENT_CHARS)
+        }.getOrNull()
+    }
+
+    fun clear() {
+        _attachments.value.forEach { runCatching { File(it.localPath).delete() } }
+        _attachments.value = emptyList()
+        chatStore.clear()
+    }
 }

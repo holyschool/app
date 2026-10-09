@@ -4,4 +4,5 @@
     <cache-path name="cloud" path="cloud/" />
     <cache-path name="attachments" path="attachments/" />
     <cache-path name="assignments" path="assignments/" />
+    <files-path name="chat_attachments" path="chat_attachments/" />
 </paths>

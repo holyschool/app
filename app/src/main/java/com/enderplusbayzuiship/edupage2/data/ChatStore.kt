@@ -13,12 +13,21 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class ChatAttachment(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val localPath: String,
+    val mimeType: String,
+    val sizeBytes: Long = 0L,
+)
+
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val role: String,
     val content: String,
     val timestampMs: Long = System.currentTimeMillis(),
     val error: Boolean = false,
+    val attachments: List<ChatAttachment> = emptyList(),
 )
 
 /**
