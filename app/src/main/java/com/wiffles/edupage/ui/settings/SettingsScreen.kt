@@ -53,7 +53,9 @@ import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.EventNote
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Fingerprint
@@ -79,6 +81,7 @@ import androidx.compose.material.icons.rounded.ShortText
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.VerticalAlignTop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -150,6 +153,9 @@ import com.wiffles.edupage.ui.modifiers.scrollMotionBlur
 import com.wiffles.edupage.ui.modifiers.transitionMotionBlur
 import com.wiffles.edupage.ui.subjects.SubjectIconEditorSheet
 import com.wiffles.edupage.ui.subjects.SubjectIconsOverviewSheet
+import com.wiffles.edupage.network.AiAnswerStyle
+import com.wiffles.edupage.network.AiStudyLanguage
+import com.wiffles.edupage.network.AiStudyTone
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 
 private enum class SettingsSection {
@@ -186,6 +192,7 @@ fun SettingsScreen(
     var showSubjectIconsEditor by remember { mutableStateOf(false) }
     var showSubjectIconsOverview by remember { mutableStateOf(false) }
     var showAiKeySheet by remember { mutableStateOf(false) }
+    var showAiStudySheet by remember { mutableStateOf(false) }
     var showAccentSheet by remember { mutableStateOf(false) }
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showDisablePinDialog by remember { mutableStateOf(false) }
@@ -344,6 +351,10 @@ fun SettingsScreen(
                     haptics.virtualKey()
                     showAiKeySheet = true
                 },
+                onEditStudySettings = {
+                    haptics.virtualKey()
+                    showAiStudySheet = true
+                },
                 onEditAccent = {
                     haptics.virtualKey()
                     showAccentSheet = true
@@ -384,6 +395,13 @@ fun SettingsScreen(
         AiSetupSheet(
             viewModel = viewModel,
             onDismiss = { showAiKeySheet = false },
+        )
+    }
+
+    if (showAiStudySheet) {
+        AiStudySheet(
+            viewModel = viewModel,
+            onDismiss = { showAiStudySheet = false },
         )
     }
 
@@ -724,6 +742,7 @@ private fun SettingsDetail(
     onViewSubjects: () -> Unit,
     onOpenAiQuiz: () -> Unit,
     onEditAiKey: () -> Unit,
+    onEditStudySettings: () -> Unit,
     onEditAccent: () -> Unit,
     viewModel: SettingsViewModel,
 ) {
@@ -798,6 +817,7 @@ private fun SettingsDetail(
                     onViewSubjects = onViewSubjects,
                     onOpenAiQuiz = onOpenAiQuiz,
                     onEditAiKey = onEditAiKey,
+                    onEditStudySettings = onEditStudySettings,
                     onEditAccent = onEditAccent,
                     onCloud = onCloud,
                 )
@@ -1325,6 +1345,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
     onViewSubjects: () -> Unit,
     onOpenAiQuiz: () -> Unit,
     onEditAiKey: () -> Unit,
+    onEditStudySettings: () -> Unit,
     onEditAccent: () -> Unit,
     onCloud: () -> Unit = {},
 ) {
@@ -1370,6 +1391,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
         fun AiRows() {
             val enabled by viewModel.aiQuizEnabled.collectAsState()
             val config by viewModel.aiConfig.collectAsState()
+            val study by viewModel.aiStudySettings.collectAsState()
 
             IconToggleItem(
                 icon = Icons.Rounded.School,
@@ -1395,6 +1417,55 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
                         description = stringResource(R.string.settings_ai_open_desc),
                         icon = Icons.Rounded.PlayArrow,
                         onClick = onOpenAiQuiz,
+                    )
+                    SettingsNavigationRow(
+                        title = stringResource(R.string.settings_ai_study_custom_prompt),
+                        description = study.customInstructions.ifBlank {
+                            stringResource(R.string.settings_ai_study_custom_prompt_desc)
+                        },
+                        icon = Icons.Rounded.EditNote,
+                        onClick = onEditStudySettings,
+                    )
+                    SettingsSelectRow(
+                        title = stringResource(R.string.settings_ai_study_style),
+                        icon = Icons.Rounded.Tune,
+                        options = listOf(
+                            AiAnswerStyle.CONCISE to stringResource(R.string.settings_ai_style_concise),
+                            AiAnswerStyle.BALANCED to stringResource(R.string.settings_ai_style_balanced),
+                            AiAnswerStyle.DETAILED to stringResource(R.string.settings_ai_style_detailed),
+                        ),
+                        selectedOption = study.answerStyle,
+                        onOptionSelected = { viewModel.setAiStudyStyle(it) },
+                    )
+                    SettingsSelectRow(
+                        title = stringResource(R.string.settings_ai_study_tone),
+                        icon = Icons.Rounded.EmojiEmotions,
+                        options = listOf(
+                            AiStudyTone.FRIENDLY to stringResource(R.string.settings_ai_tone_friendly),
+                            AiStudyTone.FORMAL to stringResource(R.string.settings_ai_tone_formal),
+                            AiStudyTone.ENCOURAGING to stringResource(R.string.settings_ai_tone_encouraging),
+                        ),
+                        selectedOption = study.tone,
+                        onOptionSelected = { viewModel.setAiStudyTone(it) },
+                    )
+                    SettingsSelectRow(
+                        title = stringResource(R.string.settings_ai_study_language),
+                        icon = Icons.Rounded.Translate,
+                        options = listOf(
+                            AiStudyLanguage.AUTO to stringResource(R.string.settings_ai_lang_auto),
+                            AiStudyLanguage.ENGLISH to stringResource(R.string.settings_ai_lang_english),
+                            AiStudyLanguage.CZECH to stringResource(R.string.settings_ai_lang_czech),
+                            AiStudyLanguage.SLOVAK to stringResource(R.string.settings_ai_lang_slovak),
+                        ),
+                        selectedOption = study.language,
+                        onOptionSelected = { viewModel.setAiStudyLanguage(it) },
+                    )
+                    IconToggleItem(
+                        icon = Icons.Rounded.Assignment,
+                        title = stringResource(R.string.settings_ai_study_homework),
+                        description = stringResource(R.string.settings_ai_study_homework_desc),
+                        checked = study.includeHomework,
+                        onCheckedChange = { viewModel.setAiStudyIncludeHomework(it) },
                     )
                 }
             }

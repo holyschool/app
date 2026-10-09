@@ -5,6 +5,10 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.wiffles.edupage.network.AiConfig
 import com.wiffles.edupage.network.AiProvider
+import com.wiffles.edupage.network.AiAnswerStyle
+import com.wiffles.edupage.network.AiStudyLanguage
+import com.wiffles.edupage.network.AiStudySettings
+import com.wiffles.edupage.network.AiStudyTone
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +32,11 @@ class AiCredentialsStore @Inject constructor(
         private const val FILE_NAME = "edupage_ai_prefs"
         private const val KEY_PROVIDER = "provider"
         private const val KEY_CUSTOM_BASE_URL = "custom_base_url"
+        private const val KEY_STUDY_PROMPT = "study_prompt"
+        private const val KEY_STUDY_STYLE = "study_style"
+        private const val KEY_STUDY_TONE = "study_tone"
+        private const val KEY_STUDY_LANGUAGE = "study_language"
+        private const val KEY_STUDY_HOMEWORK = "study_homework"
         private fun apiKeySlot(provider: AiProvider) = "api_key_${provider.key}"
         private fun modelSlot(provider: AiProvider) = "model_${provider.key}"
     }
@@ -48,9 +57,13 @@ class AiCredentialsStore @Inject constructor(
     private val _config = MutableStateFlow(AiConfig())
     val config: StateFlow<AiConfig> = _config.asStateFlow()
 
+    private val _studySettings = MutableStateFlow(AiStudySettings())
+    val studySettings: StateFlow<AiStudySettings> = _studySettings.asStateFlow()
+
     init {
         migrateLegacyPlaintext(appPreferences)
         _config.value = read(AiProvider.fromKey(prefs.getString(KEY_PROVIDER, null)))
+        _studySettings.value = readStudySettings()
     }
 
     private fun migrateLegacyPlaintext(appPreferences: AppPreferences) {
@@ -104,6 +117,43 @@ class AiCredentialsStore @Inject constructor(
     fun clearApiKey(provider: AiProvider) {
         prefs.edit().remove(apiKeySlot(provider)).apply()
         refresh()
+    }
+
+    private fun readStudySettings(): AiStudySettings = AiStudySettings(
+        customInstructions = prefs.getString(KEY_STUDY_PROMPT, "").orEmpty(),
+        answerStyle = AiAnswerStyle.fromKey(prefs.getString(KEY_STUDY_STYLE, null)),
+        tone = AiStudyTone.fromKey(prefs.getString(KEY_STUDY_TONE, null)),
+        language = AiStudyLanguage.fromKey(prefs.getString(KEY_STUDY_LANGUAGE, null)),
+        includeHomework = prefs.getBoolean(KEY_STUDY_HOMEWORK, true),
+    )
+
+    private fun refreshStudy() {
+        _studySettings.value = readStudySettings()
+    }
+
+    fun setStudyInstructions(value: String) {
+        prefs.edit().putString(KEY_STUDY_PROMPT, value).apply()
+        refreshStudy()
+    }
+
+    fun setStudyStyle(style: AiAnswerStyle) {
+        prefs.edit().putString(KEY_STUDY_STYLE, style.key).apply()
+        refreshStudy()
+    }
+
+    fun setStudyTone(tone: AiStudyTone) {
+        prefs.edit().putString(KEY_STUDY_TONE, tone.key).apply()
+        refreshStudy()
+    }
+
+    fun setStudyLanguage(language: AiStudyLanguage) {
+        prefs.edit().putString(KEY_STUDY_LANGUAGE, language.key).apply()
+        refreshStudy()
+    }
+
+    fun setStudyIncludeHomework(value: Boolean) {
+        prefs.edit().putBoolean(KEY_STUDY_HOMEWORK, value).apply()
+        refreshStudy()
     }
 
     private fun refresh() {

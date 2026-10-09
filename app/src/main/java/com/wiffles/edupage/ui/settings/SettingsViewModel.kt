@@ -33,6 +33,10 @@ import com.wiffles.edupage.data.TimelineCache
 import com.wiffles.edupage.network.BackendRegistrationManager
 import com.wiffles.edupage.network.AiConfig
 import com.wiffles.edupage.network.AiProvider
+import com.wiffles.edupage.network.AiAnswerStyle
+import com.wiffles.edupage.network.AiStudyLanguage
+import com.wiffles.edupage.network.AiStudySettings
+import com.wiffles.edupage.network.AiStudyTone
 import com.wiffles.edupage.network.AiService
 import com.wiffles.edupage.network.UpdateCenter
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -200,6 +204,8 @@ class SettingsViewModel @Inject constructor(
     val aiQuizEnabled: StateFlow<Boolean> = _aiQuizEnabled.asStateFlow()
 
     val aiConfig: StateFlow<AiConfig> = aiCredentialsStore.config
+
+    val aiStudySettings: StateFlow<AiStudySettings> = aiCredentialsStore.studySettings
 
     sealed interface AiModelsState {
         data object Idle : AiModelsState
@@ -516,6 +522,12 @@ class SettingsViewModel @Inject constructor(
     fun clearAiApiKey(provider: AiProvider) {
         aiCredentialsStore.clearApiKey(provider)
     }
+
+    fun setAiStudyInstructions(value: String) = aiCredentialsStore.setStudyInstructions(value)
+    fun setAiStudyStyle(style: AiAnswerStyle) = aiCredentialsStore.setStudyStyle(style)
+    fun setAiStudyTone(tone: AiStudyTone) = aiCredentialsStore.setStudyTone(tone)
+    fun setAiStudyLanguage(language: AiStudyLanguage) = aiCredentialsStore.setStudyLanguage(language)
+    fun setAiStudyIncludeHomework(value: Boolean) = aiCredentialsStore.setStudyIncludeHomework(value)
 
     fun loadAiModels() {
         val config = aiCredentialsStore.current()

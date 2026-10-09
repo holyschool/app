@@ -64,18 +64,22 @@ class AiChatViewModel @Inject constructor(
 
     /** Adds a short, local-only summary of pending homework so answers are more relevant. */
     private fun systemPrompt(): String {
-        val pending = homeworkStore.getAll()
-            .filter { !it.done && it.title.isNotBlank() }
-            .take(8)
-            .joinToString("; ") { item ->
-                if (item.subject.isNotBlank()) "${item.title} (${item.subject})" else item.title
-            }
+        val study = aiCredentialsStore.studySettings.value
         return buildString {
             append(basePrompt)
-            if (pending.isNotBlank()) {
-                append("\n\nThe student currently has these homework items they could ask about: ")
-                append(pending)
-                append('.')
+            append("\n\n").append(study.promptBlock())
+            if (study.includeHomework) {
+                val pending = homeworkStore.getAll()
+                    .filter { !it.done && it.title.isNotBlank() }
+                    .take(8)
+                    .joinToString("; ") { item ->
+                        if (item.subject.isNotBlank()) "${item.title} (${item.subject})" else item.title
+                    }
+                if (pending.isNotBlank()) {
+                    append("\n\nThe student currently has these homework items they could ask about: ")
+                    append(pending)
+                    append('.')
+                }
             }
         }
     }
