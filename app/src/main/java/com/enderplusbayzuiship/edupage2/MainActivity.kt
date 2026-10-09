@@ -2,6 +2,7 @@ package com.enderplusbayzuiship.edupage2
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
@@ -127,6 +128,12 @@ class MainActivity : FragmentActivity() {
             val enhancedAppearance by appPreferences.enhancedAppearanceEnabledFlow.collectAsState(
                 initial = appPreferences.enhancedAppearanceEnabled
             )
+            val dynamicColor by appPreferences.dynamicColorFlow.collectAsState(
+                initial = appPreferences.dynamicColor
+            )
+            val forceHighRefreshRate by appPreferences.forceHighRefreshRateFlow.collectAsState(
+                initial = appPreferences.forceHighRefreshRate
+            )
             val effectiveAccentArgb = if (enhancedAppearance) customAccentArgb else null
             val effectiveFontScale = if (enhancedAppearance) fontScale.multiplier else 1f
             val keepScreenAwake by appPreferences.keepScreenAwakeFlow.collectAsState(
@@ -173,11 +180,19 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
+            DisposableEffect(forceHighRefreshRate) {
+                applyRefreshRate(forceHighRefreshRate)
+                onDispose {
+                    if (forceHighRefreshRate) applyRefreshRate(false)
+                }
+            }
+
             Edupage2Theme(
                 darkTheme = darkTheme,
                 amoled = useAmoled,
                 accent = accentColor,
                 customAccentArgb = effectiveAccentArgb,
+                dynamicColor = dynamicColor,
             ) {
                 val density = LocalDensity.current
                 CompositionLocalProvider(
@@ -204,6 +219,34 @@ class MainActivity : FragmentActivity() {
                 }
                 }
             }
+        }
+    }
+
+    /**
+     * Requests the display's highest supported refresh rate when [force] is true (matching the
+     * current resolution), or resets to the system default when false.
+     */
+    private fun applyRefreshRate(force: Boolean) {
+        try {
+            val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                display
+            } else {
+                @Suppress("DEPRECATION")
+                windowManager.defaultDisplay
+            }
+            val attrs = window.attributes
+            attrs.preferredDisplayModeId = if (force) {
+                val modes = display.supportedModes
+                val currentWidth = display.mode?.physicalWidth
+                val candidates = modes.filter { currentWidth == null || it.physicalWidth == currentWidth }
+                    .ifEmpty { modes.toList() }
+                candidates.maxByOrNull { it.refreshRate }?.modeId ?: 0
+            } else {
+                0
+            }
+            window.attributes = attrs
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to apply refresh rate", e)
         }
     }
 

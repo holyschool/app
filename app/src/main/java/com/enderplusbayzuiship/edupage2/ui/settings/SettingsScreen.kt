@@ -2,6 +2,7 @@ package com.enderplusbayzuiship.edupage2.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.rounded.Assignment
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
@@ -74,6 +76,7 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.ShortText
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerticalAlignTop
@@ -988,6 +991,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.appearanceDetail(
             val darkMode by viewModel.darkMode.collectAsState()
             val useAmoled by viewModel.useAmoled.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
+            val dynamicColor by viewModel.dynamicColor.collectAsState()
+            val forceHighRefreshRate by viewModel.forceHighRefreshRate.collectAsState()
             val hapticIntensity by viewModel.hapticIntensity.collectAsState()
             val motionBlurEnabled by viewModel.motionBlurEnabled.collectAsState()
             val motionBlurScope by viewModel.motionBlurScope.collectAsState()
@@ -1057,6 +1062,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.appearanceDetail(
                     onCheckedChange = { viewModel.setUseAmoled(it) }
                 )
             }
+            val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            if (dynamicSupported) {
+                IconToggleItem(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = stringResource(R.string.settings_dynamic_color),
+                    description = stringResource(R.string.settings_dynamic_color_desc),
+                    checked = dynamicColor,
+                    onCheckedChange = { viewModel.setDynamicColor(it) }
+                )
+            }
             SettingsSelectRow(
                 title = stringResource(R.string.settings_accent_color),
                 icon = Icons.Rounded.Palette,
@@ -1074,7 +1089,15 @@ private fun androidx.compose.foundation.lazy.LazyListScope.appearanceDetail(
                     accent to label
                 },
                 selectedOption = accentColor,
-                onOptionSelected = { viewModel.setAccentColor(it) }
+                onOptionSelected = { viewModel.setAccentColor(it) },
+                enabled = !dynamicSupported || !dynamicColor,
+            )
+            IconToggleItem(
+                icon = Icons.Rounded.Speed,
+                title = stringResource(R.string.settings_force_high_refresh_rate),
+                description = stringResource(R.string.settings_force_high_refresh_rate_desc),
+                checked = forceHighRefreshRate,
+                onCheckedChange = { viewModel.setForceHighRefreshRate(it) }
             )
         }
         RoundedCardContainer { Rows() }
@@ -1412,6 +1435,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
             val enabled by viewModel.enhancedAppearanceEnabled.collectAsState()
             val customAccent by viewModel.customAccentArgb.collectAsState()
             val fontScale by viewModel.fontScale.collectAsState()
+            val dynamicColorEnabled by viewModel.dynamicColor.collectAsState()
+            val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            val customAccentEnabled = !dynamicColorSupported || !dynamicColorEnabled
 
             IconToggleItem(
                 icon = Icons.Rounded.Palette,
@@ -1428,6 +1454,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
                             ?: stringResource(R.string.settings_enhanced_custom_accent_desc),
                         icon = Icons.Rounded.ColorLens,
                         onClick = onEditAccent,
+                        enabled = customAccentEnabled,
                     )
                     SettingsSelectRow(
                         title = stringResource(R.string.settings_enhanced_font_size),

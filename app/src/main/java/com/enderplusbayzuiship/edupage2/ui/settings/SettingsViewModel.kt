@@ -295,6 +295,12 @@ class SettingsViewModel @Inject constructor(
     private val _accentColor = MutableStateFlow(appPreferences.accentColor)
     val accentColor: StateFlow<AccentColor> = _accentColor.asStateFlow()
 
+    private val _dynamicColor = MutableStateFlow(appPreferences.dynamicColor)
+    val dynamicColor: StateFlow<Boolean> = _dynamicColor.asStateFlow()
+
+    private val _forceHighRefreshRate = MutableStateFlow(appPreferences.forceHighRefreshRate)
+    val forceHighRefreshRate: StateFlow<Boolean> = _forceHighRefreshRate.asStateFlow()
+
     val lockEnabled: StateFlow<Boolean> = lockStore.isEnabledFlow
     val isBiometricEnabled: StateFlow<Boolean> = lockStore.isBiometricEnabledFlow
 
@@ -529,6 +535,16 @@ class SettingsViewModel @Inject constructor(
         _fontScale.value = value
     }
 
+    fun setDynamicColor(value: Boolean) {
+        appPreferences.dynamicColor = value
+        _dynamicColor.value = value
+    }
+
+    fun setForceHighRefreshRate(value: Boolean) {
+        appPreferences.forceHighRefreshRate = value
+        _forceHighRefreshRate.value = value
+    }
+
     fun setDefaultTab(value: Int) {
         val clamped = value.coerceIn(0, 4)
         appPreferences.defaultTab = clamped
@@ -699,9 +715,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setAccentColor(value: AccentColor) {
-        if (value == _accentColor.value) return
+        // A preset selection must override any previously chosen custom accent,
+        // otherwise the theme keeps using the custom color and appears stuck.
+        val hasCustom = _customAccentArgb.value != null
+        if (value == _accentColor.value && !hasCustom) return
         appPreferences.accentColor = value
         _accentColor.value = value
+        if (hasCustom) {
+            appPreferences.customAccentArgb = null
+            _customAccentArgb.value = null
+        }
     }
 
     fun setAppLanguage(value: AppLanguage) {

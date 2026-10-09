@@ -276,6 +276,10 @@
     <string name="settings_dark_mode_light">Light</string>
     <string name="settings_dark_mode_dark">Dark</string>
     <string name="settings_accent_color">Accent color</string>
+    <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_desc">Use colors from your wallpaper. Turn off to pick an accent color.</string>
+    <string name="settings_force_high_refresh_rate">Force high refresh rate</string>
+    <string name="settings_force_high_refresh_rate_desc">Request the display\'s highest refresh rate while the app is visible.</string>
     <string name="settings_accent_blue">Blue (default)</string>
     <string name="settings_accent_purple">Purple</string>
     <string name="settings_accent_green">Green</string>
@@ -392,9 +396,13 @@
     <string name="quiz_cancel">Cancel</string>
     <string name="quiz_back">Back</string>
     <string name="quiz_source_homework">Use my homework</string>
+    <string name="quiz_source_exam">Use an exam</string>
+    <string name="quiz_source_menu">Choose source</string>
     <string name="quiz_clear_materials">Remove</string>
     <string name="quiz_materials_pick_title">Pick homework</string>
+    <string name="quiz_materials_pick_exam_title">Pick an exam</string>
     <string name="quiz_materials_empty">No homework available to use yet.</string>
+    <string name="quiz_materials_empty_exam">No exams available to use yet.</string>
 
     <string name="subject_icons_loading">Loading subjects…</string>
     <string name="subject_icons_error">Couldn\'t load subjects</string>

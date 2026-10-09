@@ -272,6 +272,10 @@
     <string name="settings_accent_slate">Bridlicová</string>
     <string name="settings_amoled">AMOLED čierna</string>
     <string name="settings_amoled_desc">Použiť čisto čierne pozadie v tmavom režime na šetrenie energie na OLED displejoch.</string>
+    <string name="settings_dynamic_color">Dynamická farba</string>
+    <string name="settings_dynamic_color_desc">Použiť farby z tapety. Vypnite pre výber farby zvýraznenia.</string>
+    <string name="settings_force_high_refresh_rate">Vynútiť vysokú obnovovaciu frekvenciu</string>
+    <string name="settings_force_high_refresh_rate_desc">Vyžiadať najvyššiu obnovovaciu frekvenciu displeja, keď je aplikácia zobrazená.</string>
 
     <string name="settings_section_about">O aplikácii</string>
     <string name="about_title">O aplikácii</string>

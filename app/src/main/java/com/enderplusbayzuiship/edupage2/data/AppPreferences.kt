@@ -235,6 +235,8 @@ class AppPreferences @Inject constructor(
         private const val KEY_ENHANCED_APPEARANCE_ENABLED = "enhanced_appearance_enabled"
         private const val KEY_CUSTOM_ACCENT = "custom_accent_argb"
         private const val KEY_FONT_SCALE = "app_font_scale"
+        private const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        private const val KEY_FORCE_HIGH_REFRESH_RATE = "force_high_refresh_rate"
 
         const val DEFAULT_AI_MODEL = "gemini-flash-latest"
 
@@ -290,6 +292,26 @@ class AppPreferences @Inject constructor(
     val useAmoledFlow: Flow<Boolean> = prefFlow(
         key = KEY_USE_AMOLED,
         current = { useAmoled },
+    )
+
+    /** Whether to follow the system (Material You) dynamic color scheme. */
+    var dynamicColor: Boolean
+        get() = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
+        set(value) = prefs.edit().putBoolean(KEY_DYNAMIC_COLOR, value).apply()
+
+    val dynamicColorFlow: Flow<Boolean> = prefFlow(
+        key = KEY_DYNAMIC_COLOR,
+        current = { dynamicColor },
+    )
+
+    /** Whether to request the display's highest supported refresh rate while the app is visible. */
+    var forceHighRefreshRate: Boolean
+        get() = prefs.getBoolean(KEY_FORCE_HIGH_REFRESH_RATE, false)
+        set(value) = prefs.edit().putBoolean(KEY_FORCE_HIGH_REFRESH_RATE, value).apply()
+
+    val forceHighRefreshRateFlow: Flow<Boolean> = prefFlow(
+        key = KEY_FORCE_HIGH_REFRESH_RATE,
+        current = { forceHighRefreshRate },
     )
 
     var accentColor: AccentColor

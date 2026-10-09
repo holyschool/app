@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -27,10 +28,14 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -62,7 +67,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AiQuiz
-import com.enderplusbayzuiship.edupage2.data.HomeworkItem
 import com.enderplusbayzuiship.edupage2.data.QuizQuestion
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
@@ -76,6 +80,7 @@ fun AiQuizScreen(
 ) {
     val quizzes by viewModel.quizzes.collectAsState()
     val genState by viewModel.generateState.collectAsState()
+    val examState by viewModel.examMaterials.collectAsState()
     var showNewSheet by remember { mutableStateOf(false) }
     var activeQuiz by remember { mutableStateOf<AiQuiz?>(null) }
     val haptics = rememberAppHaptics()
@@ -151,7 +156,9 @@ fun AiQuizScreen(
         NewQuizSheet(
             generating = genState is AiQuizViewModel.GenerateState.Generating,
             error = (genState as? AiQuizViewModel.GenerateState.Error)?.message,
-            materialsProvider = { viewModel.homeworkMaterials() },
+            homeworkProvider = { viewModel.homeworkMaterials() },
+            examState = examState,
+            onLoadExamMaterials = { viewModel.loadExamMaterials() },
             onDismiss = {
                 viewModel.consumeError()
                 showNewSheet = false
@@ -240,7 +247,9 @@ private fun QuizRow(quiz: AiQuiz, onStart: () -> Unit, onDelete: () -> Unit) {
 private fun NewQuizSheet(
     generating: Boolean,
     error: String?,
-    materialsProvider: () -> List<HomeworkItem>,
+    homeworkProvider: () -> List<AiQuizViewModel.QuizMaterial>,
+    examState: AiQuizViewModel.ExamMaterialsState,
+    onLoadExamMaterials: () -> Unit,
     onDismiss: () -> Unit,
     onGenerate: (String, Int, String, String?) -> Unit,
 ) {
@@ -250,8 +259,31 @@ private fun NewQuizSheet(
     var material by remember { mutableStateOf<String?>(null) }
     var materialLabel by remember { mutableStateOf<String?>(null) }
     var showPicker by remember { mutableStateOf(false) }
-    var materials by remember { mutableStateOf(emptyList<HomeworkItem>()) }
+    var pickerSource by remember { mutableStateOf(QuizSource.HOMEWORK) }
+    var homeworkMaterials by remember { mutableStateOf(emptyList<AiQuizViewModel.QuizMaterial>()) }
+    var menuExpanded by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
+
+    val pickerItems: List<AiQuizViewModel.QuizMaterial> = when (pickerSource) {
+        QuizSource.HOMEWORK -> homeworkMaterials
+        QuizSource.EXAM -> (examState as? AiQuizViewModel.ExamMaterialsState.Loaded)?.items.orEmpty()
+    }
+
+    fun openPicker(source: QuizSource) {
+        haptics.virtualKey()
+        pickerSource = source
+        if (source == QuizSource.HOMEWORK) homeworkMaterials = homeworkProvider()
+        else onLoadExamMaterials()
+        showPicker = true
+    }
+
+    fun selectMaterial(item: AiQuizViewModel.QuizMaterial) {
+        haptics.virtualKey()
+        material = item.body
+        materialLabel = item.title
+        if (topic.isBlank()) topic = item.title
+        showPicker = false
+    }
 
     AppBottomSheet(onDismissRequest = { if (!generating) onDismiss() }) {
         Column(
@@ -265,56 +297,69 @@ private fun NewQuizSheet(
         ) {
             if (showPicker) {
                 Text(
-                    text = stringResource(R.string.quiz_materials_pick_title),
+                    text = stringResource(
+                        if (pickerSource == QuizSource.EXAM) R.string.quiz_materials_pick_exam_title
+                        else R.string.quiz_materials_pick_title
+                    ),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
-                if (materials.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.quiz_materials_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    materials.forEach { item ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceBright,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth(),
+                when {
+                    pickerSource == QuizSource.EXAM &&
+                        examState is AiQuizViewModel.ExamMaterialsState.Loading -> {
+                        Box(
+                            Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        haptics.virtualKey()
-                                        val body = buildString {
-                                            append(item.title)
-                                            if (item.notes.isNotBlank()) {
-                                                append("\n\n")
-                                                append(item.notes)
-                                            }
-                                        }
-                                        material = body
-                                        materialLabel = item.title
-                                        if (topic.isBlank()) topic = item.title
-                                        showPicker = false
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                        }
+                    }
+                    pickerSource == QuizSource.EXAM &&
+                        examState is AiQuizViewModel.ExamMaterialsState.Error -> {
+                        Text(
+                            text = examState.message,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    pickerItems.isEmpty() -> {
+                        Text(
+                            text = stringResource(
+                                if (pickerSource == QuizSource.EXAM) R.string.quiz_materials_empty_exam
+                                else R.string.quiz_materials_empty
+                            ),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    else -> {
+                        pickerItems.forEach { item ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceBright,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text(
-                                    text = item.title.ifBlank { item.subject.ifBlank { "Homework" } },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2,
-                                )
-                                if (item.notes.isNotBlank()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectMaterial(item) }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                ) {
                                     Text(
-                                        text = item.notes,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 3,
+                                        text = item.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
                                     )
+                                    item.subtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
+                                        Text(
+                                            text = subtitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 3,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -366,18 +411,65 @@ private fun NewQuizSheet(
                     }
                 }
             } else {
-                OutlinedButton(
-                    onClick = {
-                        haptics.virtualKey()
-                        materials = materialsProvider()
-                        showPicker = true
-                    },
-                    shape = RoundedCornerShape(20.dp),
+                Row(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Icon(Icons.Rounded.Assignment, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.quiz_source_homework))
+                    OutlinedButton(
+                        onClick = { openPicker(QuizSource.HOMEWORK) },
+                        shape = RoundedCornerShape(
+                            topStart = 20.dp,
+                            bottomStart = 20.dp,
+                            topEnd = 4.dp,
+                            bottomEnd = 4.dp,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    ) {
+                        Icon(Icons.Rounded.Assignment, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.quiz_source_homework), maxLines = 1)
+                    }
+                    Box {
+                        OutlinedButton(
+                            onClick = { haptics.virtualKey(); menuExpanded = true },
+                            shape = RoundedCornerShape(
+                                topEnd = 20.dp,
+                                bottomEnd = 20.dp,
+                                topStart = 4.dp,
+                                bottomStart = 4.dp,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                            modifier = Modifier.fillMaxHeight(),
+                        ) {
+                            Icon(
+                                Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = stringResource(R.string.quiz_source_menu),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.quiz_source_homework)) },
+                                leadingIcon = { Icon(Icons.Rounded.Assignment, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    openPicker(QuizSource.HOMEWORK)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.quiz_source_exam)) },
+                                leadingIcon = { Icon(Icons.Rounded.Quiz, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    openPicker(QuizSource.EXAM)
+                                },
+                            )
+                        }
+                    }
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -449,6 +541,8 @@ private fun NewQuizSheet(
         }
     }
 }
+
+private enum class QuizSource { HOMEWORK, EXAM }
 
 private enum class Difficulty(val key: String, val labelRes: Int) {
     EASY("easy", R.string.quiz_difficulty_easy),

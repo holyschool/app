@@ -39,14 +39,16 @@ fun <T> SettingsSelectRow(
     modifier: Modifier = Modifier,
     currentDesc: String? = null,
     icon: ImageVector? = null,
+    enabled: Boolean = true,
 ) {
     var showSheet by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
+    val contentAlpha = if (enabled) 1f else 0.38f
 
     ListItem(
         modifier = modifier
             .fillMaxWidth()
-            .clickable {
+            .clickable(enabled = enabled) {
                 haptics.virtualKey()
                 showSheet = true
             },
@@ -54,7 +56,7 @@ fun <T> SettingsSelectRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
             )
         },
         supportingContent = {
@@ -62,7 +64,7 @@ fun <T> SettingsSelectRow(
             Text(
                 text = currentDesc ?: selectedLabel,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
             )
         },
         leadingContent = icon?.let {
@@ -74,7 +76,7 @@ fun <T> SettingsSelectRow(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f * contentAlpha),
             )
         },
         colors = ListItemDefaults.colors(
