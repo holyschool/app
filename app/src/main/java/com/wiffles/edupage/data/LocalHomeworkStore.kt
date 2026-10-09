@@ -28,6 +28,7 @@ data class HomeworkItem(
 @Singleton
 class LocalHomeworkStore @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val prefs: AppPreferences,
 ) {
     companion object {
         private const val FILE_NAME = "local_homework.json"
@@ -111,7 +112,33 @@ class LocalHomeworkStore @Inject constructor(
             added++
         }
         if (added > 0) persist()
+
+        // Fresh install: close out anything that is already past due so the homework
+        // tab does not open full of stale items. Only ever done once.
+        if (!prefs.homeworkOverdueSeeded) {
+            val marked = markOverdueDone()
+            prefs.homeworkOverdueSeeded = true
+            if (marked > 0) Log.i(TAG, "first import: marked $marked overdue homework as done")
+        }
         return added
+    }
+
+    /** Marks every not-yet-done item dated before today as done. Returns how many changed. */
+    fun markOverdueDone(): Int {
+        val today = java.time.LocalDate.now()
+        var changed = 0
+        items.forEachIndexed { index, item ->
+            if (item.done) return@forEachIndexed
+            val overdue = runCatching {
+                java.time.LocalDate.parse(item.date).isBefore(today)
+            }.getOrDefault(false)
+            if (overdue) {
+                items[index] = item.copy(done = true)
+                changed++
+            }
+        }
+        if (changed > 0) persist()
+        return changed
     }
 
     fun clear() {

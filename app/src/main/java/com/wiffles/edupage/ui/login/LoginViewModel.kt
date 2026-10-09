@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
 import com.edupage.api.exceptions.BadCredentialsException
 import com.edupage.api.exceptions.CaptchaException
+import com.edupage.api.model.grades.Term
 import com.edupage.api.modules.TwoFactorLogin
 import com.wiffles.edupage.data.AccountProfile
 import com.wiffles.edupage.data.AccountProfileStore
@@ -125,8 +126,10 @@ class LoginViewModel @Inject constructor(
     }
 
     private suspend fun seedSeenIdsIfFirstLogin() {
+        // A genuine fresh install starts with no seen timeline ids; existing users who
+        // upgrade always have some, so their read state is never touched.
         if (appPreferences.getSeenTimelineIds().isNotEmpty()) return
-        Log.i(TAG, "first login — seeding seen timeline IDs")
+        Log.i(TAG, "first login — seeding seen timeline and grade IDs")
         try {
             val events = try {
                 edupage.getNotifications()
@@ -137,11 +140,28 @@ class LoginViewModel @Inject constructor(
             if (events.isNotEmpty()) {
                 val ids = events.map { it.timelineId }
                 appPreferences.markTimelineIdsSeen(ids)
-                appPreferences.lastTimelineId = ids.maxOrNull() ?: return
+                appPreferences.lastTimelineId = ids.maxOrNull() ?: appPreferences.lastTimelineId
                 Log.i(TAG, "seeded ${ids.size} timeline IDs, lastTimelineId=${appPreferences.lastTimelineId}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "seedSeenIdsIfFirstLogin failed (non-fatal): ${e.message}", e)
+            Log.e(TAG, "message seed failed (non-fatal): ${e.message}", e)
+        }
+
+        if (appPreferences.gradesSeeded) return
+        try {
+            val year = edupage.getSchoolYear()
+            if (year != null) {
+                val first = runCatching { edupage.getGradesForTerm(year, Term.FIRST) }
+                    .getOrDefault(emptyList())
+                val second = runCatching { edupage.getGradesForTerm(year, Term.SECOND) }
+                    .getOrDefault(emptyList())
+                if (first.isNotEmpty()) appPreferences.markGradeIdsSeen("T1", first.map { it.eventId })
+                if (second.isNotEmpty()) appPreferences.markGradeIdsSeen("T2", second.map { it.eventId })
+                Log.i(TAG, "seeded ${first.size + second.size} grade IDs as seen")
+            }
+            appPreferences.gradesSeeded = true
+        } catch (e: Exception) {
+            Log.e(TAG, "grade seed failed (non-fatal): ${e.message}", e)
         }
     }
 

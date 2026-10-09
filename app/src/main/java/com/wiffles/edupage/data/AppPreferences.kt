@@ -201,6 +201,8 @@ class AppPreferences @Inject constructor(
         private const val KEY_SELECTED_CHILD_ID = "selected_child_id"
 
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_GRADES_SEEDED = "grades_seeded"
+        private const val KEY_HOMEWORK_OVERDUE_SEEDED = "homework_overdue_seeded"
         private const val KEY_MEALS_ENABLED = "meals_enabled"
         private const val KEY_LIVE_CLASS_NOTIF = "live_class_notif"
         private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
@@ -434,6 +436,22 @@ class AppPreferences @Inject constructor(
     var onboardingCompleted: Boolean
         get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
         set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+
+    /**
+     * Whether all pre-existing grades were marked seen on the first login of a fresh
+     * install. Runs once so later grades still show as new.
+     */
+    var gradesSeeded: Boolean
+        get() = prefs.getBoolean(KEY_GRADES_SEEDED, false)
+        set(value) = prefs.edit().putBoolean(KEY_GRADES_SEEDED, value).apply()
+
+    /**
+     * Whether overdue items were auto-completed in the local homework list when it was
+     * first populated. Runs once so later overdue homework is never silently closed.
+     */
+    var homeworkOverdueSeeded: Boolean
+        get() = prefs.getBoolean(KEY_HOMEWORK_OVERDUE_SEEDED, false)
+        set(value) = prefs.edit().putBoolean(KEY_HOMEWORK_OVERDUE_SEEDED, value).apply()
 
     var mealsEnabled: Boolean
         get() = prefs.getBoolean(KEY_MEALS_ENABLED, true)
