@@ -38,11 +38,15 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -122,6 +126,10 @@ fun OverviewScreen(
     onGoToGrades: (() -> Unit)? = null,
     onGoToMeals: (() -> Unit)? = null,
     onHomework: (() -> Unit)? = null,
+    aiStudyEnabled: Boolean = false,
+    onAiQuiz: (() -> Unit)? = null,
+    onAiFlashcards: (() -> Unit)? = null,
+    onAiChat: (() -> Unit)? = null,
     mealsEnabled: Boolean = true,
     viewModel: OverviewViewModel = hiltViewModel(),
     prepareViewModel: PrepareViewModel = hiltViewModel(),
@@ -281,6 +289,14 @@ fun OverviewScreen(
                         onHomework  = onHomework,
                         haptics     = haptics,
                     )
+
+                    if (aiStudyEnabled && (onAiQuiz != null || onAiFlashcards != null || onAiChat != null)) {
+                        AiStudyCard(
+                            onQuiz       = onAiQuiz,
+                            onFlashcards = onAiFlashcards,
+                            onChat       = onAiChat,
+                        )
+                    }
                 }
             }
         }
@@ -1474,6 +1490,48 @@ private fun MealCardRowSkeleton() {
                         RoundedCornerShape(4.dp),
                     ),
             )
+        }
+    }
+}
+
+@Composable
+private fun AiStudyCard(
+    onQuiz: (() -> Unit)?,
+    onFlashcards: (() -> Unit)?,
+    onChat: (() -> Unit)?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        CardSectionHeader(
+            title = stringResource(R.string.overview_ai_study),
+            icon  = Icons.Rounded.AutoAwesome,
+        )
+        Spacer(Modifier.height(4.dp))
+
+        RoundedCardContainer(modifier = Modifier.fillMaxWidth()) {
+            if (onQuiz != null) {
+                FeatureCard(
+                    title = stringResource(R.string.quiz_title),
+                    description = stringResource(R.string.overview_ai_quiz_desc),
+                    icon  = Icons.Rounded.Quiz,
+                    onClick = onQuiz,
+                )
+            }
+            if (onFlashcards != null) {
+                FeatureCard(
+                    title = stringResource(R.string.flash_title),
+                    description = stringResource(R.string.overview_ai_flashcards_desc),
+                    icon  = Icons.Rounded.Style,
+                    onClick = onFlashcards,
+                )
+            }
+            if (onChat != null) {
+                FeatureCard(
+                    title = stringResource(R.string.chat_title),
+                    description = stringResource(R.string.overview_ai_chat_desc),
+                    icon  = Icons.Rounded.Psychology,
+                    onClick = onChat,
+                )
+            }
         }
     }
 }

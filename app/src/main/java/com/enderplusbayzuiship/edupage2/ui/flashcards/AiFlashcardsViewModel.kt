@@ -1,11 +1,11 @@
-package com.enderplusbayzuiship.edupage2.ui.quiz
+package com.enderplusbayzuiship.edupage2.ui.flashcards
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enderplusbayzuiship.edupage2.R
-import com.enderplusbayzuiship.edupage2.data.AiQuiz
-import com.enderplusbayzuiship.edupage2.data.AiQuizStore
 import com.enderplusbayzuiship.edupage2.data.AiCredentialsStore
+import com.enderplusbayzuiship.edupage2.data.FlashcardDeck
+import com.enderplusbayzuiship.edupage2.data.FlashcardStore
 import com.enderplusbayzuiship.edupage2.data.MaterialLoadState
 import com.enderplusbayzuiship.edupage2.data.StudyMaterial
 import com.enderplusbayzuiship.edupage2.data.StudyMaterialLoader
@@ -21,11 +21,11 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class AiQuizViewModel @Inject constructor(
+class AiFlashcardsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val aiService: AiService,
     private val aiCredentialsStore: AiCredentialsStore,
-    private val quizStore: AiQuizStore,
+    private val flashcardStore: FlashcardStore,
     private val materialLoader: StudyMaterialLoader,
 ) : ViewModel() {
 
@@ -35,7 +35,7 @@ class AiQuizViewModel @Inject constructor(
         data class Error(val message: String) : GenerateState
     }
 
-    val quizzes: StateFlow<List<AiQuiz>> = quizStore.quizzes
+    val decks: StateFlow<List<FlashcardDeck>> = flashcardStore.decks
 
     private val _generateState = MutableStateFlow<GenerateState>(GenerateState.Idle)
     val generateState: StateFlow<GenerateState> = _generateState.asStateFlow()
@@ -47,7 +47,6 @@ class AiQuizViewModel @Inject constructor(
 
     fun homeworkMaterials(): List<StudyMaterial> = materialLoader.homework()
 
-    /** Loads exam/test assignments from EduPage as study material. */
     fun loadExamMaterials(force: Boolean = false) {
         if (_examMaterials.value is MaterialLoadState.Loading) return
         if (!force && _examMaterials.value is MaterialLoadState.Loaded) return
@@ -67,28 +66,23 @@ class AiQuizViewModel @Inject constructor(
     fun generate(
         topic: String,
         count: Int,
-        difficulty: String,
         material: String? = null,
-        onCreated: (AiQuiz) -> Unit,
+        onCreated: (FlashcardDeck) -> Unit,
     ) {
         if (topic.isBlank()) return
         val config = aiCredentialsStore.current()
         if (config.apiKey.isBlank()) {
-            _generateState.value = GenerateState.Error(context.getString(R.string.quiz_no_key))
+            _generateState.value = GenerateState.Error(context.getString(R.string.flash_no_key))
             return
         }
         viewModelScope.launch {
             _generateState.value = GenerateState.Generating
             try {
-                val questions = aiService.generateQuiz(config, topic.trim(), count, difficulty, material)
-                val quiz = AiQuiz(
-                    topic = topic.trim(),
-                    difficulty = difficulty,
-                    questions = questions,
-                )
-                quizStore.add(quiz)
+                val cards = aiService.generateFlashcards(config, topic.trim(), count, material)
+                val deck = FlashcardDeck(topic = topic.trim(), cards = cards)
+                flashcardStore.add(deck)
                 _generateState.value = GenerateState.Idle
-                onCreated(quiz)
+                onCreated(deck)
             } catch (e: Exception) {
                 _generateState.value = GenerateState.Error(
                     if (e.isNetworkError()) context.getString(R.string.network_error)
@@ -102,8 +96,8 @@ class AiQuizViewModel @Inject constructor(
         if (_generateState.value is GenerateState.Error) _generateState.value = GenerateState.Idle
     }
 
-    fun delete(id: String) = quizStore.remove(id)
+    fun delete(id: String) = flashcardStore.remove(id)
 
-    fun recordResult(id: String, score: Int, total: Int) =
-        quizStore.recordResult(id, score, total)
+    fun recordProgress(id: String, knownIndices: Collection<Int>) =
+        flashcardStore.recordProgress(id, knownIndices)
 }

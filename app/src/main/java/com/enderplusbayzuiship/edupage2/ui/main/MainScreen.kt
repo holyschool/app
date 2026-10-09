@@ -115,6 +115,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     val scope         = rememberCoroutineScope()
     val settingsVm: SettingsViewModel = hiltViewModel()
     val mealsEnabled by settingsVm.mealsEnabled.collectAsState()
+    val aiStudyEnabled by settingsVm.aiQuizEnabled.collectAsState()
     val defaultTabPref by settingsVm.defaultTab.collectAsState()
     val tabs = tabList(mealsEnabled)
     val pagerState = rememberPagerState(initialPage = defaultTabPref.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))) { tabs.size }
@@ -156,6 +157,8 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     var showAcademics by remember { mutableStateOf(false) }
     var showCloud by remember { mutableStateOf(false) }
     var showAiQuiz by remember { mutableStateOf(false) }
+    var showAiFlashcards by remember { mutableStateOf(false) }
+    var showAiChat by remember { mutableStateOf(false) }
 
     suspend fun consumePendingDeepLink() {
         val deepLinkInfo = MainActivity.pendingDeepLinkInfo ?: return
@@ -355,6 +358,10 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                         onGoToGrades    = { scope.launch { pagerState.animateScrollToPage(3) } },
                         onGoToMeals     = if (mealsEnabled) { { scope.launch { pagerState.animateScrollToPage(4) } } } else { null },
                         onHomework      = { showHomework = true },
+                        aiStudyEnabled  = aiStudyEnabled,
+                        onAiQuiz        = { showAiQuiz = true },
+                        onAiFlashcards  = { showAiFlashcards = true },
+                        onAiChat        = { showAiChat = true },
                         mealsEnabled    = mealsEnabled,
                     )
                     R.string.tab_messages -> MessagesScreen(innerPadding)
@@ -434,6 +441,22 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
             ) {
                     com.enderplusbayzuiship.edupage2.ui.quiz.AiQuizScreen(
                         onBack = { showAiQuiz = false }
+                    )
+            }
+
+            OverlayTransition(
+                visible = showAiFlashcards,
+            ) {
+                    com.enderplusbayzuiship.edupage2.ui.flashcards.AiFlashcardsScreen(
+                        onBack = { showAiFlashcards = false }
+                    )
+            }
+
+            OverlayTransition(
+                visible = showAiChat,
+            ) {
+                    com.enderplusbayzuiship.edupage2.ui.chat.AiChatScreen(
+                        onBack = { showAiChat = false }
                     )
             }
         }

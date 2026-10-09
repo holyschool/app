@@ -23,6 +23,7 @@ import com.enderplusbayzuiship.edupage2.data.CredentialStore
 import com.enderplusbayzuiship.edupage2.data.DarkModePreference
 import com.enderplusbayzuiship.edupage2.data.DataExporter
 import com.enderplusbayzuiship.edupage2.data.LockStore
+import com.enderplusbayzuiship.edupage2.data.AiCredentialsStore
 import com.enderplusbayzuiship.edupage2.data.GradesCache
 import com.enderplusbayzuiship.edupage2.data.MealsCache
 import com.enderplusbayzuiship.edupage2.data.SubjectStyle
@@ -30,7 +31,9 @@ import com.enderplusbayzuiship.edupage2.data.SubjectStyleStore
 import com.enderplusbayzuiship.edupage2.data.TimetableCache
 import com.enderplusbayzuiship.edupage2.data.TimelineCache
 import com.enderplusbayzuiship.edupage2.network.BackendRegistrationManager
-import com.enderplusbayzuiship.edupage2.network.GeminiApi
+import com.enderplusbayzuiship.edupage2.network.AiConfig
+import com.enderplusbayzuiship.edupage2.network.AiProvider
+import com.enderplusbayzuiship.edupage2.network.AiService
 import com.enderplusbayzuiship.edupage2.network.UpdateCenter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.enderplusbayzuiship.edupage2.notification.NotificationScheduler
@@ -61,7 +64,8 @@ class SettingsViewModel @Inject constructor(
     private val backendRegistrationManager: BackendRegistrationManager,
     private val dataExporter: DataExporter,
     private val updateChecker: com.enderplusbayzuiship.edupage2.network.UpdateChecker,
-    private val geminiApi: GeminiApi,
+    private val aiService: AiService,
+    private val aiCredentialsStore: AiCredentialsStore,
     @ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
@@ -195,11 +199,17 @@ class SettingsViewModel @Inject constructor(
     private val _aiQuizEnabled = MutableStateFlow(appPreferences.aiQuizEnabled)
     val aiQuizEnabled: StateFlow<Boolean> = _aiQuizEnabled.asStateFlow()
 
-    private val _aiApiKey = MutableStateFlow(appPreferences.aiApiKey)
-    val aiApiKey: StateFlow<String> = _aiApiKey.asStateFlow()
+    val aiConfig: StateFlow<AiConfig> = aiCredentialsStore.config
 
-    private val _aiModel = MutableStateFlow(appPreferences.aiModel)
-    val aiModel: StateFlow<String> = _aiModel.asStateFlow()
+    sealed interface AiModelsState {
+        data object Idle : AiModelsState
+        data object Loading : AiModelsState
+        data class Loaded(val models: List<String>) : AiModelsState
+        data class Failed(val message: String) : AiModelsState
+    }
+
+    private val _aiModels = MutableStateFlow<AiModelsState>(AiModelsState.Idle)
+    val aiModels: StateFlow<AiModelsState> = _aiModels.asStateFlow()
 
     sealed interface AiTestState {
         data object Idle : AiTestState
@@ -483,27 +493,57 @@ class SettingsViewModel @Inject constructor(
         _aiQuizEnabled.value = value
     }
 
-    fun setAiApiKey(value: String) {
-        appPreferences.aiApiKey = value.trim()
-        _aiApiKey.value = value.trim()
+    fun setAiProvider(provider: AiProvider) {
+        aiCredentialsStore.setProvider(provider)
+        _aiModels.value = AiModelsState.Idle
+        _aiTestState.value = AiTestState.Idle
     }
 
-    fun setAiModel(value: String) {
-        val model = value.trim().ifBlank { AppPreferences.DEFAULT_AI_MODEL }
-        appPreferences.aiModel = model
-        _aiModel.value = model
+    fun aiConfigFor(provider: AiProvider): AiConfig = aiCredentialsStore.read(provider)
+
+    fun setAiApiKey(provider: AiProvider, value: String) {
+        aiCredentialsStore.setApiKey(provider, value)
+    }
+
+    fun setAiModel(provider: AiProvider, value: String) {
+        aiCredentialsStore.setModel(provider, value)
+    }
+
+    fun setAiCustomBaseUrl(value: String) {
+        aiCredentialsStore.setCustomBaseUrl(value)
+    }
+
+    fun clearAiApiKey(provider: AiProvider) {
+        aiCredentialsStore.clearApiKey(provider)
+    }
+
+    fun loadAiModels() {
+        val config = aiCredentialsStore.current()
+        if (config.apiKey.isBlank()) {
+            _aiModels.value = AiModelsState.Failed(context.getString(R.string.settings_ai_key_empty))
+            return
+        }
+        if (_aiModels.value is AiModelsState.Loading) return
+        viewModelScope.launch {
+            _aiModels.value = AiModelsState.Loading
+            val result = aiService.listModels(config)
+            _aiModels.value = result.fold(
+                onSuccess = { AiModelsState.Loaded(it) },
+                onFailure = { AiModelsState.Failed(it.message ?: "Unknown error") },
+            )
+        }
     }
 
     fun testAiConnection() {
-        val key = _aiApiKey.value.trim()
-        if (key.isBlank()) {
+        val config = aiCredentialsStore.current()
+        if (config.apiKey.isBlank()) {
             _aiTestState.value = AiTestState.Failed(context.getString(R.string.settings_ai_key_empty))
             return
         }
         if (_aiTestState.value is AiTestState.Testing) return
         viewModelScope.launch {
             _aiTestState.value = AiTestState.Testing
-            val result = geminiApi.testKey(key, _aiModel.value)
+            val result = aiService.testConnection(config)
             _aiTestState.value = result.fold(
                 onSuccess = { AiTestState.Ok },
                 onFailure = { AiTestState.Failed(it.message ?: "Unknown error") },

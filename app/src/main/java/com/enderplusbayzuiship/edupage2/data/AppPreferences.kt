@@ -606,6 +606,17 @@ class AppPreferences @Inject constructor(
         current = { aiModel },
     )
 
+    /**
+     * Removes the legacy plaintext AI key/model from the unencrypted preferences.
+     * Called by [AiCredentialsStore] after migrating them into encrypted storage.
+     */
+    fun clearLegacyAiCredentials() {
+        prefs.edit()
+            .remove(KEY_AI_API_KEY)
+            .remove(KEY_AI_MODEL)
+            .apply()
+    }
+
     var cloudEnabled: Boolean
         get() = prefs.getBoolean(KEY_CLOUD_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_CLOUD_ENABLED, value).apply()

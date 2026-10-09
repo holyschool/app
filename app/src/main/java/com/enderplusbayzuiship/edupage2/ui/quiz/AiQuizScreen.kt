@@ -1,6 +1,21 @@
 package com.enderplusbayzuiship.edupage2.ui.quiz
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Assignment
+import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -40,6 +56,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -59,6 +76,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -68,6 +87,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AiQuiz
 import com.enderplusbayzuiship.edupage2.data.QuizQuestion
+import com.enderplusbayzuiship.edupage2.data.MaterialLoadState
+import com.enderplusbayzuiship.edupage2.data.StudyMaterial
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
@@ -247,8 +268,8 @@ private fun QuizRow(quiz: AiQuiz, onStart: () -> Unit, onDelete: () -> Unit) {
 private fun NewQuizSheet(
     generating: Boolean,
     error: String?,
-    homeworkProvider: () -> List<AiQuizViewModel.QuizMaterial>,
-    examState: AiQuizViewModel.ExamMaterialsState,
+    homeworkProvider: () -> List<StudyMaterial>,
+    examState: MaterialLoadState,
     onLoadExamMaterials: () -> Unit,
     onDismiss: () -> Unit,
     onGenerate: (String, Int, String, String?) -> Unit,
@@ -260,13 +281,13 @@ private fun NewQuizSheet(
     var materialLabel by remember { mutableStateOf<String?>(null) }
     var showPicker by remember { mutableStateOf(false) }
     var pickerSource by remember { mutableStateOf(QuizSource.HOMEWORK) }
-    var homeworkMaterials by remember { mutableStateOf(emptyList<AiQuizViewModel.QuizMaterial>()) }
+    var homeworkMaterials by remember { mutableStateOf(emptyList<StudyMaterial>()) }
     var menuExpanded by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
 
-    val pickerItems: List<AiQuizViewModel.QuizMaterial> = when (pickerSource) {
+    val pickerItems: List<StudyMaterial> = when (pickerSource) {
         QuizSource.HOMEWORK -> homeworkMaterials
-        QuizSource.EXAM -> (examState as? AiQuizViewModel.ExamMaterialsState.Loaded)?.items.orEmpty()
+        QuizSource.EXAM -> (examState as? MaterialLoadState.Loaded)?.items.orEmpty()
     }
 
     fun openPicker(source: QuizSource) {
@@ -277,7 +298,7 @@ private fun NewQuizSheet(
         showPicker = true
     }
 
-    fun selectMaterial(item: AiQuizViewModel.QuizMaterial) {
+    fun selectMaterial(item: StudyMaterial) {
         haptics.virtualKey()
         material = item.body
         materialLabel = item.title
@@ -306,7 +327,7 @@ private fun NewQuizSheet(
                 )
                 when {
                     pickerSource == QuizSource.EXAM &&
-                        examState is AiQuizViewModel.ExamMaterialsState.Loading -> {
+                        examState is MaterialLoadState.Loading -> {
                         Box(
                             Modifier.fillMaxWidth().padding(vertical = 24.dp),
                             contentAlignment = Alignment.Center,
@@ -315,7 +336,7 @@ private fun NewQuizSheet(
                         }
                     }
                     pickerSource == QuizSource.EXAM &&
-                        examState is AiQuizViewModel.ExamMaterialsState.Error -> {
+                        examState is MaterialLoadState.Error -> {
                         Text(
                             text = examState.message,
                             style = MaterialTheme.typography.bodyLarge,
@@ -579,113 +600,142 @@ private fun QuizRunner(
             return@Surface
         }
 
-        val question = quiz.questions[index]
         val answered = selected != null
+        val progress by animateFloatAsState(
+            targetValue = (index + if (answered) 1 else 0).toFloat() / quiz.questions.size,
+            animationSpec = tween(450),
+            label = "quizProgress",
+        )
 
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = quiz.topic,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                            )
-                            Text(
-                                text = stringResource(R.string.quiz_question, index + 1, quiz.questions.size),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { haptics.virtualKey(); onExit() }) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
-            },
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = question.question,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(4.dp))
-                question.options.forEachIndexed { optionIndex, option ->
-                    OptionRow(
-                        text = option,
-                        state = optionState(optionIndex, selected, question.correctIndex),
-                        enabled = !answered,
-                        onClick = {
-                            haptics.virtualKey()
-                            selected = optionIndex
-                            if (optionIndex == question.correctIndex) score++
-                        },
-                    )
-                }
-                if (answered) {
-                    question.explanation?.takeIf { it.isNotBlank() }?.let { explanation ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(16.dp)) {
+                Column {
+                    TopAppBar(
+                        title = {
+                            Column {
                                 Text(
-                                    text = stringResource(R.string.quiz_explanation),
-                                    style = MaterialTheme.typography.labelLarge,
+                                    text = quiz.topic,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = stringResource(R.string.quiz_question, index + 1, quiz.questions.size),
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                Spacer(Modifier.height(4.dp))
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { haptics.virtualKey(); onExit() }) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                    )
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    )
+                }
+            },
+        ) { padding ->
+            AnimatedContent(
+                targetState = index,
+                transitionSpec = {
+                    (slideInHorizontally(tween(320)) { it / 4 } + fadeIn(tween(280))) togetherWith
+                        (slideOutHorizontally(tween(280)) { -it / 4 } + fadeOut(tween(200)))
+                },
+                modifier = Modifier.fillMaxSize().padding(padding),
+                label = "quizQuestion",
+            ) { targetIndex ->
+                val question = quiz.questions[targetIndex]
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = question.question,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.animateContentSize(),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    question.options.forEachIndexed { optionIndex, option ->
+                        OptionRow(
+                            text = option,
+                            state = optionState(optionIndex, selected, question.correctIndex),
+                            enabled = !answered,
+                            onClick = {
+                                haptics.virtualKey()
+                                selected = optionIndex
+                                if (optionIndex == question.correctIndex) score++
+                            },
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = answered,
+                        enter = expandVertically(tween(300)) + fadeIn(tween(250)),
+                        exit = shrinkVertically(tween(200)) + fadeOut(tween(150)),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            question.explanation?.takeIf { it.isNotBlank() }?.let { explanation ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Column(Modifier.padding(16.dp)) {
+                                        Text(
+                                            text = stringResource(R.string.quiz_explanation),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = explanation,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                    }
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    haptics.virtualKey()
+                                    if (index == quiz.questions.lastIndex) {
+                                        onRecord(score, quiz.questions.size)
+                                        finished = true
+                                    } else {
+                                        index++
+                                        selected = null
+                                    }
+                                },
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                            ) {
                                 Text(
-                                    text = explanation,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    text = if (index == quiz.questions.lastIndex) {
+                                        stringResource(R.string.quiz_finish)
+                                    } else {
+                                        stringResource(R.string.quiz_next)
+                                    },
+                                    fontWeight = FontWeight.Bold,
                                 )
                             }
                         }
                     }
-                    Button(
-                        onClick = {
-                            haptics.virtualKey()
-                            if (index == quiz.questions.lastIndex) {
-                                onRecord(score, quiz.questions.size)
-                                finished = true
-                            } else {
-                                index++
-                                selected = null
-                            }
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                    ) {
-                        Text(
-                            text = if (index == quiz.questions.lastIndex) {
-                                stringResource(R.string.quiz_finish)
-                            } else {
-                                stringResource(R.string.quiz_next)
-                            },
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
+                    Spacer(Modifier.height(24.dp))
                 }
-                Spacer(Modifier.height(24.dp))
             }
         }
     }
@@ -707,20 +757,33 @@ private fun OptionRow(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val container = when (state) {
-        OptionState.CORRECT -> MaterialTheme.colorScheme.primaryContainer
-        OptionState.WRONG -> MaterialTheme.colorScheme.errorContainer
-        OptionState.IDLE -> MaterialTheme.colorScheme.surfaceBright
-    }
-    val content = when (state) {
-        OptionState.CORRECT -> MaterialTheme.colorScheme.onPrimaryContainer
-        OptionState.WRONG -> MaterialTheme.colorScheme.onErrorContainer
-        OptionState.IDLE -> MaterialTheme.colorScheme.onSurface
-    }
+    val container by animateColorAsState(
+        targetValue = when (state) {
+            OptionState.CORRECT -> MaterialTheme.colorScheme.primaryContainer
+            OptionState.WRONG -> MaterialTheme.colorScheme.errorContainer
+            OptionState.IDLE -> MaterialTheme.colorScheme.surfaceBright
+        },
+        animationSpec = tween(280),
+        label = "optionContainer",
+    )
+    val content by animateColorAsState(
+        targetValue = when (state) {
+            OptionState.CORRECT -> MaterialTheme.colorScheme.onPrimaryContainer
+            OptionState.WRONG -> MaterialTheme.colorScheme.onErrorContainer
+            OptionState.IDLE -> MaterialTheme.colorScheme.onSurface
+        },
+        animationSpec = tween(280),
+        label = "optionContent",
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (state == OptionState.WRONG) 0.98f else 1f,
+        animationSpec = tween(220),
+        label = "optionScale",
+    )
     Surface(
         color = container,
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale },
     ) {
         Row(
             modifier = Modifier
@@ -736,9 +799,13 @@ private fun OptionRow(
                 color = content,
                 modifier = Modifier.weight(1f),
             )
-            if (state == OptionState.CORRECT || state == OptionState.WRONG) {
+            AnimatedVisibility(
+                visible = state == OptionState.CORRECT || state == OptionState.WRONG,
+                enter = fadeIn(tween(200)) + scaleIn(tween(220)),
+                exit = fadeOut(tween(120)),
+            ) {
                 Icon(
-                    imageVector = Icons.Rounded.CheckCircle,
+                    imageVector = if (state == OptionState.CORRECT) Icons.Rounded.CheckCircle else Icons.Rounded.Cancel,
                     contentDescription = null,
                     tint = content,
                     modifier = Modifier.size(20.dp),
@@ -751,6 +818,17 @@ private fun OptionRow(
 @Composable
 private fun ResultScreen(score: Int, total: Int, onRetry: () -> Unit, onDone: () -> Unit) {
     val haptics = rememberAppHaptics()
+    val fraction = if (total > 0) score.toFloat() / total else 0f
+    val progress by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = tween(900),
+        label = "resultProgress",
+    )
+    val shownScore by animateIntAsState(
+        targetValue = score,
+        animationSpec = tween(900),
+        label = "resultScore",
+    )
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -761,10 +839,35 @@ private fun ResultScreen(score: Int, total: Int, onRetry: () -> Unit, onDone: ()
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(20.dp))
+            Box(contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(148.dp),
+                    strokeWidth = 12.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    strokeCap = StrokeCap.Round,
+                )
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = shownScore.toString(),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "/$total",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             Text(
                 text = stringResource(R.string.quiz_result_score, score, total),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
             )

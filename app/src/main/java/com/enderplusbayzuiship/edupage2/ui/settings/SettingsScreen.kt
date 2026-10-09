@@ -381,7 +381,7 @@ fun SettingsScreen(
     }
 
     if (showAiKeySheet) {
-        AiKeySheet(
+        AiSetupSheet(
             viewModel = viewModel,
             onDismiss = { showAiKeySheet = false },
         )
@@ -1369,8 +1369,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
         @Composable
         fun AiRows() {
             val enabled by viewModel.aiQuizEnabled.collectAsState()
-            val apiKey by viewModel.aiApiKey.collectAsState()
-            val model by viewModel.aiModel.collectAsState()
+            val config by viewModel.aiConfig.collectAsState()
 
             IconToggleItem(
                 icon = Icons.Rounded.School,
@@ -1382,11 +1381,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
             AnimatedVisibility(visible = enabled) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     SettingsNavigationRow(
-                        title = stringResource(R.string.settings_ai_api_key),
-                        description = if (apiKey.isBlank()) {
-                            stringResource(R.string.settings_ai_api_key_desc)
+                        title = stringResource(R.string.settings_ai_setup),
+                        description = if (config.apiKey.isBlank()) {
+                            stringResource(R.string.settings_ai_setup_desc)
                         } else {
-                            "••••" + apiKey.takeLast(4) + " · " + model
+                            aiProviderLabel(config.provider) + " · " + config.effectiveModel
                         },
                         icon = Icons.Rounded.Password,
                         onClick = onEditAiKey,
@@ -1472,113 +1471,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
             }
         }
         RoundedCardContainer { AppearanceRows() }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AiKeySheet(
-    viewModel: SettingsViewModel,
-    onDismiss: () -> Unit,
-) {
-    val context = LocalContext.current
-    val haptics = rememberAppHaptics()
-    val savedKey by viewModel.aiApiKey.collectAsState()
-    val savedModel by viewModel.aiModel.collectAsState()
-    val testState by viewModel.aiTestState.collectAsState()
-
-    var key by remember { mutableStateOf(savedKey) }
-    var model by remember { mutableStateOf(savedModel) }
-
-    LaunchedEffect(testState) {
-        when (val state = testState) {
-            is SettingsViewModel.AiTestState.Ok -> {
-                android.widget.Toast.makeText(context, context.getString(R.string.settings_ai_test_ok), android.widget.Toast.LENGTH_SHORT).show()
-                viewModel.consumeAiTestState()
-            }
-            is SettingsViewModel.AiTestState.Failed -> {
-                android.widget.Toast.makeText(
-                    context,
-                    context.getString(R.string.settings_ai_test_failed, state.message),
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
-                viewModel.consumeAiTestState()
-            }
-            else -> Unit
-        }
-    }
-
-    AppBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.settings_experimental_ai_quiz),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            OutlinedTextField(
-                value = key,
-                onValueChange = { key = it },
-                label = { Text(stringResource(R.string.settings_ai_api_key)) },
-                placeholder = { Text(stringResource(R.string.settings_ai_api_key_hint)) },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = model,
-                onValueChange = { model = it },
-                label = { Text(stringResource(R.string.settings_ai_model)) },
-                placeholder = { Text(stringResource(R.string.settings_ai_model_hint)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = stringResource(R.string.settings_ai_byok_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedButton(
-                onClick = {
-                    haptics.virtualKey()
-                    viewModel.setAiApiKey(key)
-                    viewModel.setAiModel(model)
-                    viewModel.testAiConnection()
-                },
-                enabled = testState !is SettingsViewModel.AiTestState.Testing,
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                if (testState is SettingsViewModel.AiTestState.Testing) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Text(stringResource(R.string.settings_ai_test))
-                }
-            }
-            Button(
-                onClick = {
-                    haptics.virtualKey()
-                    viewModel.setAiApiKey(key)
-                    viewModel.setAiModel(model)
-                    android.widget.Toast.makeText(context, context.getString(R.string.settings_ai_key_saved), android.widget.Toast.LENGTH_SHORT).show()
-                    onDismiss()
-                },
-                enabled = key.isNotBlank(),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-            ) {
-                Text(stringResource(R.string.settings_ai_save), fontWeight = FontWeight.Bold)
-            }
-        }
     }
 }
 
