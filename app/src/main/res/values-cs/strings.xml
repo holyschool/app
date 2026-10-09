@@ -561,6 +561,19 @@
     <string name="settings_ai_save">Uložit</string>
 
     <string name="quiz_no_key">Nejprve nastavte poskytovatele AI v Nastavení → Experimentální funkce.</string>
+    <string name="quiz_review_title">Přehled otázek</string>
+    <string name="quiz_review_your_answer">Vaše odpověď</string>
+    <string name="quiz_review_correct_answer">Správná odpověď</string>
+    <string name="quiz_review_no_answer">Bez odpovědi</string>
+    <string name="quiz_progress_title">Pokrok v čase</string>
+    <string name="quiz_progress_empty">Dokončete ještě několik pokusů a uvidíte graf pokroku.</string>
+    <string name="quiz_progress_attempts">%1$d pokusů</string>
+    <string name="quiz_result_date">Dokončeno %1$s</string>
+    <string name="quiz_explain_title">Vysvětlení od AI</string>
+    <string name="quiz_explain_action">Vysvětlit pomocí AI</string>
+    <string name="quiz_explain_loading">Připravuji vysvětlení…</string>
+    <string name="quiz_explain_retry">Zkusit znovu</string>
+    <string name="quiz_explain_empty">AI nevrátila žádné vysvětlení.</string>
 
     <string name="flash_title">AI kartičky</string>
     <string name="flash_new">Nová sada</string>

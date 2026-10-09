@@ -16,6 +16,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Assignment
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
@@ -71,12 +73,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -88,10 +96,12 @@ import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.data.AiQuiz
 import com.enderplusbayzuiship.edupage2.data.QuizQuestion
 import com.enderplusbayzuiship.edupage2.data.MaterialLoadState
+import com.enderplusbayzuiship.edupage2.data.QuizAttempt
 import com.enderplusbayzuiship.edupage2.data.StudyMaterial
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.core.sheets.AppBottomSheet
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,11 +112,16 @@ fun AiQuizScreen(
     val quizzes by viewModel.quizzes.collectAsState()
     val genState by viewModel.generateState.collectAsState()
     val examState by viewModel.examMaterials.collectAsState()
+    val explainState by viewModel.explainState.collectAsState()
+    val attemptsByQuiz by viewModel.attempts.collectAsState()
     var showNewSheet by remember { mutableStateOf(false) }
     var activeQuiz by remember { mutableStateOf<AiQuiz?>(null) }
     val haptics = rememberAppHaptics()
 
-    BackHandler(enabled = activeQuiz != null) { activeQuiz = null }
+    BackHandler(enabled = activeQuiz != null) {
+        viewModel.resetExplain()
+        activeQuiz = null
+    }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -166,9 +181,16 @@ fun AiQuizScreen(
         activeQuiz?.let { quiz ->
             QuizRunner(
                 quiz = quiz,
+                attempts = attemptsByQuiz[quiz.id].orEmpty(),
+                explainState = explainState,
                 modifier = Modifier.fillMaxSize(),
                 onRecord = { score, total -> viewModel.recordResult(quiz.id, score, total) },
-                onExit = { activeQuiz = null },
+                onExplain = { answers -> viewModel.explain(quiz, answers) },
+                onResetExplain = { viewModel.resetExplain() },
+                onExit = {
+                    viewModel.resetExplain()
+                    activeQuiz = null
+                },
             )
         }
     }
@@ -575,14 +597,20 @@ private enum class Difficulty(val key: String, val labelRes: Int) {
 @Composable
 private fun QuizRunner(
     quiz: AiQuiz,
+    attempts: List<QuizAttempt>,
+    explainState: AiQuizViewModel.ExplainState,
     modifier: Modifier = Modifier,
     onRecord: (Int, Int) -> Unit,
+    onExplain: (List<Int?>) -> Unit,
+    onResetExplain: () -> Unit,
     onExit: () -> Unit,
 ) {
     var index by remember(quiz.id) { mutableIntStateOf(0) }
     var selected by remember(quiz.id) { mutableStateOf<Int?>(null) }
     var score by remember(quiz.id) { mutableIntStateOf(0) }
     var finished by remember(quiz.id) { mutableStateOf(false) }
+    var finishedAtMs by remember(quiz.id) { mutableLongStateOf(0L) }
+    val answers = remember(quiz.id) { mutableStateListOf<Int?>().apply { repeat(quiz.questions.size) { add(null) } } }
     val haptics = rememberAppHaptics()
 
     if (quiz.questions.isEmpty()) {
@@ -594,9 +622,21 @@ private fun QuizRunner(
 
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface) {
         if (finished) {
-            ResultScreen(score = score, total = quiz.questions.size, onRetry = {
-                index = 0; selected = null; score = 0; finished = false
-            }, onDone = onExit)
+            ResultScreen(
+                quiz = quiz,
+                score = score,
+                answers = answers.toList(),
+                attempts = attempts,
+                finishedAtMs = finishedAtMs,
+                explainState = explainState,
+                onExplain = { onExplain(answers.toList()) },
+                onRetry = {
+                    onResetExplain()
+                    index = 0; selected = null; score = 0; finished = false
+                    answers.indices.forEach { answers[it] = null }
+                },
+                onDone = onExit,
+            )
             return@Surface
         }
 
@@ -678,6 +718,7 @@ private fun QuizRunner(
                             onClick = {
                                 haptics.virtualKey()
                                 selected = optionIndex
+                                answers[targetIndex] = optionIndex
                                 if (optionIndex == question.correctIndex) score++
                             },
                         )
@@ -714,6 +755,7 @@ private fun QuizRunner(
                                     haptics.virtualKey()
                                     if (index == quiz.questions.lastIndex) {
                                         onRecord(score, quiz.questions.size)
+                                        finishedAtMs = System.currentTimeMillis()
                                         finished = true
                                     } else {
                                         index++
@@ -815,9 +857,21 @@ private fun OptionRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ResultScreen(score: Int, total: Int, onRetry: () -> Unit, onDone: () -> Unit) {
+private fun ResultScreen(
+    quiz: AiQuiz,
+    score: Int,
+    answers: List<Int?>,
+    attempts: List<QuizAttempt>,
+    finishedAtMs: Long,
+    explainState: AiQuizViewModel.ExplainState,
+    onExplain: () -> Unit,
+    onRetry: () -> Unit,
+    onDone: () -> Unit,
+) {
     val haptics = rememberAppHaptics()
+    val total = quiz.questions.size
     val fraction = if (total > 0) score.toFloat() / total else 0f
     val progress by animateFloatAsState(
         targetValue = fraction,
@@ -829,68 +883,395 @@ private fun ResultScreen(score: Int, total: Int, onRetry: () -> Unit, onDone: ()
         animationSpec = tween(900),
         label = "resultScore",
     )
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.quiz_result_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(20.dp))
-            Box(contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.size(148.dp),
-                    strokeWidth = 12.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    strokeCap = StrokeCap.Round,
-                )
-                Row(verticalAlignment = Alignment.Bottom) {
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        topBar = {
+            TopAppBar(
+                title = {
                     Text(
-                        text = shownScore.toString(),
-                        style = MaterialTheme.typography.displaySmall,
+                        text = stringResource(R.string.quiz_result_title),
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
                     )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { haptics.virtualKey(); onDone() }) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.size(140.dp),
+                        strokeWidth = 12.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        strokeCap = StrokeCap.Round,
+                    )
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = shownScore.toString(),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "/$total",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 6.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.quiz_result_score, score, total),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (score == total && total > 0) {
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "/$total",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = stringResource(R.string.quiz_result_perfect),
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+                if (finishedAtMs > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    val dateText = remember(finishedAtMs) {
+                        java.time.Instant.ofEpochMilli(finishedAtMs)
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                            .format(DateTimeFormatter.ofPattern("d MMM yyyy"))
+                    }
+                    Text(
+                        text = stringResource(R.string.quiz_result_date, dateText),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.quiz_result_score, score, total),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
+
+            ProgressGraphCard(attempts = attempts)
+
+            ReviewCard(quiz = quiz, answers = answers)
+
+            ExplainCard(
+                state = explainState,
+                onExplain = { haptics.virtualKey(); onExplain() },
             )
-            if (score == total && total > 0) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.quiz_result_perfect),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { haptics.virtualKey(); onRetry() },
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.weight(1f).height(54.dp),
+                ) {
+                    Text(stringResource(R.string.quiz_retry), fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = { haptics.virtualKey(); onDone() },
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.weight(1f).height(54.dp),
+                ) {
+                    Text(stringResource(R.string.quiz_back), fontWeight = FontWeight.Bold)
+                }
             }
             Spacer(Modifier.height(24.dp))
-            Button(
-                onClick = { haptics.virtualKey(); onRetry() },
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp),
+        }
+    }
+}
+
+@Composable
+private fun ProgressGraphCard(attempts: List<QuizAttempt>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader(
+            text = stringResource(R.string.quiz_progress_title),
+            trailing = if (attempts.isNotEmpty()) stringResource(R.string.quiz_progress_attempts, attempts.size) else null,
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceBright,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (attempts.size < 2) {
+                Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.quiz_progress_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            } else {
+                ProgressLineChart(
+                    attempts = attempts,
+                    modifier = Modifier.fillMaxWidth().height(160.dp).padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+/** A compact line chart of score fractions across attempts, drawn with Canvas. */
+@Composable
+private fun ProgressLineChart(attempts: List<QuizAttempt>, modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val fill = primary.copy(alpha = 0.14f)
+    val latestFraction = attempts.last().fraction
+    val reveal by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(700),
+        label = "chartReveal",
+    )
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val padL = 8.dp.toPx()
+        val padR = 8.dp.toPx()
+        val padT = 8.dp.toPx()
+        val padB = 8.dp.toPx()
+        val chartW = (w - padL - padR).coerceAtLeast(1f)
+        val chartH = (h - padT - padB).coerceAtLeast(1f)
+
+        // Horizontal grid lines at 0%, 50%, 100%.
+        listOf(0f, 0.5f, 1f).forEach { level ->
+            val y = padT + chartH * (1f - level)
+            drawLine(
+                color = grid.copy(alpha = 0.5f),
+                start = Offset(padL, y),
+                end = Offset(w - padR, y),
+                strokeWidth = 1.dp.toPx(),
+            )
+        }
+
+        if (attempts.isEmpty()) return@Canvas
+
+        fun pointAt(i: Int): Offset {
+            val x = if (attempts.size == 1) padL + chartW / 2f
+            else padL + chartW * (i.toFloat() / (attempts.size - 1))
+            val y = padT + chartH * (1f - attempts[i].fraction.coerceIn(0f, 1f))
+            return Offset(x, y)
+        }
+
+        val path = Path()
+        attempts.indices.forEach { i ->
+            val p = pointAt(i)
+            if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+        }
+
+        // Area fill under the line.
+        val area = Path().apply {
+            addPath(path)
+            lineTo(pointAt(attempts.lastIndex).x, padT + chartH)
+            lineTo(pointAt(0).x, padT + chartH)
+            close()
+        }
+        drawPath(area, color = fill)
+        drawPath(
+            path = path,
+            color = primary,
+            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
+
+        // Dots; the most recent one is emphasised.
+        attempts.indices.forEach { i ->
+            val p = pointAt(i)
+            val isLast = i == attempts.lastIndex
+            drawCircle(
+                color = if (isLast) primary else primary.copy(alpha = 0.6f),
+                radius = if (isLast) 4.dp.toPx() else 2.5.dp.toPx(),
+                center = p,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReviewCard(quiz: AiQuiz, answers: List<Int?>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader(text = stringResource(R.string.quiz_review_title))
+        quiz.questions.forEachIndexed { index, question ->
+            val given = answers.getOrNull(index)
+            val isCorrect = given == question.correctIndex
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceBright,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.quiz_retry), fontWeight = FontWeight.Bold)
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (isCorrect) Icons.Rounded.CheckCircle else Icons.Rounded.Cancel,
+                            contentDescription = null,
+                            tint = if (isCorrect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = "${index + 1}. ${question.question}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    val givenText = given?.let { question.options.getOrNull(it) }
+                        ?: stringResource(R.string.quiz_review_no_answer)
+                    Text(
+                        text = stringResource(R.string.quiz_review_your_answer) + ": " + givenText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isCorrect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    )
+                    if (!isCorrect) {
+                        Text(
+                            text = stringResource(R.string.quiz_review_correct_answer) + ": " +
+                                (question.options.getOrNull(question.correctIndex) ?: ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    question.explanation?.takeIf { it.isNotBlank() }?.let { explanation ->
+                        Text(
+                            text = explanation,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = { haptics.virtualKey(); onDone() }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.quiz_back))
+        }
+    }
+}
+
+@Composable
+private fun ExplainCard(state: AiQuizViewModel.ExplainState, onExplain: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(
+                Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(R.string.quiz_explain_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceBright,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when (state) {
+                    is AiQuizViewModel.ExplainState.Loading -> Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(
+                            text = stringResource(R.string.quiz_explain_loading),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    is AiQuizViewModel.ExplainState.Ready -> {
+                        Text(
+                            text = state.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        OutlinedButton(
+                            onClick = onExplain,
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.quiz_explain_retry))
+                        }
+                    }
+                    is AiQuizViewModel.ExplainState.Error -> {
+                        Text(
+                            text = state.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Button(
+                            onClick = onExplain,
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                        ) {
+                            Text(stringResource(R.string.quiz_explain_retry))
+                        }
+                    }
+                    else -> Button(
+                        onClick = onExplain,
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                    ) {
+                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.quiz_explain_action), fontWeight = FontWeight.Bold)
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String, trailing: String? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
+            Text(
+                text = trailing,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

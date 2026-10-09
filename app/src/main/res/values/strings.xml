@@ -430,6 +430,19 @@
     <string name="quiz_materials_pick_exam_title">Pick an exam</string>
     <string name="quiz_materials_empty">No homework available to use yet.</string>
     <string name="quiz_materials_empty_exam">No exams available to use yet.</string>
+    <string name="quiz_review_title">Question review</string>
+    <string name="quiz_review_your_answer">Your answer</string>
+    <string name="quiz_review_correct_answer">Correct answer</string>
+    <string name="quiz_review_no_answer">No answer</string>
+    <string name="quiz_progress_title">Progress over time</string>
+    <string name="quiz_progress_empty">Finish a couple more attempts to see your progress graph.</string>
+    <string name="quiz_progress_attempts">%1$d attempts</string>
+    <string name="quiz_result_date">Completed %1$s</string>
+    <string name="quiz_explain_title">AI explanation</string>
+    <string name="quiz_explain_action">Explain with AI</string>
+    <string name="quiz_explain_loading">Preparing your explanation…</string>
+    <string name="quiz_explain_retry">Try again</string>
+    <string name="quiz_explain_empty">The AI didn\'t return an explanation.</string>
 
     <string name="flash_title">AI Flashcards</string>
     <string name="flash_new">New deck</string>

@@ -297,6 +297,53 @@ class AiService @Inject constructor(
         return if (count in 1..cards.size) cards.take(count) else cards
     }
 
+    // --------------------------------------------------------------- explain
+
+    /**
+     * Produces an educational explanation of a finished quiz: why the wrong answers were
+     * wrong, which concepts to review, and a short study tip. Returns plain text.
+     */
+    suspend fun explainQuiz(
+        config: AiConfig,
+        topic: String,
+        questions: List<QuizQuestion>,
+        answers: List<Int?>,
+    ): String {
+        if (questions.isEmpty()) return ""
+        val wrongCount = questions.indices.count { answers.getOrNull(it) != questions[it].correctIndex }
+        val prompt = buildString {
+            append("A student just finished a multiple-choice quiz about \"")
+            append(topic.trim())
+            append("\". They got ")
+            append(questions.size - wrongCount)
+            append(" of ")
+            append(questions.size)
+            append(" correct.\n\n")
+            questions.forEachIndexed { index, q ->
+                val given = answers.getOrNull(index)
+                val correct = q.options.getOrNull(q.correctIndex) ?: ""
+                append("Q").append(index + 1).append(": ").append(q.question).append("\n")
+                q.options.forEachIndexed { i, opt ->
+                    append("  ").append(if (i == q.correctIndex) "* " else "- ").append(opt).append("\n")
+                }
+                append("  Correct answer: ").append(correct).append("\n")
+                append("  Student chose: ").append(given?.let { q.options.getOrNull(it) } ?: "no answer").append("\n\n")
+            }
+            append("Write a short, encouraging study review. For each question the student got wrong, ")
+            append("explain why their answer was wrong and why the correct one is right, in 1–2 sentences. ")
+            append("Then list the key concepts they should revise and end with one practical study tip. ")
+            append("Use clear, age-appropriate language and write in the same language as the questions.")
+        }
+        return complete(
+            config,
+            listOf(
+                AiMessage("system", "You are a patient tutor who gives concise, accurate, encouraging feedback."),
+                AiMessage("user", prompt),
+            ),
+            jsonMode = false,
+        ).trim()
+    }
+
     // --------------------------------------------------------------- connection test
 
     suspend fun testConnection(config: AiConfig): Result<Unit> = withContext(Dispatchers.IO) {

@@ -7,6 +7,9 @@ import com.enderplusbayzuiship.edupage2.data.AiQuiz
 import com.enderplusbayzuiship.edupage2.data.AiQuizStore
 import com.enderplusbayzuiship.edupage2.data.AiCredentialsStore
 import com.enderplusbayzuiship.edupage2.data.MaterialLoadState
+import com.enderplusbayzuiship.edupage2.data.QuizAttempt
+import com.enderplusbayzuiship.edupage2.data.QuizAttemptStore
+import com.enderplusbayzuiship.edupage2.data.QuizQuestion
 import com.enderplusbayzuiship.edupage2.data.StudyMaterial
 import com.enderplusbayzuiship.edupage2.data.StudyMaterialLoader
 import com.enderplusbayzuiship.edupage2.network.AiService
@@ -26,6 +29,7 @@ class AiQuizViewModel @Inject constructor(
     private val aiService: AiService,
     private val aiCredentialsStore: AiCredentialsStore,
     private val quizStore: AiQuizStore,
+    private val attemptStore: QuizAttemptStore,
     private val materialLoader: StudyMaterialLoader,
 ) : ViewModel() {
 
@@ -35,15 +39,29 @@ class AiQuizViewModel @Inject constructor(
         data class Error(val message: String) : GenerateState
     }
 
+    sealed interface ExplainState {
+        data object Idle : ExplainState
+        data object Loading : ExplainState
+        data class Ready(val text: String) : ExplainState
+        data class Error(val message: String) : ExplainState
+    }
+
     val quizzes: StateFlow<List<AiQuiz>> = quizStore.quizzes
+
+    val attempts: StateFlow<Map<String, List<QuizAttempt>>> = attemptStore.all
 
     private val _generateState = MutableStateFlow<GenerateState>(GenerateState.Idle)
     val generateState: StateFlow<GenerateState> = _generateState.asStateFlow()
+
+    private val _explainState = MutableStateFlow<ExplainState>(ExplainState.Idle)
+    val explainState: StateFlow<ExplainState> = _explainState.asStateFlow()
 
     private val _examMaterials = MutableStateFlow<MaterialLoadState>(MaterialLoadState.Idle)
     val examMaterials: StateFlow<MaterialLoadState> = _examMaterials.asStateFlow()
 
     fun hasApiKey(): Boolean = aiCredentialsStore.current().apiKey.isNotBlank()
+
+    fun attemptsFor(quizId: String): List<QuizAttempt> = attemptStore.forQuiz(quizId)
 
     fun homeworkMaterials(): List<StudyMaterial> = materialLoader.homework()
 
@@ -102,8 +120,43 @@ class AiQuizViewModel @Inject constructor(
         if (_generateState.value is GenerateState.Error) _generateState.value = GenerateState.Idle
     }
 
-    fun delete(id: String) = quizStore.remove(id)
+    fun delete(id: String) {
+        quizStore.remove(id)
+        attemptStore.remove(id)
+    }
 
-    fun recordResult(id: String, score: Int, total: Int) =
+    fun recordResult(id: String, score: Int, total: Int) {
         quizStore.recordResult(id, score, total)
+        attemptStore.record(id, score, total)
+    }
+
+    fun resetExplain() {
+        _explainState.value = ExplainState.Idle
+    }
+
+    /** Asks the configured AI provider to explain the quiz, focusing on wrong answers. */
+    fun explain(quiz: AiQuiz, answers: List<Int?>) {
+        if (_explainState.value is ExplainState.Loading) return
+        val config = aiCredentialsStore.current()
+        if (config.apiKey.isBlank()) {
+            _explainState.value = ExplainState.Error(context.getString(R.string.quiz_no_key))
+            return
+        }
+        viewModelScope.launch {
+            _explainState.value = ExplainState.Loading
+            try {
+                val text = aiService.explainQuiz(config, quiz.topic, quiz.questions, answers)
+                _explainState.value = if (text.isBlank()) {
+                    ExplainState.Error(context.getString(R.string.quiz_explain_empty))
+                } else {
+                    ExplainState.Ready(text)
+                }
+            } catch (e: Exception) {
+                _explainState.value = ExplainState.Error(
+                    if (e.isNetworkError()) context.getString(R.string.network_error)
+                    else e.message ?: context.getString(R.string.cloud_error_loading)
+                )
+            }
+        }
+    }
 }
