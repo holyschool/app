@@ -11,11 +11,23 @@ data class Meal(
     val weight: String? = null,
 )
 
+/** Aggregated quality/quantity rating for a menu choice (from EduPage's `hodnotenia`). */
+data class MealRating(
+    val qualityAverage: Double? = null,
+    val qualityCount: Int? = null,
+    val quantityAverage: Double? = null,
+    val quantityCount: Int? = null,
+) {
+    val hasRatings: Boolean
+        get() = (qualityCount ?: 0) > 0 || (quantityCount ?: 0) > 0
+}
+
 data class MenuChoice(
     val letter: String,
     val name: String,
     val allergens: List<String>? = null,
     val weight: String? = null,
+    val rating: MealRating? = null,
 )
 
 data class MealOrderInfo(
@@ -26,6 +38,7 @@ data class MealOrderInfo(
     val canChangeUntil: String?,
     val servedFrom: String?,
     val servedTo: String?,
+    val amountOfFoods: Int? = null,
 )
 
 data class Meals(

@@ -144,6 +144,32 @@ class MealsViewModel @Inject constructor(
         }
     }
 
+    fun rateMeal(mealTypeIndex: String, quality: Int, quantity: Int) {
+        val state = _uiState.value as? MealsUiState.Success ?: return
+        val boarderId = state.boarderId ?: return
+        val date = state.date
+
+        viewModelScope.launch {
+            try {
+                val ok = try {
+                    edupage.rateMeal(date, mealTypeIndex, boarderId, quality, quantity)
+                } catch (e: NotLoggedInException) {
+                    Log.w(TAG, "session expired, re-authenticating and retrying once")
+                    sessionRepository.ensureValidSession()
+                    edupage.rateMeal(date, mealTypeIndex, boarderId, quality, quantity)
+                }
+                if (ok) {
+                    Log.i(TAG, "rated type $mealTypeIndex on $date, refreshing")
+                    refresh()
+                } else {
+                    Log.w(TAG, "rating failed for type $mealTypeIndex on $date")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "rating failed for type $mealTypeIndex on $date: ${e.message}", e)
+            }
+        }
+    }
+
     private fun loadMeals(date: LocalDate) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {

@@ -27,22 +27,32 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -50,16 +60,19 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.edupage.api.model.Meal
 import com.edupage.api.model.MealOrderInfo
+import com.edupage.api.model.MealRating
 import com.edupage.api.model.MenuChoice
 import com.enderplusbayzuiship.edupage2.R
 import com.enderplusbayzuiship.edupage2.ui.core.containers.RoundedCardContainer
 import com.enderplusbayzuiship.edupage2.ui.util.rememberAppHaptics
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,6 +153,7 @@ fun MealsScreen(
                     bottomPadding = bottomPadding,
                     onOrder = viewModel::orderMeal,
                     onCancel = viewModel::cancelMeal,
+                    onRate = viewModel::rateMeal,
                 )
             }
         }
@@ -281,8 +295,9 @@ private fun MealList(
     bottomPadding: PaddingValues,
     onOrder: (String, String) -> Unit,
     onCancel: (String) -> Unit,
+    onRate: (String, Int, Int) -> Unit,
 ) {
-    if (meals.isEmpty()) {
+    if (meals.isEmpty() && mealOrderInfo.isNullOrEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
@@ -315,6 +330,9 @@ private fun MealList(
                             info = info,
                             onOrder = { choice -> onOrder(info.mealTypeIndex, choice) },
                             onCancel = { onCancel(info.mealTypeIndex) },
+                            onRate = { quality, quantity ->
+                                onRate(info.mealTypeIndex, quality, quantity)
+                            },
                         )
                     }
                 }
@@ -363,8 +381,11 @@ private fun MealOrderCard(
     info: MealOrderInfo,
     onOrder: (String) -> Unit,
     onCancel: () -> Unit,
+    onRate: (Int, Int) -> Unit,
 ) {
     val haptics = rememberAppHaptics()
+    var showRating by remember { mutableStateOf(false) }
+
     RoundedCardContainer(modifier = Modifier.fillMaxWidth()) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceBright,
@@ -374,54 +395,178 @@ private fun MealOrderCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-            Text(
-                text = info.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-
-            info.availableChoices.forEach { choice ->
-                val isSelected = choice.letter == info.orderedChoice
-                ChoiceRow(
-                    choice = choice,
-                    isSelected = isSelected,
-                    onOrder = { onOrder(choice.letter) },
-                )
-            }
-
-            if (info.orderedChoice != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    FilledTonalButton(
-                        onClick = { haptics.virtualKey(); onCancel() },
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        ),
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = Icons.Rounded.Restaurant,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(8.dp).size(18.dp),
                         )
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.meals_cancel_order))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = info.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        val subtitle = buildList {
+                            if (!info.servedFrom.isNullOrBlank() && !info.servedTo.isNullOrBlank()) {
+                                add("${info.servedFrom}\u2013${info.servedTo}")
+                            }
+                            info.amountOfFoods?.let {
+                                add(
+                                    androidx.compose.ui.res.stringResource(
+                                        R.string.meals_foods, it
+                                    )
+                                )
+                            }
+                        }.joinToString(" · ")
+                        if (subtitle.isNotBlank()) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (info.orderedChoice != null) {
+                        IconButton(onClick = { haptics.virtualKey(); showRating = true }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Star,
+                                contentDescription = stringResource(R.string.meals_rate),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
-            }
 
-            val changeUntil = info.canChangeUntil
-            if (changeUntil != null) {
-                Text(
-                    text = stringResource(R.string.meals_change_until, changeUntil),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                info.availableChoices.forEach { choice ->
+                    val isSelected = choice.letter == info.orderedChoice
+                    ChoiceRow(
+                        choice = choice,
+                        isSelected = isSelected,
+                        onOrder = { onOrder(choice.letter) },
+                    )
+                }
+
+                if (info.orderedChoice != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        FilledTonalButton(
+                            onClick = { haptics.virtualKey(); onCancel() },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.meals_cancel_order))
+                        }
+                    }
+                }
+
+                val changeUntil = info.canChangeUntil
+                if (changeUntil != null) {
+                    Text(
+                        text = stringResource(R.string.meals_change_until, changeUntil),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+
+    if (showRating) {
+        RatingDialog(
+            title = info.title,
+            onDismiss = { showRating = false },
+            onSubmit = { quality, quantity ->
+                showRating = false
+                onRate(quality, quantity)
+            },
+        )
+    }
+}
+
+@Composable
+private fun RatingDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onSubmit: (Int, Int) -> Unit,
+) {
+    var quality by remember { mutableIntStateOf(5) }
+    var quantity by remember { mutableIntStateOf(5) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.meals_rate_title, title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                StarRatingRow(
+                    label = stringResource(R.string.meals_rate_quality),
+                    value = quality,
+                    onChange = { quality = it },
+                )
+                StarRatingRow(
+                    label = stringResource(R.string.meals_rate_quantity),
+                    value = quantity,
+                    onChange = { quantity = it },
                 )
             }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSubmit(quality, quantity) }) {
+                Text(stringResource(R.string.meals_rate_submit))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.meals_rate_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun StarRatingRow(
+    label: String,
+    value: Int,
+    onChange: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            for (star in 1..5) {
+                IconButton(onClick = { onChange(star) }) {
+                    Icon(
+                        imageVector = if (star <= value) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        contentDescription = null,
+                        tint = if (star <= value) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline,
+                    )
+                }
             }
         }
     }
@@ -434,57 +579,115 @@ private fun ChoiceRow(
     onOrder: () -> Unit,
 ) {
     val haptics = rememberAppHaptics()
-    Row(
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        else MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "${choice.letter}: ${choice.name}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            )
-            val allergens = choice.allergens
-            if (!allergens.isNullOrEmpty()) {
-                Text(
-                    text = "${stringResource(R.string.meals_allergens)}: ${allergens.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
                 )
             }
-            val weight = choice.weight
-            if (!weight.isNullOrBlank()) {
-                Text(
-                    text = stringResource(R.string.meals_weight, weight),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
 
-        if (isSelected) {
-            Text(
-                text = stringResource(R.string.meals_ordered),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        } else {
-            FilledTonalButton(onClick = { haptics.virtualKey(); onOrder() }) {
-                Text(stringResource(R.string.meals_order))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${choice.letter}: ${choice.name}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val meta = buildList {
+                    choice.allergens?.takeIf { it.isNotEmpty() }?.let {
+                        add("${stringResource(R.string.meals_allergens)}: ${it.joinToString(", ")}")
+                    }
+                    choice.weight?.takeIf { it.isNotBlank() }?.let { add(it) }
+                }.joinToString(" · ")
+                if (meta.isNotBlank()) {
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                choice.rating?.takeIf { it.hasRatings }?.let { rating ->
+                    RatingSummary(rating)
+                }
+            }
+
+            if (isSelected) {
+                Text(
+                    text = stringResource(R.string.meals_ordered),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                FilledTonalButton(onClick = { haptics.virtualKey(); onOrder() }) {
+                    Text(stringResource(R.string.meals_order))
+                }
             }
         }
     }
+}
+
+@Composable
+private fun RatingSummary(rating: MealRating) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 2.dp),
+    ) {
+        rating.qualityAverage?.let { avg ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Star,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    text = formatRating(avg, rating.qualityCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        rating.quantityAverage?.let { avg ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Restaurant,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    text = formatRating(avg, rating.quantityCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private fun formatRating(average: Double, count: Int?): String {
+    val rounded = (average * 10).roundToInt() / 10.0
+    return if (count != null) "%.1f (%d)".format(rounded, count) else "%.1f".format(rounded)
 }
 
 @Composable
@@ -500,40 +703,40 @@ private fun MealCard(meal: Meal) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = meal.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = meal.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
 
-                if (meal.canOrder) {
-                    OrderBadge(isOrdered = meal.isOrdered)
+                    if (meal.canOrder) {
+                        OrderBadge(isOrdered = meal.isOrdered)
+                    }
                 }
-            }
 
-            val allergens = meal.allergens
-            if (!allergens.isNullOrEmpty()) {
-                Text(
-                    text = "${stringResource(R.string.meals_allergens)}: ${allergens.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                val allergens = meal.allergens
+                if (!allergens.isNullOrEmpty()) {
+                    Text(
+                        text = "${stringResource(R.string.meals_allergens)}: ${allergens.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
-            val weight = meal.weight
-            if (!weight.isNullOrBlank()) {
-                Text(
-                    text = stringResource(R.string.meals_weight, weight),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                val weight = meal.weight
+                if (!weight.isNullOrBlank()) {
+                    Text(
+                        text = stringResource(R.string.meals_weight, weight),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -554,4 +757,3 @@ private fun OrderBadge(isOrdered: Boolean) {
         color = color,
     )
 }
-

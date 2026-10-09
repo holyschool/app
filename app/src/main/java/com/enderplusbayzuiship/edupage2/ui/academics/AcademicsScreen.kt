@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
@@ -79,6 +80,7 @@ fun AcademicsScreen(
     val topics by viewModel.topics.collectAsState()
     val haptics = rememberAppHaptics()
     var detailPlan by remember { mutableStateOf<SchoolPlan?>(null) }
+    var viewerAttachment by remember { mutableStateOf<com.edupage.api.model.MessageAttachment?>(null) }
 
     val tabs = listOf(
         AcademicsTab.ABSENCES to stringResource(R.string.academics_tab_absences),
@@ -150,6 +152,14 @@ fun AcademicsScreen(
                 detailPlan = null
                 viewModel.resetTopics()
             },
+            onOpenAttachment = { viewerAttachment = it },
+        )
+    }
+
+    viewerAttachment?.let { attachment ->
+        com.enderplusbayzuiship.edupage2.ui.attachments.AttachmentViewerSheet(
+            attachment = attachment,
+            onDismiss = { viewerAttachment = null },
         )
     }
 }
@@ -417,6 +427,7 @@ private fun SubjectTopicsSheet(
     plan: SchoolPlan,
     state: TopicsUiState,
     onDismiss: () -> Unit,
+    onOpenAttachment: (com.edupage.api.model.MessageAttachment) -> Unit,
 ) {
     AppBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -478,9 +489,9 @@ private fun SubjectTopicsSheet(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            items(state.topics.size, key = { state.topics[it].timelineId }) { index ->
+                            items(state.topics.size, key = { state.topics[it].id }) { index ->
                                 val topic = state.topics[index]
-                                TopicRow(topic)
+                                TopicRow(topic, onOpenAttachment = onOpenAttachment)
                             }
                         }
                     }
@@ -491,39 +502,89 @@ private fun SubjectTopicsSheet(
 }
 
 @Composable
-private fun TopicRow(topic: CurriculumTopic) {
+private fun TopicRow(
+    topic: CurriculumTopic,
+    onOpenAttachment: (com.edupage.api.model.MessageAttachment) -> Unit,
+) {
+    val badgeColor = if (topic.isTaught) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.tertiary
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceBright,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Icon(
-                Icons.Rounded.MenuBook,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp).padding(top = 2.dp),
-            )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = topic.topic,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(
+                    Icons.Rounded.MenuBook,
+                    contentDescription = null,
+                    tint = badgeColor,
+                    modifier = Modifier.size(20.dp).padding(top = 2.dp),
                 )
-                val meta = buildList {
-                    topic.date?.let { add(it.format(mediumDateFmt)) }
-                    topic.teacher?.takeIf { it.isNotBlank() }?.let { add(it) }
-                }.joinToString(" · ")
-                if (meta.isNotBlank()) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = meta,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
+                        text = topic.topic,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
+                    val meta = buildList {
+                        topic.date?.let { add(it.format(mediumDateFmt)) }
+                        topic.period?.let { add(stringResource(R.string.curriculum_period, it)) }
+                        topic.teacher?.takeIf { it.isNotBlank() }?.let { add(it) }
+                    }.joinToString(" · ")
+                    if (meta.isNotBlank()) {
+                        Text(
+                            text = meta,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = badgeColor.copy(alpha = 0.15f),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (topic.isTaught) R.string.curriculum_taught
+                            else R.string.curriculum_planned
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = badgeColor,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+            }
+
+            if (topic.attachments.isNotEmpty()) {
+                topic.attachments.forEach { attachment ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenAttachment(attachment) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.AttachFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = attachment.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }

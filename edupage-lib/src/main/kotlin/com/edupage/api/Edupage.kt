@@ -155,6 +155,13 @@ class Edupage(timeoutSeconds: Long = 15L) {
     suspend fun getCurriculum(dateFrom: LocalDate): List<com.edupage.api.model.CurriculumTopic> =
         Timeline(session).getCurriculum(dateFrom)
 
+    /** Real per-lesson curriculum plan (taught/upcoming topics) from EduPage's daily plan. */
+    suspend fun getCurriculumPlan(
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+    ): List<com.edupage.api.model.CurriculumTopic> =
+        com.edupage.api.modules.Timetables(session).getCurriculumPlan(dateFrom, dateTo)
+
     suspend fun getPlans(): List<com.edupage.api.model.SchoolPlan> =
         com.edupage.api.modules.Plans(session).getPlans()
 
@@ -175,6 +182,15 @@ class Edupage(timeoutSeconds: Long = 15L) {
 
     suspend fun cancelMeal(date: LocalDate, mealTypeIndex: String, boarderId: String): Boolean =
         Lunches(session).cancelMeal(date, mealTypeIndex, boarderId)
+
+    suspend fun rateMeal(
+        date: LocalDate,
+        mealTypeIndex: String,
+        boarderId: String,
+        quality: Int,
+        quantity: Int,
+    ): Boolean =
+        Lunches(session).rateMeal(date, mealTypeIndex, boarderId, quality, quantity)
 
     suspend fun getMissingTeachers(date: LocalDate): List<EduTeacher> =
         Substitution(session).getMissingTeachers(date)

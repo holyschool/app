@@ -152,26 +152,34 @@ class AcademicsViewModel @Inject constructor(
     }
 
     /**
-     * Loads taught-curriculum entries recorded in the timeline and filters them
-     * to a single subject (the selected plan). EduPage has no per-plan topics
-     * endpoint, so topics are recovered from `ucivo` timeline events.
+     * Loads dated curriculum topics from EduPage's daily plan (taught + planned) and
+     * filters them to a single subject (the selected plan). Future-dated topics are
+     * flagged as not yet taught.
      */
     fun loadTopics(subjectId: Int?, subjectName: String?) {
         viewModelScope.launch {
             _topics.value = TopicsUiState.Loading
             try {
-                val dateFrom = LocalDate.now().minusMonths(12)
-                val all = try {
-                    edupage.getCurriculum(dateFrom)
-                } catch (e: NotLoggedInException) {
-                    Log.w(TAG, "session expired, re-authenticating and retrying once")
-                    sessionRepository.ensureValidSession()
-                    edupage.getCurriculum(dateFrom)
-                }
+                val now = LocalDate.now()
+                val startYear = if (now.monthValue >= 9) now.year else now.year - 1
+                val dateFrom = LocalDate.of(startYear, 9, 1)
+                val dateTo = LocalDate.of(startYear + 1, 6, 30)
+                val cacheKey = "$dateFrom..$dateTo"
+                val all = planTopicsCache?.takeIf { planTopicsCacheKey == cacheKey }
+                    ?: try {
+                        edupage.getCurriculumPlan(dateFrom, dateTo)
+                    } catch (e: NotLoggedInException) {
+                        Log.w(TAG, "session expired, re-authenticating and retrying once")
+                        sessionRepository.ensureValidSession()
+                        edupage.getCurriculumPlan(dateFrom, dateTo)
+                    }.also {
+                        planTopicsCache = it
+                        planTopicsCacheKey = cacheKey
+                    }
                 val filtered = if (subjectId != null) all.filter { it.subjectId == subjectId } else all
                 val resolvedName = subjectName ?: filtered.firstOrNull()?.subjectName
                 _topics.value = TopicsUiState.Success(resolvedName, filtered)
-                Log.i(TAG, "loaded ${filtered.size} topics for subject $subjectId")
+                Log.i(TAG, "loaded ${filtered.size} plan topics for subject $subjectId")
             } catch (e: Exception) {
                 Log.e(TAG, "failed to load topics: ${e.message}", e)
                 _topics.value = TopicsUiState.Error(
@@ -181,6 +189,9 @@ class AcademicsViewModel @Inject constructor(
             }
         }
     }
+
+    private var planTopicsCache: List<CurriculumTopic>? = null
+    private var planTopicsCacheKey: String? = null
 
     fun resetTopics() {
         _topics.value = TopicsUiState.Idle

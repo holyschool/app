@@ -778,6 +778,13 @@
     <string name="meals_not_ordered">Not ordered</string>
     <string name="meals_order">Order</string>
     <string name="meals_cancel_order">Cancel</string>
+    <string name="meals_rate">Rate meal</string>
+    <string name="meals_rate_title">Rate "%s"</string>
+    <string name="meals_rate_quality">Quality</string>
+    <string name="meals_rate_quantity">Portion size</string>
+    <string name="meals_rate_submit">Submit</string>
+    <string name="meals_rate_cancel">Cancel</string>
+    <string name="meals_foods">%d dishes</string>
     <string name="meals_action_meals">Meals</string>
     <string name="meals_credit">Credit: %s</string>
     <string name="meals_change_until">Can be changed until %s</string>
@@ -887,9 +894,12 @@
     <string name="absence_unexcused_label">Unexcused</string>
     <string name="curriculum_error_loading">Could not load curriculum.</string>
     <string name="curriculum_empty">No curriculum plans available.</string>
-    <string name="curriculum_taught_topics">Taught topics from your lessons</string>
+    <string name="curriculum_taught_topics">Topics from your lesson plan</string>
     <string name="curriculum_topics_loading">Loading topics…</string>
-    <string name="curriculum_topics_empty">No taught topics recorded for this subject yet.</string>
+    <string name="curriculum_topics_empty">No topics recorded for this subject yet.</string>
+    <string name="curriculum_taught">Taught</string>
+    <string name="curriculum_planned">Planned</string>
+    <string name="curriculum_period">%d. period</string>
     <string name="curriculum_unknown_subject">Unknown subject</string>
     <string name="curriculum_progress">Taught %1$d of %2$d topics</string>
 

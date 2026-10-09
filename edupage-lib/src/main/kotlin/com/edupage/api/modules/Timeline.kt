@@ -47,12 +47,13 @@ internal class Timeline(private val session: EdupageSession) {
             .getOrNull()?.associateBy { it.subjectId } ?: emptyMap()
         return topics.map { event ->
             com.edupage.api.model.CurriculumTopic(
-                timelineId = event.timelineId,
+                id = "tl-${event.timelineId}",
                 subjectId = event.subjectId,
                 subjectName = event.subjectId?.let { subjects[it]?.name },
                 topic = event.text.orEmpty(),
                 date = event.createdAt ?: event.timestamp,
                 teacher = event.authorName,
+                attachments = event.attachments,
             )
         }.sortedByDescending { it.date }
     }

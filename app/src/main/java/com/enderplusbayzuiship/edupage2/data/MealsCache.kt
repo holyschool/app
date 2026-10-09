@@ -22,11 +22,19 @@ private data class CachedMeal(
     val weight: String?,
 )
 
+private data class CachedMealRating(
+    val qualityAverage: Double? = null,
+    val qualityCount: Int? = null,
+    val quantityAverage: Double? = null,
+    val quantityCount: Int? = null,
+)
+
 private data class CachedMenuChoice(
     val letter: String,
     val name: String,
     val allergens: List<String>?,
     val weight: String?,
+    val rating: CachedMealRating? = null,
 )
 
 private data class CachedMealOrderInfo(
@@ -37,6 +45,7 @@ private data class CachedMealOrderInfo(
     val canChangeUntil: String?,
     val servedFrom: String?,
     val servedTo: String?,
+    val amountOfFoods: Int? = null,
 )
 
 private data class MealsCacheFile(
@@ -79,11 +88,25 @@ class MealsCache @Inject constructor(
                 title = oi.title,
                 orderedChoice = oi.orderedChoice,
                 availableChoices = oi.availableChoices.map { c ->
-                    CachedMenuChoice(c.letter, c.name, c.allergens, c.weight)
+                    CachedMenuChoice(
+                        letter = c.letter,
+                        name = c.name,
+                        allergens = c.allergens,
+                        weight = c.weight,
+                        rating = c.rating?.let {
+                            CachedMealRating(
+                                qualityAverage = it.qualityAverage,
+                                qualityCount = it.qualityCount,
+                                quantityAverage = it.quantityAverage,
+                                quantityCount = it.quantityCount,
+                            )
+                        },
+                    )
                 },
                 canChangeUntil = oi.canChangeUntil,
                 servedFrom = oi.servedFrom,
                 servedTo = oi.servedTo,
+                amountOfFoods = oi.amountOfFoods,
             )
         }
         val cacheFile = MealsCacheFile(
@@ -169,11 +192,25 @@ class MealsCache @Inject constructor(
         title = title,
         orderedChoice = orderedChoice,
         availableChoices = availableChoices.map { c ->
-            MenuChoice(c.letter, c.name, c.allergens, c.weight)
+            MenuChoice(
+                letter = c.letter,
+                name = c.name,
+                allergens = c.allergens,
+                weight = c.weight,
+                rating = c.rating?.let {
+                    com.edupage.api.model.MealRating(
+                        qualityAverage = it.qualityAverage,
+                        qualityCount = it.qualityCount,
+                        quantityAverage = it.quantityAverage,
+                        quantityCount = it.quantityCount,
+                    )
+                },
+            )
         },
         canChangeUntil = canChangeUntil,
         servedFrom = servedFrom,
         servedTo = servedTo,
+        amountOfFoods = amountOfFoods,
     )
 }
 

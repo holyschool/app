@@ -406,6 +406,13 @@
 
     <string name="meals_credit">Kredit: %s</string>
     <string name="meals_change_until">Lze změnit do %s</string>
+    <string name="meals_rate">Ohodnotit jídlo</string>
+    <string name="meals_rate_title">Ohodnotit „%s“</string>
+    <string name="meals_rate_quality">Kvalita</string>
+    <string name="meals_rate_quantity">Velikost porce</string>
+    <string name="meals_rate_submit">Odeslat</string>
+    <string name="meals_rate_cancel">Zrušit</string>
+    <string name="meals_foods">%d chodů</string>
 
     <string name="onboarding_title_1">Celá škola na jednom místě</string>
     <string name="onboarding_desc_1">Mějte přehled o svém dni — vyučování, kredit, známky i nejnovější zprávy na úvodní obrazovce.</string>
@@ -515,9 +522,12 @@
     <string name="absence_unexcused_label">Neomluvené</string>
     <string name="curriculum_error_loading">Nepodařilo se načíst učební plán.</string>
     <string name="curriculum_empty">Žádné učební plány.</string>
-    <string name="curriculum_taught_topics">Probraná témata z výuky</string>
+    <string name="curriculum_taught_topics">Témata z plánu výuky</string>
     <string name="curriculum_topics_loading">Načítání témat…</string>
-    <string name="curriculum_topics_empty">Pro tento předmět zatím nejsou zapsána žádná probraná témata.</string>
+    <string name="curriculum_topics_empty">Pro tento předmět zatím nejsou zapsána žádná témata.</string>
+    <string name="curriculum_taught">Probrané</string>
+    <string name="curriculum_planned">Plánované</string>
+    <string name="curriculum_period">%d. hodina</string>
     <string name="curriculum_unknown_subject">Neznámý předmět</string>
     <string name="curriculum_progress">Probráno %1$d z %2$d témat</string>
 
