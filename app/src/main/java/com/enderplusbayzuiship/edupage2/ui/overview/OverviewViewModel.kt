@@ -348,7 +348,11 @@ class OverviewViewModel @Inject constructor(
             .filter { it.type?.lowercase() !in HIDDEN_TYPES }
 
         val mains = filtered.filter { it.reactionTo == null || it.reactionTo == 0 }
-        val replies = filtered.filter { it.reactionTo != null && it.reactionTo != 0 }
+        val replies = filtered.filter {
+            it.reactionTo != null && it.reactionTo != 0 &&
+                (!it.text.isNullOrBlank() || !it.title.isNullOrBlank() ||
+                    it.attachments.isNotEmpty() || !it.pollAnswers.isNullOrEmpty())
+        }
 
         val groups = mains.map { main ->
             main to replies.filter { it.reactionTo == main.timelineId }

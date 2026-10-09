@@ -39,6 +39,13 @@ data class MessageGroup(
     val replies: List<TimelineEvent> = emptyList()
 )
 
+/** True when an event has something meaningful to show (body, title, attachment or poll). */
+internal fun TimelineEvent.hasContent(): Boolean =
+    !text.isNullOrBlank() ||
+        !title.isNullOrBlank() ||
+        attachments.isNotEmpty() ||
+        !pollAnswers.isNullOrEmpty()
+
 sealed interface MessagesUiState {
     object Loading : MessagesUiState
     data class Error(val message: String) : MessagesUiState
@@ -394,7 +401,9 @@ class MessagesViewModel @Inject constructor(
     private fun List<TimelineEvent>.toGroups(): List<MessageGroup> {
         val filtered = filter { it.type?.lowercase() !in HIDDEN_TYPES }
         val mains = filtered.filter { it.reactionTo == null || it.reactionTo == 0 }
-        val replies = filtered.filter { it.reactionTo != null && it.reactionTo != 0 }
+        // Reactions/read-receipts can arrive as reply events with no body; drop those so
+        // they don't render as phantom empty replies.
+        val replies = filtered.filter { it.reactionTo != null && it.reactionTo != 0 && it.hasContent() }
 
         return mains.map { main ->
             MessageGroup(

@@ -247,6 +247,7 @@ fun MessagesScreen(
 
     var showCompose    by remember { mutableStateOf(false) }
     var detailGroup    by remember { mutableStateOf<MessageGroup?>(null) }
+    var pendingImportant by remember { mutableStateOf<MessageGroup?>(null) }
     var viewerAttachment by remember { mutableStateOf<com.edupage.api.model.MessageAttachment?>(null) }
     var selectedFilter by remember { mutableStateOf<Int?>(null) }
     var unreadOnly     by remember { mutableStateOf(false) }
@@ -568,9 +569,13 @@ fun MessagesScreen(
                                     onLoadMore = { viewModel.loadMore() },
                                     onItemClick = { group ->
                                         haptics.virtualKey()
-                                        viewModel.markMessageSeen(group.main.timelineId)
-                                        group.replies.forEach { viewModel.markMessageSeen(it.timelineId) }
-                                        detailGroup = group
+                                        if (group.main.isImportant) {
+                                            pendingImportant = group
+                                        } else {
+                                            viewModel.markMessageSeen(group.main.timelineId)
+                                            group.replies.forEach { viewModel.markMessageSeen(it.timelineId) }
+                                            detailGroup = group
+                                        }
                                     },
                                 )
                             }
@@ -603,6 +608,36 @@ fun MessagesScreen(
         com.enderplusbayzuiship.edupage2.ui.attachments.AttachmentViewerSheet(
             attachment = attachment,
             onDismiss = { viewerAttachment = null },
+        )
+    }
+
+    pendingImportant?.let { group ->
+        AlertDialog(
+            onDismissRequest = { pendingImportant = null },
+            icon = {
+                Icon(
+                    Icons.Default.PriorityHigh,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text(stringResource(R.string.messages_important_open_title)) },
+            text = { Text(stringResource(R.string.messages_important_open_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.markMessageSeen(group.main.timelineId)
+                    group.replies.forEach { viewModel.markMessageSeen(it.timelineId) }
+                    detailGroup = group
+                    pendingImportant = null
+                }) {
+                    Text(stringResource(R.string.messages_important_open_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImportant = null }) {
+                    Text(stringResource(R.string.messages_important_open_cancel))
+                }
+            },
         )
     }
 
@@ -1223,6 +1258,9 @@ private fun MessageItem(group: MessageGroup, isUnread: Boolean, onClick: () -> U
     }
 
     val starredColor = Color(0xFFF9A825)
+    val isImportant = event.isImportant
+    val importantColor = MaterialTheme.colorScheme.error
+    val hasAttachment = event.attachments.isNotEmpty() || group.replies.any { it.attachments.isNotEmpty() }
 
     ListItem(
         modifier = Modifier
@@ -1233,7 +1271,8 @@ private fun MessageItem(group: MessageGroup, isUnread: Boolean, onClick: () -> U
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (isUnread || isImportant) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isImportant) importantColor else MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -1264,6 +1303,14 @@ private fun MessageItem(group: MessageGroup, isUnread: Boolean, onClick: () -> U
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                if (hasAttachment) {
+                    Icon(
+                        imageVector = Icons.Filled.AttachFile,
+                        contentDescription = stringResource(R.string.messages_attachment),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
                 if (group.replies.isNotEmpty()) {
                     Surface(
                         shape = RoundedCornerShape(50),

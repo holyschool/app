@@ -17,13 +17,28 @@ object FirebaseNotificationHandler {
         val channel = data["channel"]?.takeIf { it.isNotBlank() }
             ?: NotificationType.channelFor(type)
 
-        val resolvedTitle = title?.takeIf { it.isNotBlank() }
-            ?: data["title"]?.takeIf { it.isNotBlank() }
-            ?: defaultTitle(context, type, data)
-        val resolvedBody = body?.takeIf { it.isNotBlank() }
-            ?: data["body"]?.takeIf { it.isNotBlank() }
-            ?: defaultBody(context, type, data)
-        val timelineId = data["timelineId"]?.toIntOrNull() ?: -1
+        // Important messages must be opened and read manually in the app: never preview
+        // their content and never auto-mark them as read from the notification.
+        val isImportant = data["important"] == "1" || data["important"] == "true" ||
+            data["receipt"] == "1" || data["isImportant"] == "1"
+
+        val resolvedTitle = if (isImportant) {
+            data["sender"]?.takeIf { it.isNotBlank() }
+                ?.let { context.getString(R.string.notif_important_title_sender, it) }
+                ?: context.getString(R.string.notif_important_title)
+        } else {
+            title?.takeIf { it.isNotBlank() }
+                ?: data["title"]?.takeIf { it.isNotBlank() }
+                ?: defaultTitle(context, type, data)
+        }
+        val resolvedBody = if (isImportant) {
+            context.getString(R.string.notif_important_body)
+        } else {
+            body?.takeIf { it.isNotBlank() }
+                ?: data["body"]?.takeIf { it.isNotBlank() }
+                ?: defaultBody(context, type, data)
+        }
+        val timelineId = if (isImportant) -1 else data["timelineId"]?.toIntOrNull() ?: -1
 
         val tapIntent = when (type) {
             "grade" -> DeepLinkHelper.createGradesIntent(context, resolvedTitle, resolvedBody, timelineId)
@@ -41,9 +56,10 @@ object FirebaseNotificationHandler {
             .setStyle(NotificationCompat.BigTextStyle().bigText(resolvedBody))
             .setAutoCancel(true)
             .setContentIntent(tapIntent)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(if (isImportant) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             .setGroup(channel)
 
+        // Important messages: no "mark as read" action so opening them is a deliberate act.
         if (timelineId > 0) {
             builder
                 .addAction(

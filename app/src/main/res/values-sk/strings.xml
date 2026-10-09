@@ -145,6 +145,10 @@
     <string name="messages_delete_confirm">Naozaj chcete vymazať túto správu? Túto akciu nie je možné vrátiť späť.</string>
     <string name="messages_delete_action">Vymazať</string>
     <string name="messages_important_label">Dôležitá</string>
+    <string name="messages_important_open_title">Dôležitá správa</string>
+    <string name="messages_important_open_warning">Otvorením tejto správy ju na EduPage označíte ako prečítanú. Prečítajte si ju pozorne — vyžaduje vašu pozornosť. Pokračovať?</string>
+    <string name="messages_important_open_confirm">Otvoriť</string>
+    <string name="messages_important_open_cancel">Teraz nie</string>
     <string name="messages_attachment">Príloha</string>
     <string name="messages_attachment_pick">Vybrať prílohu</string>
     <string name="messages_attachment_open">Otvoriť prílohu</string>
@@ -638,6 +642,14 @@
     <string name="chat_suggestion_3">Daj mi 3 cvičné otázky na kvadratické rovnice</string>
     <string name="chat_error">Niečo sa pokazilo: %1$s</string>
     <string name="chat_disclaimer">AI môže robiť chyby. Dôležité fakty si overte.</string>
+    <string name="chat_subtitle">Váš osobný študijný pomocník</string>
+    <string name="chat_attach">Pripojiť súbor</string>
+    <string name="chat_attach_failed">Súbor sa nepodarilo pripojiť.</string>
+    <string name="chat_attachment_remove">Odobrať prílohu</string>
+    <string name="chat_copy">Kopírovať</string>
+    <string name="chat_copied">Skopírované do schránky</string>
+    <string name="chat_share">Zdieľať</string>
+    <string name="chat_share_title">Zdieľať správu</string>
 
     <string name="overview_ai_study">AI štúdium</string>
     <string name="overview_ai_quiz_desc">Generujte a robte kvízy</string>

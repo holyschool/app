@@ -146,6 +146,10 @@
     <string name="messages_delete_confirm">Opravdu chcete smazat tuto zprávu? Tuto akci nelze vrátit zpět.</string>
     <string name="messages_delete_action">Smazat</string>
     <string name="messages_important_label">Důležitá</string>
+    <string name="messages_important_open_title">Důležitá zpráva</string>
+    <string name="messages_important_open_warning">Otevřením této zprávy ji na EduPage označíte jako přečtenou. Přečtěte si ji pozorně — vyžaduje vaši pozornost. Pokračovat?</string>
+    <string name="messages_important_open_confirm">Otevřít</string>
+    <string name="messages_important_open_cancel">Teď ne</string>
     <string name="messages_attachment">Příloha</string>
     <string name="messages_attachment_pick">Vybrat přílohu</string>
     <string name="messages_attachment_open">Otevřít přílohu</string>
@@ -641,6 +645,14 @@
     <string name="chat_suggestion_3">Dej mi 3 cvičné otázky na kvadratické rovnice</string>
     <string name="chat_error">Něco se pokazilo: %1$s</string>
     <string name="chat_disclaimer">AI může dělat chyby. Důležitá fakta si ověřte.</string>
+    <string name="chat_subtitle">Váš osobní studijní pomocník</string>
+    <string name="chat_attach">Přiložit soubor</string>
+    <string name="chat_attach_failed">Soubor se nepodařilo přiložit.</string>
+    <string name="chat_attachment_remove">Odebrat přílohu</string>
+    <string name="chat_copy">Kopírovat</string>
+    <string name="chat_copied">Zkopírováno do schránky</string>
+    <string name="chat_share">Sdílet</string>
+    <string name="chat_share_title">Sdílet zprávu</string>
 
     <string name="overview_ai_study">AI studium</string>
     <string name="overview_ai_quiz_desc">Generujte a dělejte kvízy</string>

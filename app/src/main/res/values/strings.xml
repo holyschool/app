@@ -161,6 +161,10 @@
     <string name="messages_delete_confirm">Are you sure you want to delete this message? This action cannot be undone.</string>
     <string name="messages_delete_action">Delete</string>
     <string name="messages_important_label">Important</string>
+    <string name="messages_important_open_title">Important message</string>
+    <string name="messages_important_open_warning">Opening this message will mark it as read on EduPage. Read it carefully — it requires your attention. Continue?</string>
+    <string name="messages_important_open_confirm">Open</string>
+    <string name="messages_important_open_cancel">Not now</string>
     <string name="messages_attachment">Attachment</string>
     <string name="messages_attachment_pick">Pick attachment</string>
     <string name="messages_attachment_open">Open attachment</string>
@@ -494,6 +498,14 @@
     <string name="chat_suggestion_3">Give me 3 practice questions on quadratic equations</string>
     <string name="chat_error">Something went wrong: %1$s</string>
     <string name="chat_disclaimer">AI can make mistakes. Double-check important facts.</string>
+    <string name="chat_subtitle">Your personal study helper</string>
+    <string name="chat_attach">Attach a file</string>
+    <string name="chat_attach_failed">Couldn\'t attach that file.</string>
+    <string name="chat_attachment_remove">Remove attachment</string>
+    <string name="chat_copy">Copy</string>
+    <string name="chat_copied">Copied to clipboard</string>
+    <string name="chat_share">Share</string>
+    <string name="chat_share_title">Share message</string>
 
     <string name="overview_ai_study">AI Study</string>
     <string name="overview_ai_quiz_desc">Generate and take quizzes</string>
@@ -682,6 +694,9 @@
     <string name="notif_message_no_preview">Tap to read</string>
     <string name="notif_message_unknown_sender">Unknown</string>
     <string name="notif_mark_read">Mark as read</string>
+    <string name="notif_important_title">Important message</string>
+    <string name="notif_important_title_sender">Important message from %1$s</string>
+    <string name="notif_important_body">Open the app to read it. It will be marked as read.</string>
 
     <string name="notif_homework_title">New homework</string>
     <string name="notif_homework_title_sender">New homework from %1$s</string>

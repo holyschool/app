@@ -19,29 +19,57 @@ internal class Cloud(private val session: EdupageSession) {
         if (!session.isLoggedIn) throw NotLoggedInException()
 
         return withContext(Dispatchers.IO) {
-            val url = "https://${session.subdomain}.edupage.org/timeline/server/cloud.js?__func=uploadCloudFile"
-
             val mimeType = detectMimeType(file)
-            val fileBody = file.asRequestBody(mimeType.toMediaType())
+
+            // Primary: EduPage's timeline attachment uploader (used by the web client).
+            val url = "https://${session.subdomain}.edupage.org/timeline/?akcia=uploadAtt"
             val multipart = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("file", file.name, fileBody)
-                .addFormDataPart("__gsh", session.gsecHash ?: "")
+                .addFormDataPart("att", file.name, file.asRequestBody(mimeType.toMediaType()))
                 .build()
 
-            val request = Request.Builder().url(url).post(multipart).build()
-            val response = session.httpClient.newCall(request).execute()
-            val responseStr = response.body?.string() ?: throw RuntimeException("Empty upload response")
+            val response = session.httpClient.newCall(Request.Builder().url(url).post(multipart).build()).execute()
+            val responseStr = response.body?.string().orEmpty()
 
-            val json = JsonParser.parseString(responseStr).asJsonObject
-            val r = json.getAsJsonObject("r") ?: throw RuntimeException("Invalid upload response")
+            val json = runCatching { JsonParser.parseString(responseStr).asJsonObject }.getOrNull()
+            val status = json?.get("status")?.let { runCatching { it.asString }.getOrNull() }
+            val data = json?.get("data")?.let { runCatching { it.asJsonObject }.getOrNull() }
+            if (status == "ok" && data != null) {
+                return@withContext EduCloudFile(
+                    fileId = data.get("cloudid")?.let { runCatching { it.asString }.getOrNull() } ?: "",
+                    fileName = data.get("name")?.let { runCatching { it.asString }.getOrNull() }
+                        ?: file.name,
+                    uploadPath = data.get("file")?.let { runCatching { it.asString }.getOrNull() } ?: "",
+                )
+            }
 
-            EduCloudFile(
-                fileId = r.get("id")?.asString ?: "",
-                fileName = file.name,
-                uploadPath = r.get("path")?.asString ?: ""
-            )
+            // Fallback: legacy cloud.js uploader.
+            uploadViaCloudJs(file, mimeType)
         }
+    }
+
+    private suspend fun uploadViaCloudJs(file: File, mimeType: String): EduCloudFile {
+        val url = "https://${session.subdomain}.edupage.org/timeline/server/cloud.js?__func=uploadCloudFile"
+
+        val fileBody = file.asRequestBody(mimeType.toMediaType())
+        val multipart = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("file", file.name, fileBody)
+            .addFormDataPart("__gsh", session.gsecHash ?: "")
+            .build()
+
+        val request = Request.Builder().url(url).post(multipart).build()
+        val response = session.httpClient.newCall(request).execute()
+        val responseStr = response.body?.string() ?: throw RuntimeException("Empty upload response")
+
+        val json = JsonParser.parseString(responseStr).asJsonObject
+        val r = json.getAsJsonObject("r") ?: throw RuntimeException("Invalid upload response")
+
+        return EduCloudFile(
+            fileId = r.get("id")?.asString ?: "",
+            fileName = file.name,
+            uploadPath = r.get("path")?.asString ?: "",
+        )
     }
 
     private fun detectMimeType(file: File): String {
