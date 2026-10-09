@@ -278,11 +278,17 @@ class GradesViewModel @Inject constructor(
                 val sorted = subjectGrades.sortedByDescending { it.date }
                 val avg = computeAverage(sorted)
                 val hasNew = sorted.any { it.eventId !in seenIds }
+                // Class average is reported per grade event; the subject value is the
+                // mean of those, not just the first grade that happens to carry one.
+                val classAvgs = sorted.mapNotNull { it.classGradeAvg }
+                val classAvg = classAvgs
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { (it.sum() / it.size * 100.0).roundToInt() / 100.0 }
                 GradeSubjectGroup(
                     subjectName   = subject,
                     grades        = sorted,
                     average       = avg,
-                    classGradeAvg = sorted.firstOrNull { it.classGradeAvg != null }?.classGradeAvg,
+                    classGradeAvg = classAvg,
                     allVerbal     = sorted.all { it.verbal },
                     hasNewGrades  = hasNew,
                 )
