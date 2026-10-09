@@ -38,6 +38,12 @@ data class AiMessage(
     val content: String,
 )
 
+/** Binary content (image or PDF) sent inline to a multimodal model. */
+data class AiAttachment(
+    val mimeType: String,
+    val data: ByteArray,
+)
+
 /**
  * Everything needed to talk to an AI backend. API keys live in encrypted storage;
  * this object is only held in memory by the view models.
@@ -47,12 +53,21 @@ data class AiConfig(
     val apiKey: String = "",
     val model: String = "",
     val baseUrl: String = "",
+    /** Gemini model used for photo/PDF attachments (multimodal). Blank disables attachments. */
+    val visionModel: String = "",
 ) {
     val effectiveModel: String
         get() = model.ifBlank { provider.defaultModel }
 
     val effectiveBaseUrl: String
         get() = (baseUrl.ifBlank { provider.defaultBaseUrl }).trimEnd('/')
+
+    /**
+     * Attachments are only sent to Gemini's multimodal endpoint, and only once a
+     * vision model has been chosen. Otherwise the attach action stays disabled.
+     */
+    val hasVision: Boolean
+        get() = provider.isGemini && visionModel.isNotBlank()
 
     val isReady: Boolean
         get() = effectiveModel.isNotBlank() && effectiveBaseUrl.isNotBlank() && apiKey.isNotBlank()

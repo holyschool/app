@@ -519,6 +519,10 @@ class SettingsViewModel @Inject constructor(
         aiCredentialsStore.setCustomBaseUrl(value)
     }
 
+    fun setAiVisionModel(value: String) {
+        aiCredentialsStore.setVisionModel(value)
+    }
+
     fun clearAiApiKey(provider: AiProvider) {
         aiCredentialsStore.clearApiKey(provider)
     }

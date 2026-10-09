@@ -89,6 +89,7 @@ fun AiSetupSheet(
     var key by remember { mutableStateOf(config.apiKey) }
     var baseUrl by remember { mutableStateOf(config.baseUrl) }
     var model by remember { mutableStateOf(config.model) }
+    var visionModel by remember { mutableStateOf(config.visionModel) }
 
     fun selectProvider(next: AiProvider) {
         if (next == provider) return
@@ -98,6 +99,7 @@ fun AiSetupSheet(
         key = stored.apiKey
         baseUrl = stored.baseUrl
         model = stored.model
+        visionModel = stored.visionModel
     }
 
     fun persistAccess() {
@@ -117,6 +119,7 @@ fun AiSetupSheet(
             }
             AI_STEP_MODEL -> {
                 viewModel.setAiModel(provider, model)
+                viewModel.setAiVisionModel(visionModel)
                 step = AI_STEP_VERIFY
             }
         }
@@ -278,6 +281,28 @@ fun AiSetupSheet(
                         }
                         else -> Unit
                     }
+
+                    if (provider.isGemini) {
+                        Spacer(Modifier.size(4.dp))
+                        Text(
+                            text = stringResource(R.string.settings_ai_vision_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        OutlinedTextField(
+                            value = visionModel,
+                            onValueChange = { visionModel = it },
+                            label = { Text(stringResource(R.string.settings_ai_vision_model)) },
+                            placeholder = { Text(stringResource(R.string.settings_ai_vision_model_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_ai_vision_note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 AI_STEP_VERIFY -> {
@@ -299,6 +324,9 @@ fun AiSetupSheet(
                             SummaryRow(stringResource(R.string.settings_ai_model), model.ifBlank { provider.defaultModel })
                             if (provider.needsBaseUrl) {
                                 SummaryRow(stringResource(R.string.settings_ai_base_url), baseUrl)
+                            }
+                            if (provider.isGemini && visionModel.isNotBlank()) {
+                                SummaryRow(stringResource(R.string.settings_ai_vision_model), visionModel)
                             }
                             SummaryRow(
                                 stringResource(R.string.settings_ai_api_key),

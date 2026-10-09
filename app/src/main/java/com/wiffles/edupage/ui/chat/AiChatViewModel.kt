@@ -12,6 +12,7 @@ import com.wiffles.edupage.data.ChatAttachment
 import com.wiffles.edupage.data.ChatMessage
 import com.wiffles.edupage.data.ChatStore
 import com.wiffles.edupage.data.LocalHomeworkStore
+import com.wiffles.edupage.network.AiAttachment
 import com.wiffles.edupage.network.AiMessage
 import com.wiffles.edupage.network.AiService
 import com.wiffles.edupage.ui.util.isNetworkError
@@ -86,6 +87,9 @@ class AiChatViewModel @Inject constructor(
 
     fun hasApiKey(): Boolean = aiCredentialsStore.current().apiKey.isNotBlank()
 
+    /** True when the configured provider can read attachments (Gemini + vision model). */
+    fun attachmentsEnabled(): Boolean = aiCredentialsStore.current().hasVision
+
     fun clearAttachError() {
         _attachError.value = null
     }
@@ -156,6 +160,7 @@ class AiChatViewModel @Inject constructor(
             chatStore.add(ChatMessage(role = "assistant", content = context.getString(R.string.chat_no_key), error = true))
             return
         }
+        val config = aiCredentialsStore.current()
         _attachments.value = emptyList()
         chatStore.add(ChatMessage(role = "user", content = prompt, attachments = pending))
         viewModelScope.launch {
@@ -166,7 +171,18 @@ class AiChatViewModel @Inject constructor(
                 .map { AiMessage(it.role, messageContentForModel(it)) }
             val payload = listOf(AiMessage("system", systemPrompt())) + history
             try {
-                val reply = aiService.complete(aiCredentialsStore.current(), payload, jsonMode = false)
+                // Photos and PDFs are sent inline to a Gemini vision model when configured;
+                // text files are folded into the prompt by [messageContentForModel].
+                val binaries = if (config.hasVision) {
+                    pending.mapNotNull { readVisionAttachment(it) }
+                } else {
+                    emptyList()
+                }
+                val reply = if (binaries.isNotEmpty()) {
+                    aiService.completeWithAttachments(config, payload, binaries, config.visionModel)
+                } else {
+                    aiService.complete(config, payload, jsonMode = false)
+                }
                 chatStore.add(ChatMessage(role = "assistant", content = reply.trim()))
             } catch (e: Exception) {
                 val message = if (e.isNetworkError()) context.getString(R.string.network_error)
@@ -176,6 +192,18 @@ class AiChatViewModel @Inject constructor(
                 _thinking.value = false
             }
         }
+    }
+
+    /** Reads an image or PDF attachment into bytes for the multimodal endpoint. */
+    private fun readVisionAttachment(attachment: ChatAttachment): AiAttachment? {
+        val mime = attachment.mimeType.lowercase().ifBlank { "application/octet-stream" }
+        val supported = mime.startsWith("image/") || mime == "application/pdf"
+        if (!supported) return null
+        return runCatching {
+            val file = File(attachment.localPath)
+            if (!file.exists() || file.length() > 8_000_000) return null
+            AiAttachment(mimeType = mime, data = file.readBytes())
+        }.getOrNull()
     }
 
     /** Folds attachment names (and small text-file contents) into what the model sees. */

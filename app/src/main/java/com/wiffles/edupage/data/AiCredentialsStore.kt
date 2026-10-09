@@ -32,6 +32,7 @@ class AiCredentialsStore @Inject constructor(
         private const val FILE_NAME = "edupage_ai_prefs"
         private const val KEY_PROVIDER = "provider"
         private const val KEY_CUSTOM_BASE_URL = "custom_base_url"
+        private const val KEY_VISION_MODEL = "vision_model"
         private const val KEY_STUDY_PROMPT = "study_prompt"
         private const val KEY_STUDY_STYLE = "study_style"
         private const val KEY_STUDY_TONE = "study_tone"
@@ -90,6 +91,7 @@ class AiCredentialsStore @Inject constructor(
         apiKey = prefs.getString(apiKeySlot(provider), "").orEmpty(),
         model = prefs.getString(modelSlot(provider), "").orEmpty().ifBlank { provider.defaultModel },
         baseUrl = prefs.getString(KEY_CUSTOM_BASE_URL, "").orEmpty(),
+        visionModel = prefs.getString(KEY_VISION_MODEL, "").orEmpty(),
     )
 
     fun current(): AiConfig = _config.value
@@ -111,6 +113,11 @@ class AiCredentialsStore @Inject constructor(
 
     fun setCustomBaseUrl(value: String) {
         prefs.edit().putString(KEY_CUSTOM_BASE_URL, value.trim()).apply()
+        refresh()
+    }
+
+    fun setVisionModel(value: String) {
+        prefs.edit().putString(KEY_VISION_MODEL, value.trim()).apply()
         refresh()
     }
 

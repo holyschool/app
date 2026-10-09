@@ -384,6 +384,10 @@
     <string name="settings_ai_test_ok">Connection OK</string>
     <string name="settings_ai_test_failed">Connection failed: %1$s</string>
     <string name="settings_ai_model_hint">gemini-flash-latest</string>
+    <string name="settings_ai_vision_title">Attachments (photos &amp; files)</string>
+    <string name="settings_ai_vision_model">Vision model</string>
+    <string name="settings_ai_vision_model_hint">gemini-flash-latest</string>
+    <string name="settings_ai_vision_note">Optional. A Gemini model that can read photos and PDFs. The attach button stays disabled until this is set.</string>
     <string name="settings_ai_save">Save</string>
     <string name="settings_ai_study_custom_prompt">Custom instructions</string>
     <string name="settings_ai_study_custom_prompt_desc">Tell the AI how to help you</string>
@@ -525,6 +529,7 @@
     <string name="chat_disclaimer">AI can make mistakes. Double-check important facts.</string>
     <string name="chat_subtitle">Your personal study helper</string>
     <string name="chat_attach">Attach a file</string>
+    <string name="chat_attach_photo">Attach a photo</string>
     <string name="chat_attach_failed">Couldn\'t attach that file.</string>
     <string name="chat_attachment_remove">Remove attachment</string>
     <string name="chat_copy">Copy</string>
@@ -852,6 +857,10 @@
     <string name="about_source_code_desc">View the source code on GitHub.</string>
     <string name="about_made_title">Edupage2 by holyschool</string>
     <string name="about_made_desc">An unofficial EduPage client built with Jetpack Compose. Tap to visit the project, star it, report bugs and contribute.</string>
+    <string name="about_made_by">Made by %1$s</string>
+    <string name="about_credit">An unofficial EduPage client. Built with Jetpack Compose and Material 3.</string>
+    <string name="about_action_source">Source code</string>
+    <string name="about_action_issue">Report an issue</string>
     <string name="settings_section_experimental">Experimental</string>
 
     <string name="settings_my_homework">My homework</string>
