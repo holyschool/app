@@ -469,6 +469,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
 
             OverlayTransition(
                 visible = showAiChat,
+                motionBlur = false,
             ) {
                     com.wiffles.edupage.ui.chat.AiChatScreen(
                         onBack = { showAiChat = false }

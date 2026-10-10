@@ -38,6 +38,7 @@ class AiCredentialsStore @Inject constructor(
         private const val KEY_STUDY_TONE = "study_tone"
         private const val KEY_STUDY_LANGUAGE = "study_language"
         private const val KEY_STUDY_HOMEWORK = "study_homework"
+        private const val KEY_STUDY_CLASS = "study_class"
         private fun apiKeySlot(provider: AiProvider) = "api_key_${provider.key}"
         private fun modelSlot(provider: AiProvider) = "model_${provider.key}"
     }
@@ -132,6 +133,7 @@ class AiCredentialsStore @Inject constructor(
         tone = AiStudyTone.fromKey(prefs.getString(KEY_STUDY_TONE, null)),
         language = AiStudyLanguage.fromKey(prefs.getString(KEY_STUDY_LANGUAGE, null)),
         includeHomework = prefs.getBoolean(KEY_STUDY_HOMEWORK, true),
+        studentClass = prefs.getString(KEY_STUDY_CLASS, "").orEmpty(),
     )
 
     private fun refreshStudy() {
@@ -160,6 +162,11 @@ class AiCredentialsStore @Inject constructor(
 
     fun setStudyIncludeHomework(value: Boolean) {
         prefs.edit().putBoolean(KEY_STUDY_HOMEWORK, value).apply()
+        refreshStudy()
+    }
+
+    fun setStudyClass(value: String) {
+        prefs.edit().putString(KEY_STUDY_CLASS, value.trim()).apply()
         refreshStudy()
     }
 

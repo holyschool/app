@@ -569,7 +569,12 @@ fun MessagesScreen(
                                     onLoadMore = { viewModel.loadMore() },
                                     onItemClick = { group ->
                                         haptics.virtualKey()
-                                        if (group.main.isImportant) {
+                                        val unseen = group.main.timelineId !in state.seenIds ||
+                                            group.replies.any { it.timelineId !in state.seenIds }
+                                        if (group.main.isImportant && unseen) {
+                                            // Warn only on the first open, then remember it as read.
+                                            viewModel.markMessageSeen(group.main.timelineId)
+                                            group.replies.forEach { viewModel.markMessageSeen(it.timelineId) }
                                             pendingImportant = group
                                         } else {
                                             viewModel.markMessageSeen(group.main.timelineId)
@@ -612,33 +617,50 @@ fun MessagesScreen(
     }
 
     pendingImportant?.let { group ->
-        AlertDialog(
+        com.wiffles.edupage.ui.core.sheets.AppBottomSheet(
             onDismissRequest = { pendingImportant = null },
-            icon = {
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Icon(
                     Icons.Default.PriorityHigh,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
                 )
-            },
-            title = { Text(stringResource(R.string.messages_important_open_title)) },
-            text = { Text(stringResource(R.string.messages_important_open_warning)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.markMessageSeen(group.main.timelineId)
-                    group.replies.forEach { viewModel.markMessageSeen(it.timelineId) }
-                    detailGroup = group
-                    pendingImportant = null
-                }) {
-                    Text(stringResource(R.string.messages_important_open_confirm))
+                Text(
+                    text = stringResource(R.string.messages_important_open_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(R.string.messages_important_open_warning),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                ) {
+                    TextButton(onClick = { pendingImportant = null }) {
+                        Text(stringResource(R.string.messages_important_open_cancel))
+                    }
+                    Button(
+                        onClick = {
+                            haptics.virtualKey()
+                            detailGroup = group
+                            pendingImportant = null
+                        },
+                    ) {
+                        Text(stringResource(R.string.messages_important_open_confirm))
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingImportant = null }) {
-                    Text(stringResource(R.string.messages_important_open_cancel))
-                }
-            },
-        )
+            }
+        }
     }
 
     if (showFilterSheet) {

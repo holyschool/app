@@ -1,9 +1,5 @@
 package com.wiffles.edupage.network
 
-/**
- * User-tunable behaviour for the AI Study features (chat, quiz, flashcards). Everything
- * here is optional: sane defaults reproduce the original assistant behaviour.
- */
 enum class AiAnswerStyle(val key: String) {
     CONCISE("concise"),
     BALANCED("balanced"),
@@ -67,12 +63,23 @@ data class AiStudySettings(
     val tone: AiStudyTone = AiStudyTone.FRIENDLY,
     val language: AiStudyLanguage = AiStudyLanguage.AUTO,
     val includeHomework: Boolean = true,
+    val studentClass: String = "",
 ) {
-    /** Renders the settings into extra system-prompt lines. */
+    /** Level instruction based on the class the student says they are in, or null. */
+    fun classHint(): String? = studentClass.trim().takeIf { it.isNotBlank() }?.let {
+        "The student is in $it. Match the difficulty, vocabulary and depth of your " +
+            "explanations and questions to that level."
+    }
+
+    /** Class level plus language instruction, for the quiz/flashcard generators. */
+    fun contextHint(): String? =
+        listOfNotNull(classHint(), language.promptHint).joinToString(" ").takeIf { it.isNotBlank() }
+
     fun promptBlock(): String = buildString {
         append(answerStyle.promptHint)
         append(' ').append(tone.promptHint)
         language.promptHint?.let { append(' ').append(it) }
+        classHint()?.let { append(' ').append(it) }
         if (customInstructions.isNotBlank()) {
             append("\n\nAdditional instructions from the student (follow them):\n")
             append(customInstructions.trim())

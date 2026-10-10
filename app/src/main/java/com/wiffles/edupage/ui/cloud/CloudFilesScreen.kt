@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Refresh
@@ -162,6 +163,7 @@ fun CloudFilesScreen(
                                             deleting = state.deletingId == file.fileId,
                                             opening = state.openingId == file.fileId,
                                             onOpen = { viewModel.open(file) },
+                                            onCopy = { haptics.virtualKey(); viewModel.copyLink(file) },
                                             onDelete = { confirmDelete = file }
                                         )
                                     }
@@ -198,6 +200,7 @@ private fun CloudFileRow(
     deleting: Boolean,
     opening: Boolean,
     onOpen: () -> Unit,
+    onCopy: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val haptics = rememberAppHaptics()
@@ -229,6 +232,10 @@ private fun CloudFileRow(
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 }
                 else -> {
+                    IconButton(onClick = onCopy) {
+                        Icon(Icons.Rounded.ContentCopy, contentDescription = stringResource(R.string.cloud_copy_link),
+                            tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = { haptics.virtualKey(); onDelete() }) {
                         Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.cloud_delete_action),
                             tint = MaterialTheme.colorScheme.error)

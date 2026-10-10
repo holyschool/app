@@ -24,9 +24,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -47,7 +47,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -55,12 +60,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.wiffles.edupage.R
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import java.net.HttpURLConnection
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 private const val TAG = "AboutScreen"
 private const val AUTHOR_URL = "https://github.com/FoxyIsCoding"
@@ -75,10 +88,6 @@ fun AboutScreen(
 ) {
     val context = LocalContext.current
     val haptics = rememberAppHaptics()
-
-    val versionName = runCatching {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "—"
-    }.getOrElse { "—" }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -116,46 +125,6 @@ fun AboutScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceBright,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(40.dp)
-                        )
-                        Column {
-                            Text(
-                                text = stringResource(R.string.about_app_name),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = stringResource(R.string.about_version, versionName),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(R.string.about_description),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
             AboutFooter(
                 onOpenLink = { url ->
                     Log.i(TAG, "opening $url")
@@ -168,12 +137,20 @@ fun AboutScreen(
                 },
             )
 
+            Spacer(Modifier.height(12.dp))
+
+            ContributorsSection(
+                onOpenLink = { url ->
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                        .onFailure { Log.w(TAG, "no browser to open $url") }
+                },
+            )
+
             Spacer(Modifier.height(24.dp))
         }
     }
 }
 
-/** Footer credit card: author avatar, credits and a connected group of actions. */
 @Composable
 private fun AboutFooter(
     onOpenLink: (String) -> Unit,
@@ -191,17 +168,18 @@ private fun AboutFooter(
             modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            val cookie = remember { CookieShape() }
             Surface(
-                shape = CircleShape,
+                shape = cookie,
                 color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.size(72.dp),
+                modifier = Modifier.size(84.dp),
             ) {
                 if (avatar != null) {
                     Image(
                         bitmap = avatar,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        modifier = Modifier.fillMaxSize().clip(cookie),
                     )
                 } else {
                     Box(contentAlignment = Alignment.Center) {
@@ -209,7 +187,7 @@ private fun AboutFooter(
                             Icons.Rounded.Person,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(40.dp),
                         )
                     }
                 }
@@ -231,7 +209,6 @@ private fun AboutFooter(
 
             Spacer(Modifier.height(18.dp))
 
-            // Connected (grouped) action buttons, Material 3 expressive style.
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surface,
@@ -299,7 +276,6 @@ private fun FooterAction(
     }
 }
 
-/** Loads a small remote image into an [ImageBitmap], falling back to null on failure. */
 @Composable
 private fun rememberRemoteImage(url: String): ImageBitmap? {
     var image by remember(url) { mutableStateOf<ImageBitmap?>(null) }
@@ -313,3 +289,168 @@ private fun rememberRemoteImage(url: String): ImageBitmap? {
     }
     return image
 }
+
+private class CookieShape : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline {
+        val path = Path()
+        val centerX = size.width / 2f
+        val centerY = size.height / 2f
+        val outer = minOf(centerX, centerY)
+        val inner = outer * 0.86f
+        val steps = 24
+
+        val points = (0 until steps).map { i ->
+            val radius = if (i % 2 == 0) outer else inner
+            val angle = (i.toDouble() / steps) * 2.0 * PI
+            Offset(
+                (centerX + radius * cos(angle)).toFloat(),
+                (centerY + radius * sin(angle)).toFloat(),
+            )
+        }
+
+        val start = Offset(
+            (points[0].x + points[1].x) / 2f,
+            (points[0].y + points[1].y) / 2f,
+        )
+        path.moveTo(start.x, start.y)
+        for (i in 0 until steps) {
+            val vertex = points[i]
+            val next = points[(i + 1) % steps]
+            val mid = Offset((vertex.x + next.x) / 2f, (vertex.y + next.y) / 2f)
+            path.quadraticBezierTo(vertex.x, vertex.y, mid.x, mid.y)
+        }
+        path.close()
+        return Outline.Generic(path)
+    }
+}
+
+private data class Contributor(
+    val login: String,
+    val avatarUrl: String,
+    val htmlUrl: String,
+    val contributions: Int,
+)
+
+private const val CONTRIBUTORS_API =
+    "https://api.github.com/repos/holyschool/app/contributors?per_page=100"
+
+@Composable
+private fun ContributorsSection(onOpenLink: (String) -> Unit) {
+    var contributors by remember { mutableStateOf<List<Contributor>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        contributors = withContext(Dispatchers.IO) { fetchContributors() }
+            .filterNot { it.login.equals("FoxyIsCoding", ignoreCase = true) }
+    }
+
+    if (contributors.isEmpty()) return
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceBright,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.about_contributors),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(12.dp))
+            contributors.forEachIndexed { index, contributor ->
+                ContributorRow(contributor = contributor, onOpenLink = onOpenLink)
+                if (index < contributors.lastIndex) {
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContributorRow(contributor: Contributor, onOpenLink: (String) -> Unit) {
+    val haptics = rememberAppHaptics()
+    val avatar = rememberRemoteImage(contributor.avatarUrl)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable {
+                haptics.virtualKey()
+                onOpenLink(contributor.htmlUrl)
+            }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.size(36.dp),
+        ) {
+            if (avatar != null) {
+                Image(
+                    bitmap = avatar,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                )
+            } else {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = contributor.login,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.about_contributions, contributor.contributions),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+private fun fetchContributors(): List<Contributor> = runCatching {
+    val connection = (java.net.URL(CONTRIBUTORS_API).openConnection() as HttpURLConnection).apply {
+        setRequestProperty("User-Agent", "Edupage2-App")
+        setRequestProperty("Accept", "application/vnd.github+json")
+        connectTimeout = 8000
+        readTimeout = 8000
+    }
+    val body = connection.inputStream.bufferedReader().use { it.readText() }
+    val array = JSONArray(body)
+    (0 until array.length()).mapNotNull { index ->
+        val obj = array.optJSONObject(index) ?: return@mapNotNull null
+        if (obj.optString("type").equals("Bot", ignoreCase = true)) return@mapNotNull null
+        val login = obj.optString("login").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        Contributor(
+            login = login,
+            avatarUrl = obj.optString("avatar_url"),
+            htmlUrl = obj.optString("html_url"),
+            contributions = obj.optInt("contributions"),
+        )
+    }
+}.getOrElse { emptyList() }

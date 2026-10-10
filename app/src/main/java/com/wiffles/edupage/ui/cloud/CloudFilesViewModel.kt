@@ -1,5 +1,7 @@
 package com.wiffles.edupage.ui.cloud
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -145,6 +147,14 @@ class CloudFilesViewModel @Inject constructor(
                 _messages.tryEmit(R.string.cloud_upload_failed)
             }
         }
+    }
+
+    fun copyLink(file: EduCloudFile) {
+        if (file.uploadPath.isBlank()) return
+        val link = edupage.cloudFileLink(file.uploadPath)
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(file.fileName, link))
+        _messages.tryEmit(R.string.cloud_link_copied)
     }
 
     fun open(file: EduCloudFile) {

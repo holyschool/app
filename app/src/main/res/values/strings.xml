@@ -398,6 +398,9 @@
     <string name="settings_ai_study_custom_prompt_desc">Tell the AI how to help you</string>
     <string name="settings_ai_study_sheet_desc">These instructions are added to every AI request for the study features.</string>
     <string name="settings_ai_study_prompt_label">Instructions</string>
+    <string name="settings_ai_study_class_label">Your class</string>
+    <string name="settings_ai_study_class_hint">e.g. Grade 9</string>
+    <string name="settings_ai_study_class_desc">The AI pitches its difficulty and detail at this level.</string>
     <string name="settings_ai_study_presets">Quick presets</string>
     <string name="settings_ai_study_preset_stepbystep">Explain step by step</string>
     <string name="settings_ai_study_preset_quiz">Quiz me after explaining</string>
@@ -873,6 +876,8 @@
     <string name="about_made_desc">An unofficial EduPage client built with Jetpack Compose. Tap to visit the project, star it, report bugs and contribute.</string>
     <string name="about_made_by">Made by %1$s</string>
     <string name="about_credit">An unofficial EduPage client. Built with Jetpack Compose and Material 3.</string>
+    <string name="about_contributors">Contributors</string>
+    <string name="about_contributions">%1$d contributions</string>
     <string name="about_action_source">Source code</string>
     <string name="about_action_issue">Report an issue</string>
     <string name="about_action_licenses">Licenses</string>
@@ -987,6 +992,8 @@
     <string name="cloud_delete_confirm">Delete "%1$s" from your cloud?</string>
     <string name="cloud_delete_action">Delete</string>
     <string name="cloud_cancel">Cancel</string>
+    <string name="cloud_copy_link">Copy link</string>
+    <string name="cloud_link_copied">Link copied</string>
 
     <string name="onboarding_welcome_title">Welcome to Edupage2</string>
     <string name="onboarding_welcome_subtitle">Your school day, grades and messages — in one clean app.</string>

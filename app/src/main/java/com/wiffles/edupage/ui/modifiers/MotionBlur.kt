@@ -161,6 +161,7 @@ fun <T> BlurStepTransition(
 fun OverlayTransition(
     visible: Boolean,
     durationMs: Int = 320,
+    motionBlur: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     var rendered by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(visible) }
@@ -183,7 +184,7 @@ fun OverlayTransition(
                 .graphicsLayer {
                     translationX = (1f - progress.value) * size.width
                 }
-                .transitionMotionBlur(progress.value),
+                .then(if (motionBlur) Modifier.transitionMotionBlur(progress.value) else Modifier),
         ) {
             content()
         }

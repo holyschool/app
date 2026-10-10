@@ -67,8 +67,8 @@ class AiQuizViewModel @Inject constructor(
 
     fun hasApiKey(): Boolean = aiCredentialsStore.current().apiKey.isNotBlank()
 
-    /** Language instruction from the AI study settings, or null to mirror the input. */
-    private fun languageHint(): String? = aiCredentialsStore.studySettings.value.language.promptHint
+    /** Class-level and language instruction from the AI study settings, or null. */
+    private fun languageHint(): String? = aiCredentialsStore.studySettings.value.contextHint()
 
     fun attemptsFor(quizId: String): List<QuizAttempt> = attemptStore.forQuiz(quizId)
 

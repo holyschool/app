@@ -546,6 +546,10 @@
     <string name="cloud_delete_confirm">Smazat "%1$s" z cloudu?</string>
     <string name="cloud_delete_action">Smazat</string>
     <string name="cloud_cancel">Zrušit</string>
+    <string name="cloud_copy_link">Kopírovat odkaz</string>
+    <string name="cloud_link_copied">Odkaz zkopírován</string>
+    <string name="about_contributors">Přispěvatelé</string>
+    <string name="about_contributions">%1$d příspěvků</string>
 
     <string name="settings_experimental_ai_quiz">AI studijní nástroje</string>
     <string name="settings_experimental_ai_quiz_desc">Kvízy, kartičky a studijní chat s vlastním AI klíčem.</string>
@@ -598,6 +602,9 @@
     <string name="settings_ai_study_custom_prompt_desc">Řekněte AI, jak vám má pomáhat</string>
     <string name="settings_ai_study_sheet_desc">Tyto pokyny se přidají ke každému požadavku AI ve studijních funkcích.</string>
     <string name="settings_ai_study_prompt_label">Pokyny</string>
+    <string name="settings_ai_study_class_label">Tvoje třída</string>
+    <string name="settings_ai_study_class_hint">např. 9. ročník</string>
+    <string name="settings_ai_study_class_desc">AI přizpůsobí náročnost a detailnost této úrovni.</string>
     <string name="settings_ai_study_presets">Rychlé předvolby</string>
     <string name="settings_ai_study_preset_stepbystep">Vysvětli krok za krokem</string>
     <string name="settings_ai_study_preset_quiz">Po vysvětlení mě vyzkoušej</string>

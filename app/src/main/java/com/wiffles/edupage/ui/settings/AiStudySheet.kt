@@ -28,10 +28,6 @@ import com.wiffles.edupage.R
 import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 
-/**
- * Editor for the free-form "custom instructions" that are appended to the AI study
- * system prompt. Presets give students a quick starting point.
- */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun AiStudySheet(
@@ -40,6 +36,7 @@ fun AiStudySheet(
 ) {
     val study by viewModel.aiStudySettings.collectAsState()
     var text by remember { mutableStateOf(study.customInstructions) }
+    var className by remember { mutableStateOf(study.studentClass) }
     val haptics = rememberAppHaptics()
 
     val presets = listOf(
@@ -66,6 +63,15 @@ fun AiStudySheet(
                 text = stringResource(R.string.settings_ai_study_sheet_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = className,
+                onValueChange = { if (it.length <= 60) className = it },
+                label = { Text(stringResource(R.string.settings_ai_study_class_label)) },
+                placeholder = { Text(stringResource(R.string.settings_ai_study_class_hint)) },
+                singleLine = true,
+                supportingText = { Text(stringResource(R.string.settings_ai_study_class_desc)) },
+                modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = text,
@@ -108,6 +114,7 @@ fun AiStudySheet(
                     onClick = {
                         haptics.virtualKey()
                         viewModel.setAiStudyInstructions(text.trim())
+                        viewModel.setAiStudyClass(className.trim())
                         onDismiss()
                     },
                 ) {

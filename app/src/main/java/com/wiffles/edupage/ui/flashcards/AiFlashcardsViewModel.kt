@@ -45,7 +45,7 @@ class AiFlashcardsViewModel @Inject constructor(
 
     fun hasApiKey(): Boolean = aiCredentialsStore.current().apiKey.isNotBlank()
 
-    private fun languageHint(): String? = aiCredentialsStore.studySettings.value.language.promptHint
+    private fun languageHint(): String? = aiCredentialsStore.studySettings.value.contextHint()
 
     fun homeworkMaterials(): List<StudyMaterial> = materialLoader.homework()
 

@@ -540,6 +540,7 @@ class SettingsViewModel @Inject constructor(
     fun setAiStudyTone(tone: AiStudyTone) = aiCredentialsStore.setStudyTone(tone)
     fun setAiStudyLanguage(language: AiStudyLanguage) = aiCredentialsStore.setStudyLanguage(language)
     fun setAiStudyIncludeHomework(value: Boolean) = aiCredentialsStore.setStudyIncludeHomework(value)
+    fun setAiStudyClass(value: String) = aiCredentialsStore.setStudyClass(value)
 
     fun loadAiModels() {
         val config = aiCredentialsStore.current()

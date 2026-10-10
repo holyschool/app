@@ -213,6 +213,10 @@ class Edupage(timeoutSeconds: Long = 15L) {
     suspend fun cloudDownload(uploadPath: String, destination: File): File =
         Cloud(session).downloadFile(uploadPath, destination)
 
+    fun cloudFileLink(uploadPath: String): String =
+        if (uploadPath.startsWith("http")) uploadPath
+        else "https://${session.subdomain}.edupage.org$uploadPath"
+
     val children: List<EduAccount>?
         get() = session.children
 

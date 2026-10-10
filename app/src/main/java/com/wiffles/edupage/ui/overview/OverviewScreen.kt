@@ -92,6 +92,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -865,34 +866,22 @@ private fun CompactLessonRow(
     }
 }
 
-/**
- * Experimental overview timetable: the whole day rendered as one connected group of period
- * columns (number, subject abbreviation, time), similar to the default EduPage timetable, so
- * the full day fits on a single screen at a glance. Columns shrink to fit and fall back to a
- * horizontal scroll when there are more periods than can comfortably fit.
- */
 @Composable
 private fun OverviewTimetableGrid(
     lessons: List<Lesson>,
     currentLesson: Lesson?,
     nextLesson: Lesson?,
 ) {
-    val periodLessons = lessons.filter { (it.period ?: 0) > 0 }
-    if (periodLessons.isEmpty()) return
-
-    val maxPeriod = periodLessons.maxOf { it.period!! }
-    val byPeriod = periodLessons.associateBy { it.period!! }
-    val extras = lessons.filter { (it.period ?: 0) <= 0 }
-
-    val columns = buildList<Lesson?> {
-        for (p in 1..maxPeriod) add(byPeriod[p])
-        extras.forEach { add(it) }
-    }
+    // Only periods that actually have a lesson are shown, so free periods (long breaks) do
+    // not take up a column and the day packs tightly enough to fit a full 9-period day.
+    val columns = lessons
+        .filter { (it.period ?: 0) > 0 }
+        .sortedBy { it.period }
+    if (columns.isEmpty()) return
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val count = columns.size.coerceAtLeast(1)
-        val minColumn = 44.dp
-        val columnWidth = (maxWidth / count).coerceAtLeast(minColumn)
+        val count = columns.size
+        val columnWidth = (maxWidth / count).coerceAtLeast(30.dp)
         val scrollable = columnWidth * count > maxWidth
         val scrollState = rememberScrollState()
 
@@ -906,14 +895,13 @@ private fun OverviewTimetableGrid(
             columns.forEachIndexed { index, lesson ->
                 PeriodCell(
                     lesson = lesson,
-                    period = lesson?.period ?: index + 1,
                     width = columnWidth,
-                    isCurrent = lesson != null && lesson == currentLesson,
-                    isNext = lesson != null && lesson == nextLesson && currentLesson == null,
+                    isCurrent = lesson == currentLesson,
+                    isNext = lesson == nextLesson && currentLesson == null,
                 )
                 if (index < columns.lastIndex) {
                     VerticalDivider(
-                        modifier = Modifier.height(80.dp),
+                        modifier = Modifier.height(72.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     )
                 }
@@ -924,75 +912,70 @@ private fun OverviewTimetableGrid(
 
 @Composable
 private fun PeriodCell(
-    lesson: Lesson?,
-    period: Int,
+    lesson: Lesson,
     width: Dp,
     isCurrent: Boolean,
     isNext: Boolean,
 ) {
-    val cancelled = lesson?.isCancelled == true
-    val labelColor = when {
-        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+    val cancelled = lesson.isCancelled
+    val changed = lesson.hasChange() && !cancelled
+    val containerColor = when {
+        isCurrent -> MaterialTheme.colorScheme.primaryContainer
+        changed   -> MaterialTheme.colorScheme.tertiaryContainer
+        cancelled -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+        else      -> Color.Transparent
+    }
+    val primaryColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer
+        changed   -> MaterialTheme.colorScheme.onTertiaryContainer
+        cancelled -> MaterialTheme.colorScheme.error
         isNext    -> MaterialTheme.colorScheme.primary
+        else      -> MaterialTheme.colorScheme.onSurface
+    }
+    val secondaryColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+        changed   -> MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+        cancelled -> MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
         else      -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Column(
         modifier = Modifier
             .width(width)
-            .height(80.dp)
-            .background(
-                if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-            )
-            .padding(horizontal = 2.dp, vertical = 8.dp),
+            .height(72.dp)
+            .background(containerColor)
+            .padding(horizontal = 2.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text       = "$period.",
+            text       = "${lesson.period}.",
             style      = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color      = labelColor,
+            color      = primaryColor.copy(alpha = 0.75f),
         )
-        Spacer(Modifier.height(4.dp))
-        if (lesson == null) {
-            Text(
-                text  = "–",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-            )
-        } else {
-            Text(
-                text       = lessonShortName(lesson),
-                style      = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color      = when {
-                    isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer
-                    cancelled -> MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
-                    else      -> MaterialTheme.colorScheme.onSurface
-                },
-                maxLines   = 1,
-                overflow   = TextOverflow.Ellipsis,
-                textAlign  = TextAlign.Center,
-            )
-            Spacer(Modifier.height(4.dp))
-            val timeColor = when {
-                isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                cancelled -> MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
-                else      -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            Text(
-                text  = lesson.startTime?.format(timeFmt) ?: "–",
-                style = MaterialTheme.typography.labelSmall,
-                color = timeColor,
-                maxLines = 1,
-            )
-            Text(
-                text  = lesson.endTime?.format(timeFmt).orEmpty(),
-                style = MaterialTheme.typography.labelSmall,
-                color = timeColor,
-                maxLines = 1,
-            )
-        }
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text       = lessonShortName(lesson),
+            style      = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color      = primaryColor,
+            maxLines   = 1,
+            overflow   = TextOverflow.Ellipsis,
+            textAlign  = TextAlign.Center,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text     = lesson.startTime?.format(timeFmt) ?: "–",
+            fontSize = 9.sp,
+            color    = secondaryColor,
+            maxLines = 1,
+        )
+        Text(
+            text     = lesson.endTime?.format(timeFmt).orEmpty(),
+            fontSize = 9.sp,
+            color    = secondaryColor,
+            maxLines = 1,
+        )
     }
 }
 
