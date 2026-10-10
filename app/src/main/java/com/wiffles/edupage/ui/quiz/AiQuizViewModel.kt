@@ -9,6 +9,7 @@ import com.wiffles.edupage.data.AiCredentialsStore
 import com.wiffles.edupage.data.MaterialLoadState
 import com.wiffles.edupage.data.QuizAttempt
 import com.wiffles.edupage.data.QuizAttemptStore
+import com.wiffles.edupage.data.QuizKind
 import com.wiffles.edupage.data.QuizQuestion
 import com.wiffles.edupage.data.StudyMaterial
 import com.wiffles.edupage.data.StudyMaterialLoader
@@ -96,6 +97,8 @@ class AiQuizViewModel @Inject constructor(
         count: Int,
         difficulty: String,
         material: String? = null,
+        kind: QuizKind = QuizKind.QUIZ,
+        instructions: String? = null,
         onCreated: (AiQuiz) -> Unit,
     ) {
         if (topic.isBlank()) return
@@ -107,11 +110,22 @@ class AiQuizViewModel @Inject constructor(
         viewModelScope.launch {
             _generateState.value = GenerateState.Generating
             try {
-                val questions = aiService.generateQuiz(config, topic.trim(), count, difficulty, material, languageHint())
+                val questions = aiService.generateQuiz(
+                    config = config,
+                    topic = topic.trim(),
+                    count = count,
+                    difficulty = difficulty,
+                    material = material,
+                    languageHint = languageHint(),
+                    kind = kind,
+                    instructions = instructions?.takeIf { it.isNotBlank() },
+                )
                 val quiz = AiQuiz(
                     topic = topic.trim(),
                     difficulty = difficulty,
                     questions = questions,
+                    kind = kind,
+                    instructions = instructions?.takeIf { it.isNotBlank() },
                 )
                 quizStore.add(quiz)
                 _generateState.value = GenerateState.Idle
@@ -175,11 +189,15 @@ class AiQuizViewModel @Inject constructor(
                     difficulty = quiz.difficulty,
                     focus = focus,
                     languageHint = languageHint(),
+                    kind = quiz.kind ?: QuizKind.QUIZ,
+                    instructions = quiz.instructions,
                 )
                 val newQuiz = AiQuiz(
                     topic = quiz.topic,
                     difficulty = quiz.difficulty,
                     questions = questions,
+                    kind = quiz.kind ?: QuizKind.QUIZ,
+                    instructions = quiz.instructions,
                 )
                 quizStore.add(newQuiz)
                 onCreated(newQuiz)

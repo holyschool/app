@@ -647,6 +647,13 @@
     <string name="quiz_insights_weak_title">Na precvičenie</string>
     <string name="quiz_insights_wrong_count">%1$d×</string>
     <string name="quiz_insights_recent_title">Nedávne výsledky</string>
+    <string name="quiz_type">Typ</string>
+    <string name="quiz_kind_quiz">Kvíz</string>
+    <string name="quiz_kind_grammar">Diktát</string>
+    <string name="quiz_grammar_topic">Čo precvičiť</string>
+    <string name="quiz_grammar_topic_hint">napr. vybrané slová, i/y po obojetných spoluhláskach…</string>
+    <string name="quiz_grammar_instructions">Možnosti / pokyny (nepovinné)</string>
+    <string name="quiz_grammar_instructions_hint">napr. len i/y, alebo miešaj í/ý, ě/je a koncovky</string>
 
     <string name="flash_title">AI kartičky</string>
     <string name="flash_new">Nová sada</string>

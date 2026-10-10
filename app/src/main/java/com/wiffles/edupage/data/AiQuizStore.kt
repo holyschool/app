@@ -25,6 +25,9 @@ data class QuizQuestion(
     val explanation: String? = null,
 )
 
+/** Distinguishes a general quiz from a fill-in-the-blank grammar exam (diktát). */
+enum class QuizKind { QUIZ, GRAMMAR }
+
 data class AiQuiz(
     val id: String = UUID.randomUUID().toString(),
     val topic: String,
@@ -33,7 +36,13 @@ data class AiQuiz(
     val questions: List<QuizQuestion> = emptyList(),
     val bestScore: Int = -1,
     val bestTotal: Int = 0,
-)
+    /** Nullable for backward compatibility with quizzes saved before grammar exams existed. */
+    val kind: QuizKind? = QuizKind.QUIZ,
+    /** Free-form instructions for a grammar exam (e.g. "only i/y" or "mix in ě/je"). */
+    val instructions: String? = null,
+) {
+    val isGrammar: Boolean get() = kind == QuizKind.GRAMMAR
+}
 
 @Singleton
 class AiQuizStore @Inject constructor(

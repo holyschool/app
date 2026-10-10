@@ -102,6 +102,7 @@ import com.wiffles.edupage.data.AiQuiz
 import com.wiffles.edupage.data.QuizQuestion
 import com.wiffles.edupage.data.MaterialLoadState
 import com.wiffles.edupage.data.QuizAttempt
+import com.wiffles.edupage.data.QuizKind
 import com.wiffles.edupage.data.StudyMaterial
 import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
 import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
@@ -125,7 +126,6 @@ fun AiQuizScreen(
     var activeQuiz by remember { mutableStateOf<AiQuiz?>(null) }
     val haptics = rememberAppHaptics()
     val snackbarHostState = remember { SnackbarHostState() }
-    val hasInsights = attemptsByQuiz.values.any { it.isNotEmpty() }
 
     LaunchedEffect(regenerateError) {
         regenerateError?.let {
@@ -184,14 +184,6 @@ fun AiQuizScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (hasInsights) {
-                        item(key = "insights") {
-                            QuizInsights(
-                                quizzes = quizzes,
-                                attemptsByQuiz = attemptsByQuiz,
-                            )
-                        }
-                    }
                     items(quizzes, key = { it.id }) { quiz ->
                         QuizRow(
                             quiz = quiz,
@@ -247,8 +239,8 @@ fun AiQuizScreen(
                 viewModel.consumeError()
                 showNewSheet = false
             },
-            onGenerate = { topic, count, difficulty, material ->
-                viewModel.generate(topic, count, difficulty, material) { created ->
+            onGenerate = { topic, count, difficulty, material, kind, instructions ->
+                viewModel.generate(topic, count, difficulty, material, kind, instructions) { created ->
                     showNewSheet = false
                     activeQuiz = created
                 }
@@ -318,6 +310,14 @@ private fun QuizRow(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                 )
+                if (quiz.isGrammar) {
+                    Text(
+                        text = stringResource(R.string.quiz_kind_grammar),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
                 Text(
                     text = stringResource(R.string.quiz_questions_count, quiz.questions.size),
                     style = MaterialTheme.typography.bodySmall,
@@ -377,143 +377,6 @@ private fun QuizRow(
     }
 }
 
-/** A compact overview of recent quiz activity and the concepts that need practice. */
-@Composable
-private fun QuizInsights(
-    quizzes: List<AiQuiz>,
-    attemptsByQuiz: Map<String, List<QuizAttempt>>,
-) {
-    val allAttempts = remember(attemptsByQuiz) { attemptsByQuiz.values.flatten() }
-    if (allAttempts.isEmpty()) return
-
-    val weakSpots = remember(attemptsByQuiz) {
-        attemptsByQuiz.values.flatten()
-            .flatMap { it.wrongQuestions }
-            .groupingBy { it }
-            .eachCount()
-            .entries
-            .sortedByDescending { it.value }
-            .take(5)
-    }
-    val recent = remember(attemptsByQuiz, quizzes) {
-        val topics = quizzes.associate { it.id to it.topic }
-        attemptsByQuiz.entries
-            .flatMap { (id, list) -> list.map { topics[id] to it } }
-            .sortedByDescending { it.second.timestampMs }
-            .take(4)
-    }
-    val average = remember(allAttempts) { allAttempts.map { it.fraction }.average() }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionHeader(text = stringResource(R.string.quiz_insights_title))
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceBright,
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    InsightStat(
-                        value = allAttempts.size.toString(),
-                        label = stringResource(R.string.quiz_insights_attempts),
-                    )
-                    InsightStat(
-                        value = "${(average * 100).toInt()}%",
-                        label = stringResource(R.string.quiz_insights_average),
-                    )
-                }
-                if (weakSpots.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(
-                                Icons.Rounded.School,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(
-                                text = stringResource(R.string.quiz_insights_weak_title),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        weakSpots.forEach { (question, count) ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Text(
-                                    text = question,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    text = stringResource(R.string.quiz_insights_wrong_count, count),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                    }
-                }
-                if (recent.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = stringResource(R.string.quiz_insights_recent_title),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        recent.forEach { (topic, attempt) ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Text(
-                                    text = topic ?: stringResource(R.string.quiz_title),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    text = "${attempt.score}/${attempt.total}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InsightStat(value: String, label: String) {
-    Column {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewQuizSheet(
@@ -523,11 +386,13 @@ private fun NewQuizSheet(
     examState: MaterialLoadState,
     onLoadExamMaterials: () -> Unit,
     onDismiss: () -> Unit,
-    onGenerate: (String, Int, String, String?) -> Unit,
+    onGenerate: (String, Int, String, String?, QuizKind, String?) -> Unit,
 ) {
+    var quizKind by remember { mutableStateOf(QuizKind.QUIZ) }
     var topic by remember { mutableStateOf("") }
     var count by remember { mutableIntStateOf(10) }
     var difficulty by remember { mutableStateOf("medium") }
+    var instructions by remember { mutableStateOf("") }
     var material by remember { mutableStateOf<String?>(null) }
     var materialLabel by remember { mutableStateOf<String?>(null) }
     var showPicker by remember { mutableStateOf(false) }
@@ -651,15 +516,45 @@ private fun NewQuizSheet(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
+            val isGrammar = quizKind == QuizKind.GRAMMAR
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.quiz_type),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = quizKind == QuizKind.QUIZ,
+                        onClick = { haptics.virtualKey(); quizKind = QuizKind.QUIZ },
+                        label = { Text(stringResource(R.string.quiz_kind_quiz)) },
+                    )
+                    FilterChip(
+                        selected = isGrammar,
+                        onClick = { haptics.virtualKey(); quizKind = QuizKind.GRAMMAR },
+                        label = { Text(stringResource(R.string.quiz_kind_grammar)) },
+                    )
+                }
+            }
             OutlinedTextField(
                 value = topic,
                 onValueChange = { topic = it },
-                label = { Text(stringResource(R.string.quiz_topic)) },
-                placeholder = { Text(stringResource(R.string.quiz_topic_hint)) },
+                label = { Text(stringResource(if (isGrammar) R.string.quiz_grammar_topic else R.string.quiz_topic)) },
+                placeholder = { Text(stringResource(if (isGrammar) R.string.quiz_grammar_topic_hint else R.string.quiz_topic_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (isGrammar) {
+                OutlinedTextField(
+                    value = instructions,
+                    onValueChange = { instructions = it },
+                    label = { Text(stringResource(R.string.quiz_grammar_instructions)) },
+                    placeholder = { Text(stringResource(R.string.quiz_grammar_instructions_hint)) },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             if (materialLabel != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -792,7 +687,7 @@ private fun NewQuizSheet(
             Button(
                 onClick = {
                     haptics.virtualKey()
-                    onGenerate(topic, count, difficulty, material)
+                    onGenerate(topic, count, difficulty, material, quizKind, instructions)
                 },
                 enabled = topic.isNotBlank() && !generating,
                 shape = RoundedCornerShape(20.dp),
@@ -939,7 +834,8 @@ private fun QuizRunner(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 20.dp, bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(

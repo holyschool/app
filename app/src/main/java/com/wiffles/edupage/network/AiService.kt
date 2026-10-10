@@ -2,6 +2,7 @@ package com.wiffles.edupage.network
 
 import android.util.Base64
 import com.wiffles.edupage.data.Flashcard
+import com.wiffles.edupage.data.QuizKind
 import com.wiffles.edupage.data.QuizQuestion
 import com.google.gson.Gson
 import com.google.gson.JsonArray
@@ -265,46 +266,112 @@ class AiService @Inject constructor(
         material: String? = null,
         focus: String? = null,
         languageHint: String? = null,
+        kind: QuizKind = QuizKind.QUIZ,
+        instructions: String? = null,
     ): List<QuizQuestion> {
-        val prompt = buildString {
-            append("Create a multiple-choice quiz with exactly ")
-            append(count)
-            append(" questions about: \"")
-            append(topic.trim())
-            append("\".\n")
-            if (!material.isNullOrBlank()) {
-                append("Base the questions strictly on the following study material:\n")
-                append("---\n")
-                append(material.trim().take(8000))
-                append("\n---\n")
-            }
-            if (!focus.isNullOrBlank()) {
-                append("The student previously got these concepts wrong. Write NEW questions with different wording that re-test the same underlying ideas:\n")
-                append("---\n")
-                append(focus.trim().take(4000))
-                append("\n---\n")
-            }
-            append("Difficulty: $difficulty.\n")
-            append("Rules:\n")
-            append("- Each question has exactly 4 options with exactly one correct answer.\n")
-            append("- correctIndex is the 0-based index of the correct option.\n")
-            append("- Add a short, educational explanation for why the correct answer is right.\n")
-            append("- Make questions varied and non-repetitive; test understanding, not trivia.\n")
-            append("- ")
-            append(languageRule(languageHint, "Write in the same language as the topic; if unclear, use English."))
-            append("\n")
-            append("Return JSON only, with this shape: {\"questions\":[{\"question\":\"…\",")
-            append("\"options\":[\"…\"],\"correctIndex\":0,\"explanation\":\"…\"}]}")
+        val prompt = if (kind == QuizKind.GRAMMAR) {
+            grammarExamPrompt(topic, count, difficulty, material, focus, languageHint, instructions)
+        } else {
+            standardQuizPrompt(topic, count, difficulty, material, focus, languageHint)
+        }
+        val systemPrompt = if (kind == QuizKind.GRAMMAR) {
+            "You are a meticulous language teacher who writes accurate dictation and grammar exercises with clear explanations."
+        } else {
+            "You are a meticulous exam writer who produces accurate, well-explained questions."
         }
         val text = complete(
             config,
             listOf(
-                AiMessage("system", "You are a meticulous exam writer who produces accurate, well-explained questions."),
+                AiMessage("system", systemPrompt),
                 AiMessage("user", prompt),
             ),
             jsonMode = true,
         )
         return parseQuestions(text, count)
+    }
+
+    private fun standardQuizPrompt(
+        topic: String,
+        count: Int,
+        difficulty: String,
+        material: String?,
+        focus: String?,
+        languageHint: String?,
+    ): String = buildString {
+        append("Create a multiple-choice quiz with exactly ")
+        append(count)
+        append(" questions about: \"")
+        append(topic.trim())
+        append("\".\n")
+        if (!material.isNullOrBlank()) {
+            append("Base the questions strictly on the following study material:\n")
+            append("---\n")
+            append(material.trim().take(8000))
+            append("\n---\n")
+        }
+        if (!focus.isNullOrBlank()) {
+            append("The student previously got these concepts wrong. Write NEW questions with different wording that re-test the same underlying ideas:\n")
+            append("---\n")
+            append(focus.trim().take(4000))
+            append("\n---\n")
+        }
+        append("Difficulty: $difficulty.\n")
+        append("Rules:\n")
+        append("- Each question has exactly 4 options with exactly one correct answer.\n")
+        append("- correctIndex is the 0-based index of the correct option.\n")
+        append("- Add a short, educational explanation for why the correct answer is right.\n")
+        append("- Make questions varied and non-repetitive; test understanding, not trivia.\n")
+        append("- ")
+        append(languageRule(languageHint, "Write in the same language as the topic; if unclear, use English."))
+        append("\n")
+        append("Return JSON only, with this shape: {\"questions\":[{\"question\":\"…\",")
+        append("\"options\":[\"…\"],\"correctIndex\":0,\"explanation\":\"…\"}]}")
+    }
+
+    private fun grammarExamPrompt(
+        topic: String,
+        count: Int,
+        difficulty: String,
+        material: String?,
+        focus: String?,
+        languageHint: String?,
+        instructions: String?,
+    ): String = buildString {
+        append("Create a grammar exam (diktát) with exactly ")
+        append(count)
+        append(" items to practise: \"")
+        append(topic.trim())
+        append("\".\n")
+        if (!material.isNullOrBlank()) {
+            append("Base the items on the following study material:\n")
+            append("---\n")
+            append(material.trim().take(8000))
+            append("\n---\n")
+        }
+        if (!focus.isNullOrBlank()) {
+            append("The student previously made these mistakes. Write NEW items with different sentences that re-test the same rules:\n")
+            append("---\n")
+            append(focus.trim().take(4000))
+            append("\n---\n")
+        }
+        if (!instructions.isNullOrBlank()) {
+            append("Extra instructions from the student (follow them closely): ")
+            append(instructions.trim())
+            append("\n")
+        }
+        append("Difficulty: $difficulty.\n")
+        append("Rules:\n")
+        append("- Each item is one short Czech sentence containing a single gap written as \"___\".\n")
+        append("- The gap is exactly where the spelling/grammar decision is being tested.\n")
+        append("- Provide the candidate spellings or word forms for the gap as options (for example just [\"i\",\"y\"], or mixed options such as [\"i\",\"y\",\"í\",\"ý\"]).\n")
+        append("- Give exactly one correct option; correctIndex is its 0-based index.\n")
+        append("- Add a short explanation naming the grammar rule that decides the correct form.\n")
+        append("- Vary the sentences so they are not repetitive.\n")
+        append("- ")
+        append(languageRule(languageHint, "Write the sentences in Czech."))
+        append("\n")
+        append("Return JSON only, with this shape: {\"questions\":[{\"question\":\"…\",")
+        append("\"options\":[\"…\"],\"correctIndex\":0,\"explanation\":\"…\"}]}")
     }
 
     private fun parseQuestions(text: String, expected: Int): List<QuizQuestion> {

@@ -447,6 +447,13 @@
     <string name="quiz_new">New quiz</string>
     <string name="quiz_topic">Topic</string>
     <string name="quiz_topic_hint">e.g. Photosynthesis, World War II…</string>
+    <string name="quiz_type">Type</string>
+    <string name="quiz_kind_quiz">Quiz</string>
+    <string name="quiz_kind_grammar">Diktát</string>
+    <string name="quiz_grammar_topic">What to practise</string>
+    <string name="quiz_grammar_topic_hint">e.g. vyjmenovaná slova, i/y after hard consonants…</string>
+    <string name="quiz_grammar_instructions">Options / instructions (optional)</string>
+    <string name="quiz_grammar_instructions_hint">e.g. only i/y, or mix in í/ý, ě/je and word endings</string>
     <string name="quiz_count">Number of questions</string>
     <string name="quiz_difficulty">Difficulty</string>
     <string name="quiz_difficulty_easy">Easy</string>
