@@ -21,6 +21,7 @@ import com.wiffles.edupage.data.TimelineCache
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -159,7 +160,9 @@ class OverviewViewModel @Inject constructor(
     }
 
     private fun load(forceRefresh: Boolean, silent: Boolean = false) {
-        viewModelScope.launch {
+        // Cache reads/writes below are blocking file I/O, so run the whole load off the
+        // main thread. All published state is StateFlow (thread-safe).
+        viewModelScope.launch(Dispatchers.IO) {
             val timetableDeferred = async { loadTimetable(forceRefresh, silent) }
             val gradesDeferred    = async { loadGrades(forceRefresh, silent) }
             val messagesDeferred  = async { loadMessages(forceRefresh, silent) }

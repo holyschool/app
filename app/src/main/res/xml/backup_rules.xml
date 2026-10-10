@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <full-backup-content>
-
+    <!-- Android 11 and below: keep device-bound encrypted prefs off cloud backup. -->
+    <exclude domain="sharedpref" path="edupage_secure_prefs.xml" />
+    <exclude domain="sharedpref" path="edupage_ai_prefs.xml" />
+    <exclude domain="sharedpref" path="edupage_accounts_prefs.xml" />
+    <exclude domain="sharedpref" path="edupage_lock_prefs.xml" />
 </full-backup-content>

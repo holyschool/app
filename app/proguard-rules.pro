@@ -5,17 +5,49 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep line numbers for readable crash reports.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# ---------------------------------------------------------------------------
+# Gson / reflection-based (de)serialization
+# ---------------------------------------------------------------------------
+# Gson reads/writes fields reflectively by their declared name, so model classes
+# and their fields must not be renamed or removed.
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+-keep class com.google.gson.** { *; }
+-dontwarn com.google.gson.**
+
+# App + library models that are read/written with Gson.
+-keep class com.wiffles.edupage.data.** { *; }
+-keep class com.edupage.api.model.** { *; }
+-keep class com.wiffles.edupage.network.** { *; }
+-keep class com.wiffles.edupage.ui.widgets.** { *; }
+
+# Keep enum values (Gson stores/reads them by name).
+-keepclassmembers enum * { *; }
+
+# Kotlin metadata used by reflection / coroutines.
+-keep class kotlin.Metadata { *; }
+-keepclassmembers class **$WhenMappings { <fields>; }
+
+# ---------------------------------------------------------------------------
+# Networking
+# ---------------------------------------------------------------------------
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+-dontwarn com.google.crypto.tink.**
+
+# ---------------------------------------------------------------------------
+# Firebase / Google Play services (their libraries ship their own rules, but
+# keep these informational warnings quiet for optional components).
+# ---------------------------------------------------------------------------
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**

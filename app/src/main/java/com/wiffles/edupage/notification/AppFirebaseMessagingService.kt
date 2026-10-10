@@ -2,11 +2,10 @@ package com.wiffles.edupage.notification
 
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.wiffles.edupage.applicationScope
 import com.wiffles.edupage.network.BackendRegistrationManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -16,7 +15,7 @@ class AppFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             backendRegistrationManager.registerIfPossible(token)
         }
     }

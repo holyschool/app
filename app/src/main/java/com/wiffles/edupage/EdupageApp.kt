@@ -18,8 +18,6 @@ import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.HiltAndroidApp
 import java.io.IOException
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @HiltAndroidApp
@@ -49,7 +47,7 @@ class EdupageApp : Application(), Configuration.Provider {
         val pushReady = runCatching { com.google.firebase.FirebaseApp.getInstance() }.isSuccess
         if (pushReady) {
             FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                CoroutineScope(Dispatchers.IO).launch {
+                applicationScope.launch {
                     runCatching { backendRegistrationManager.registerIfPossible(token) }
                 }
             }
@@ -60,7 +58,7 @@ class EdupageApp : Application(), Configuration.Provider {
         if (appPreferences.liveClassNotif) {
             com.wiffles.edupage.notification.ClassLiveController.start(this)
         }
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             UpdateCenter.checkOnBoot(appPreferences, appPreferences.appVersionName)
         }
     }

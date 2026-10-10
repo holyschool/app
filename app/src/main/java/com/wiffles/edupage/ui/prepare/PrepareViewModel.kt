@@ -12,6 +12,7 @@ import com.wiffles.edupage.data.TimetableCache
 import com.wiffles.edupage.ui.widgets.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,7 +60,7 @@ class PrepareViewModel @Inject constructor(
     }
 
     fun load() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = PrepareUiState.Loading
             val date = targetDate()
             try {

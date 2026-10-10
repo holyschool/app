@@ -24,3 +24,10 @@ node_modules/
 .idea/
 .vscode/
 /edupage-notify-backend/
+.kotlin/
+
+# Signing secrets — never commit
+keystore.properties
+/keystore/
+*.jks
+*.keystore

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -10,6 +12,27 @@ plugins {
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
+
+// Release signing is configured from keystore.properties (gitignored) or environment
+// variables, so secrets never live in the public repository. When neither is present the
+// release build stays unsigned instead of failing.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+fun signingValue(envName: String, propName: String): String? =
+    System.getenv(envName) ?: keystoreProperties.getProperty(propName)
+val releaseStorePath = signingValue("KEYSTORE_FILE", "storeFile")
+val hasReleaseSigning = !releaseStorePath.isNullOrBlank()
+
+// The official backend key is never committed. It can be injected at build time through
+// the OFFICIAL_BACKEND_KEY environment variable or the `officialBackendKey` property in
+// keystore.properties (gitignored); otherwise a harmless placeholder is used.
+val officialBackendKey = System.getenv("OFFICIAL_BACKEND_KEY")
+    ?: keystoreProperties.getProperty("officialBackendKey")
+    ?: "change-this-long-random"
 
 java {
     toolchain {
@@ -29,12 +52,28 @@ android {
         versionName = "1.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "OFFICIAL_BACKEND_KEY", "\"$officialBackendKey\"")
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(releaseStorePath!!)
+                storePassword = signingValue("KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signingValue("KEY_ALIAS", "keyAlias")
+                keyPassword = signingValue("KEY_PASSWORD", "keyPassword")
+            }
+        }
+    }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -47,6 +86,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

@@ -5,6 +5,10 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -37,6 +41,7 @@ class LocalHomeworkStore @Inject constructor(
 
     private val gson = Gson()
     private val file: File get() = File(context.filesDir, FILE_NAME)
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val items = CopyOnWriteArrayList<HomeworkItem>().apply {
         loadFromDisk()?.let { addAll(it) }
@@ -147,10 +152,13 @@ class LocalHomeworkStore @Inject constructor(
     }
 
     private fun persist() {
-        try {
-            file.writeText(gson.toJson(items))
-        } catch (e: Exception) {
-            Log.e(TAG, "failed to persist homework: ${e.message}", e)
+        val snapshot = items.toList()
+        ioScope.launch {
+            try {
+                file.writeText(gson.toJson(snapshot))
+            } catch (e: Exception) {
+                Log.e(TAG, "failed to persist homework: ${e.message}", e)
+            }
         }
     }
 

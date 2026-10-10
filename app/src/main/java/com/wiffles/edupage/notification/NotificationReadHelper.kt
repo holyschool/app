@@ -1,10 +1,9 @@
 package com.wiffles.edupage.notification
 
 import android.content.Context
+import com.wiffles.edupage.applicationScope
 import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.network.BackendRegistrationManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 object NotificationReadHelper {
@@ -21,7 +20,7 @@ object NotificationReadHelper {
             prefs.lastTimelineId = timelineId
         }
         backendRegistrationManager?.let { manager ->
-            CoroutineScope(Dispatchers.IO).launch {
+            applicationScope.launch {
                 manager.markMessagesRead(listOf(timelineId))
             }
         }

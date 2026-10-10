@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <data-extraction-rules>
+    <!--
+        Sensitive, device-bound encrypted preferences are excluded from backup/transfer:
+        they are encrypted with a Keystore master key that never leaves the device, so a
+        restored copy would be unreadable (and could crash on access). Credentials and
+        API keys must be re-entered on a new device.
+    -->
     <cloud-backup>
         <include domain="sharedpref" path="." />
         <include domain="file" path="." />
         <include domain="database" path="." />
-        <exclude domain="cache" path="." />
+        <exclude domain="sharedpref" path="edupage_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="edupage_ai_prefs.xml" />
+        <exclude domain="sharedpref" path="edupage_accounts_prefs.xml" />
+        <exclude domain="sharedpref" path="edupage_lock_prefs.xml" />
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="." />
         <include domain="file" path="." />
         <include domain="database" path="." />
-        <exclude domain="cache" path="." />
+        <exclude domain="sharedpref" path="edupage_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="edupage_ai_prefs.xml" />
+        <exclude domain="sharedpref" path="edupage_accounts_prefs.xml" />
+        <exclude domain="sharedpref" path="edupage_lock_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>
 

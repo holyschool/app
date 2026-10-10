@@ -5,9 +5,13 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
 import javax.inject.Inject
@@ -24,6 +28,7 @@ class PreparedStore @Inject constructor(
 
     private val gson = Gson()
     private val file: File get() = File(context.filesDir, FILE_NAME)
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _state = MutableStateFlow<Map<String, Set<String>>>(loadFromDisk() ?: emptyMap())
     val state: StateFlow<Map<String, Set<String>>> = _state.asStateFlow()
@@ -47,10 +52,13 @@ class PreparedStore @Inject constructor(
     }
 
     private fun persist() {
-        try {
-            file.writeText(gson.toJson(_state.value))
-        } catch (e: Exception) {
-            Log.e(TAG, "failed to persist prepared lessons: ${e.message}", e)
+        val snapshot = _state.value
+        ioScope.launch {
+            try {
+                file.writeText(gson.toJson(snapshot))
+            } catch (e: Exception) {
+                Log.e(TAG, "failed to persist prepared lessons: ${e.message}", e)
+            }
         }
     }
 
