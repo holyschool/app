@@ -9,6 +9,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,6 +19,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -25,17 +27,22 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -64,10 +71,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
@@ -76,6 +84,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -83,6 +92,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -95,6 +107,8 @@ import com.wiffles.edupage.R
 import com.wiffles.edupage.data.ChatAttachment
 import com.wiffles.edupage.data.ChatMessage
 import com.wiffles.edupage.ui.util.rememberAppHaptics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -199,7 +213,7 @@ fun AiChatScreen(
                 )
             },
             bottomBar = {
-                ChatInput(
+                ChatComposer(
                     value = input,
                     onValueChange = { input = it },
                     onSend = { send() },
@@ -394,7 +408,7 @@ private fun MessageBubble(
 
                     if (message.attachments.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
-                        ConnectedAttachmentGroup(
+                        MessageAttachmentPreviews(
                             attachments = message.attachments,
                             isUser = isUser,
                             onOpen = { onOpenAttachment(it) },
@@ -423,7 +437,7 @@ private fun MessageBubble(
 }
 
 @Composable
-private fun ConnectedAttachmentGroup(
+private fun MessageAttachmentPreviews(
     attachments: List<ChatAttachment>,
     isUser: Boolean,
     onOpen: (ChatAttachment) -> Unit,
@@ -436,43 +450,137 @@ private fun ConnectedAttachmentGroup(
     val content = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     val accent = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
 
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        attachments.forEach { attachment ->
+            if (attachment.isImage()) {
+                ImageAttachmentPreview(
+                    attachment = attachment,
+                    modifier = Modifier.size(132.dp),
+                    onClick = { onOpen(attachment) },
+                )
+            } else {
+                FileAttachmentChip(
+                    attachment = attachment,
+                    container = container,
+                    content = content,
+                    accent = accent,
+                    onClick = { onOpen(attachment) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImageAttachmentPreview(
+    attachment: ChatAttachment,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+) {
+    val bitmap = rememberImageThumbnail(attachment.localPath, targetPx = 512)
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = attachment.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    Icons.Rounded.Image,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileAttachmentChip(
+    attachment: ChatAttachment,
+    container: Color,
+    content: Color,
+    accent: Color,
+    onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     Surface(
         color = container,
         shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.clickable(onClick = onClick),
     ) {
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            attachments.forEachIndexed { index, attachment ->
-                if (index > 0) {
-                    VerticalDivider(
-                        modifier = Modifier
-                            .height(26.dp)
-                            .align(Alignment.CenterVertically),
-                        color = content.copy(alpha = 0.18f),
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .clickable { onOpen(attachment) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Rounded.Description,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
+        Row(
+            modifier = Modifier
+                .padding(start = 12.dp, end = if (trailing == null) 12.dp else 4.dp, top = 8.dp, bottom = 8.dp)
+                .widthIn(max = 220.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Rounded.Description,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = attachment.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = content,
+                    maxLines = 1,
+                )
+                if (attachment.sizeBytes > 0) {
                     Text(
-                        text = attachment.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = content,
+                        text = formatBytes(attachment.sizeBytes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = 0.7f),
                         maxLines = 1,
                     )
                 }
             }
+            if (trailing != null) {
+                Spacer(Modifier.width(2.dp))
+                trailing()
+            }
         }
     }
+}
+
+private fun ChatAttachment.isImage(): Boolean = mimeType.startsWith("image/")
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> String.format("%.0f KB", bytes / 1024.0)
+    else -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+}
+
+/** Decodes a small, downsampled thumbnail from a local image file. */
+@Composable
+private fun rememberImageThumbnail(path: String, targetPx: Int): ImageBitmap? =
+    produceState<ImageBitmap?>(initialValue = null, key1 = path, key2 = targetPx) {
+        value = withContext(Dispatchers.IO) { decodeThumbnail(path, targetPx) }
+    }.value
+
+private fun decodeThumbnail(path: String, target: Int): ImageBitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / sample > target || bounds.outHeight / sample > target) {
+        sample *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+    return runCatching { BitmapFactory.decodeFile(path, options)?.asImageBitmap() }.getOrNull()
 }
 
 @Composable
@@ -513,8 +621,13 @@ private fun ThinkingBubble() {
     }
 }
 
+/**
+ * The merged chat composer: a single rounded container that holds the attachment
+ * previews, the attach actions, the text field and the send button. Window insets are
+ * applied here so the bar keeps comfortable space above the navigation bar / keyboard.
+ */
 @Composable
-private fun ChatInput(
+private fun ChatComposer(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
@@ -525,87 +638,108 @@ private fun ChatInput(
     pendingAttachments: List<ChatAttachment>,
     onRemoveAttachment: (String) -> Unit,
 ) {
+    val canSend = enabled && (value.isNotBlank() || pendingAttachments.isNotEmpty())
+    val scale by animateFloatAsState(
+        targetValue = if (canSend) 1f else 0.92f,
+        animationSpec = tween(180, easing = FastOutSlowInEasing),
+        label = "sendScale",
+    )
+
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .imePadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                .padding(horizontal = 12.dp)
+                .padding(top = 10.dp, bottom = 16.dp),
         ) {
-            AnimatedVisibility(
-                visible = pendingAttachments.isNotEmpty(),
-                enter = fadeIn() + slideInVertically(),
-            ) {
-                PendingAttachmentGroup(
-                    attachments = pendingAttachments,
-                    onRemove = onRemoveAttachment,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                )
-            }
-
-            Row(
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                val canSend = enabled && (value.isNotBlank() || pendingAttachments.isNotEmpty())
-                val scale by animateFloatAsState(
-                    targetValue = if (canSend) 1f else 0.92f,
-                    animationSpec = tween(180, easing = FastOutSlowInEasing),
-                    label = "sendScale",
-                )
+                Column {
+                    AnimatedVisibility(
+                        visible = pendingAttachments.isNotEmpty(),
+                        enter = fadeIn() + slideInVertically(),
+                    ) {
+                        PendingAttachmentPreviews(
+                            attachments = pendingAttachments,
+                            onRemove = onRemoveAttachment,
+                            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp),
+                        )
+                    }
 
-                AttachButtonGroup(
-                    enabled = enabled && attachmentsEnabled,
-                    onAttachFile = onAttachFile,
-                    onAttachPhoto = onAttachPhoto,
-                )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        ComposerAttachActions(
+                            enabled = enabled && attachmentsEnabled,
+                            onAttachFile = onAttachFile,
+                            onAttachPhoto = onAttachPhoto,
+                        )
 
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    placeholder = { Text(stringResource(R.string.chat_hint)) },
-                    enabled = enabled,
-                    maxLines = 5,
-                    shape = RoundedCornerShape(26.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onSend() }),
-                    modifier = Modifier.weight(1f),
-                )
+                        TextField(
+                            value = value,
+                            onValueChange = onValueChange,
+                            placeholder = {
+                                Text(
+                                    text = stringResource(R.string.chat_hint),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            },
+                            enabled = enabled,
+                            maxLines = 6,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                            ),
+                            modifier = Modifier.weight(1f),
+                        )
 
-                FilledIconButton(
-                    onClick = onSend,
-                    enabled = canSend,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (canSend) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                        ),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        disabledContainerColor = Color.Transparent,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.Send,
-                        contentDescription = stringResource(R.string.chat_send),
-                        modifier = Modifier.scale(scale),
-                    )
+                        FilledIconButton(
+                            onClick = onSend,
+                            enabled = canSend,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (canSend) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                ),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                disabledContainerColor = Color.Transparent,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.Send,
+                                contentDescription = stringResource(R.string.chat_send),
+                                modifier = Modifier.scale(scale),
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/** A grouped (connected) row of attach actions for files and photos. */
+/** Compact, connected attach actions (file + photo) that live inside the composer. */
 @Composable
-private fun AttachButtonGroup(
+private fun ComposerAttachActions(
     enabled: Boolean,
     onAttachFile: () -> Unit,
     onAttachPhoto: () -> Unit,
@@ -615,93 +749,94 @@ private fun AttachButtonGroup(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(50),
-        modifier = Modifier.height(48.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(
-                onClick = onAttachFile,
-                enabled = enabled,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    Icons.Rounded.AttachFile,
-                    contentDescription = stringResource(R.string.chat_attach),
-                    tint = tint,
-                )
-            }
-            VerticalDivider(
-                modifier = Modifier.height(24.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(
+            onClick = onAttachFile,
+            enabled = enabled,
+            modifier = Modifier.size(44.dp),
+        ) {
+            Icon(
+                Icons.Rounded.AttachFile,
+                contentDescription = stringResource(R.string.chat_attach),
+                tint = tint,
+                modifier = Modifier.size(22.dp),
             )
-            IconButton(
-                onClick = onAttachPhoto,
-                enabled = enabled,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    Icons.Rounded.Image,
-                    contentDescription = stringResource(R.string.chat_attach_photo),
-                    tint = tint,
+        }
+        VerticalDivider(
+            modifier = Modifier.height(20.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        IconButton(
+            onClick = onAttachPhoto,
+            enabled = enabled,
+            modifier = Modifier.size(44.dp),
+        ) {
+            Icon(
+                Icons.Rounded.Image,
+                contentDescription = stringResource(R.string.chat_attach_photo),
+                tint = tint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+/** Attachment previews shown inside the top of the composer, each removable. */
+@Composable
+private fun PendingAttachmentPreviews(
+    attachments: List<ChatAttachment>,
+    onRemove: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        attachments.forEach { attachment ->
+            if (attachment.isImage()) {
+                Box(modifier = Modifier.size(72.dp)) {
+                    ImageAttachmentPreview(
+                        attachment = attachment,
+                        modifier = Modifier.size(72.dp),
+                    )
+                    RemoveBadge(
+                        onClick = { onRemove(attachment.id) },
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    )
+                }
+            } else {
+                FileAttachmentChip(
+                    attachment = attachment,
+                    container = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    content = MaterialTheme.colorScheme.onSurface,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = {},
+                    trailing = { RemoveBadge(onClick = { onRemove(attachment.id) }) },
                 )
             }
         }
     }
 }
 
-/** Pending attachments shown as one rounded, connected group. */
 @Composable
-private fun PendingAttachmentGroup(
-    attachments: List<ChatAttachment>,
-    onRemove: (String) -> Unit,
+private fun RemoveBadge(
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(16.dp),
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shadowElevation = 1.dp,
+        modifier = modifier.size(24.dp),
     ) {
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            attachments.forEachIndexed { index, attachment ->
-                if (index > 0) {
-                    VerticalDivider(
-                        modifier = Modifier
-                            .height(28.dp)
-                            .align(Alignment.CenterVertically),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.16f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.padding(start = 12.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Rounded.Description,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(15.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = attachment.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        maxLines = 1,
-                    )
-                    IconButton(
-                        onClick = { onRemove(attachment.id) },
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = stringResource(R.string.chat_attachment_remove),
-                            modifier = Modifier.size(15.dp),
-                        )
-                    }
-                }
-            }
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Rounded.Close,
+                contentDescription = stringResource(R.string.chat_attachment_remove),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp),
+            )
         }
     }
 }
