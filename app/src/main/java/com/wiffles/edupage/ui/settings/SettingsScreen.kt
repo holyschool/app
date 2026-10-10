@@ -1543,6 +1543,22 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
         }
         RoundedCardContainer { AppearanceRows() }
     }
+
+    item {
+        SettingsSectionHeader(text = stringResource(R.string.settings_experimental_overview))
+        @Composable
+        fun OverviewRows() {
+            val enabled by viewModel.overviewTimetableRedesign.collectAsState()
+            IconToggleItem(
+                icon = Icons.Rounded.SwapHoriz,
+                title = stringResource(R.string.settings_overview_timetable_redesign),
+                description = stringResource(R.string.settings_overview_timetable_redesign_desc),
+                checked = enabled,
+                onCheckedChange = { viewModel.setOverviewTimetableRedesign(it) },
+            )
+        }
+        RoundedCardContainer { OverviewRows() }
+    }
 }
 
 private val customAccentSwatches: List<Int> = listOf(

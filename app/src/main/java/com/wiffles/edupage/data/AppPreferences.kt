@@ -220,6 +220,7 @@ class AppPreferences @Inject constructor(
         private const val KEY_LIVE_CLASS_SHOW_PROGRESS = "live_class_show_progress"
 
         private const val KEY_COMPACT_TIMETABLE = "compact_timetable"
+        private const val KEY_OVERVIEW_TIMETABLE_REDESIGN = "overview_timetable_redesign"
         private const val KEY_AUTO_REFRESH_MINS = "auto_refresh_mins"
         private const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"
         private const val KEY_DEFAULT_TAB = "default_tab"
@@ -523,6 +524,16 @@ class AppPreferences @Inject constructor(
     var compactTimetable: Boolean
         get() = prefs.getBoolean(KEY_COMPACT_TIMETABLE, false)
         set(value) = prefs.edit().putBoolean(KEY_COMPACT_TIMETABLE, value).apply()
+
+    /** Experimental: show the whole day timetable as a compact horizontal period grid. */
+    var overviewTimetableRedesign: Boolean
+        get() = prefs.getBoolean(KEY_OVERVIEW_TIMETABLE_REDESIGN, false)
+        set(value) = prefs.edit().putBoolean(KEY_OVERVIEW_TIMETABLE_REDESIGN, value).apply()
+
+    val overviewTimetableRedesignFlow: Flow<Boolean> = prefFlow(
+        key = KEY_OVERVIEW_TIMETABLE_REDESIGN,
+        current = { overviewTimetableRedesign },
+    )
 
     var autoRefreshIntervalMinutes: Int
         get() = prefs.getInt(KEY_AUTO_REFRESH_MINS, 0).coerceIn(0, 1440)

@@ -13,12 +13,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,6 +64,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -83,8 +87,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.RoundedPolygon
@@ -142,6 +148,7 @@ fun OverviewScreen(
     val isRefreshing   by viewModel.isRefreshing.collectAsState()
     val currentTime    by viewModel.currentTime.collectAsState()
     val showSeconds    by viewModel.showSeconds.collectAsState()
+    val timetableRedesign by viewModel.overviewTimetableRedesign.collectAsState()
     val haptics        = rememberAppHaptics()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val overviewScroll = rememberScrollState()
@@ -250,6 +257,7 @@ fun OverviewScreen(
                         haptics = haptics,
                         showSeconds = showSeconds,
                         onRetry = viewModel::refresh,
+                        redesign = timetableRedesign,
                     )
 
                     GradesCard(
@@ -425,6 +433,7 @@ private fun TimetableCard(
     haptics: com.wiffles.edupage.ui.util.AppHaptics,
     showSeconds: Boolean,
     onRetry: () -> Unit,
+    redesign: Boolean,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -440,6 +449,7 @@ private fun TimetableCard(
                 onGoToTimetable = onGoToTimetable,
                 haptics      = haptics,
                 showSeconds  = showSeconds,
+                redesign     = redesign,
             )
         }
     }
@@ -505,6 +515,7 @@ private fun TimetableCardContent(
     onGoToTimetable: (() -> Unit)?,
     haptics: com.wiffles.edupage.ui.util.AppHaptics,
     showSeconds: Boolean,
+    redesign: Boolean,
 ) {
     val lessons = state.lessons
     val title = when {
@@ -522,7 +533,7 @@ private fun TimetableCardContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .clickable(enabled = lessons.size > TIMETABLE_COLLAPSED_COUNT) { onToggle() },
+                .clickable(enabled = !redesign && lessons.size > TIMETABLE_COLLAPSED_COUNT) { onToggle() },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -542,7 +553,7 @@ private fun TimetableCardContent(
                     fontWeight = FontWeight.Bold,
                 )
             }
-            if (lessons.size > TIMETABLE_COLLAPSED_COUNT) {
+            if (!redesign && lessons.size > TIMETABLE_COLLAPSED_COUNT) {
                 Icon(
                     imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
                     contentDescription = null,
@@ -589,6 +600,38 @@ private fun TimetableCardContent(
                     )
                 }
             }
+        }
+
+        val hasPeriodGrid = lessons.any { (it.period ?: 0) > 0 }
+        if (redesign && hasPeriodGrid) {
+            Spacer(Modifier.height(10.dp))
+            OverviewTimetableGrid(
+                lessons = lessons,
+                currentLesson = currentLesson,
+                nextLesson = nextLesson,
+            )
+            if (onGoToTimetable != null) {
+                Spacer(Modifier.height(2.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(
+                        onClick = { haptics.virtualKey(); onGoToTimetable() },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    ) {
+                        Text(
+                            text  = stringResource(R.string.overview_see_timetable),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            return@Column
         }
 
         if (currentLesson != null) {
@@ -820,6 +863,144 @@ private fun CompactLessonRow(
             }
         }
     }
+}
+
+/**
+ * Experimental overview timetable: the whole day rendered as one connected group of period
+ * columns (number, subject abbreviation, time), similar to the default EduPage timetable, so
+ * the full day fits on a single screen at a glance. Columns shrink to fit and fall back to a
+ * horizontal scroll when there are more periods than can comfortably fit.
+ */
+@Composable
+private fun OverviewTimetableGrid(
+    lessons: List<Lesson>,
+    currentLesson: Lesson?,
+    nextLesson: Lesson?,
+) {
+    val periodLessons = lessons.filter { (it.period ?: 0) > 0 }
+    if (periodLessons.isEmpty()) return
+
+    val maxPeriod = periodLessons.maxOf { it.period!! }
+    val byPeriod = periodLessons.associateBy { it.period!! }
+    val extras = lessons.filter { (it.period ?: 0) <= 0 }
+
+    val columns = buildList<Lesson?> {
+        for (p in 1..maxPeriod) add(byPeriod[p])
+        extras.forEach { add(it) }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val count = columns.size.coerceAtLeast(1)
+        val minColumn = 44.dp
+        val columnWidth = (maxWidth / count).coerceAtLeast(minColumn)
+        val scrollable = columnWidth * count > maxWidth
+        val scrollState = rememberScrollState()
+
+        val rowModifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .then(if (scrollable) Modifier.horizontalScroll(scrollState) else Modifier)
+
+        Row(modifier = rowModifier) {
+            columns.forEachIndexed { index, lesson ->
+                PeriodCell(
+                    lesson = lesson,
+                    period = lesson?.period ?: index + 1,
+                    width = columnWidth,
+                    isCurrent = lesson != null && lesson == currentLesson,
+                    isNext = lesson != null && lesson == nextLesson && currentLesson == null,
+                )
+                if (index < columns.lastIndex) {
+                    VerticalDivider(
+                        modifier = Modifier.height(80.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeriodCell(
+    lesson: Lesson?,
+    period: Int,
+    width: Dp,
+    isCurrent: Boolean,
+    isNext: Boolean,
+) {
+    val cancelled = lesson?.isCancelled == true
+    val labelColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+        isNext    -> MaterialTheme.colorScheme.primary
+        else      -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Column(
+        modifier = Modifier
+            .width(width)
+            .height(80.dp)
+            .background(
+                if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            )
+            .padding(horizontal = 2.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text       = "$period.",
+            style      = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color      = labelColor,
+        )
+        Spacer(Modifier.height(4.dp))
+        if (lesson == null) {
+            Text(
+                text  = "–",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+            )
+        } else {
+            Text(
+                text       = lessonShortName(lesson),
+                style      = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color      = when {
+                    isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer
+                    cancelled -> MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                    else      -> MaterialTheme.colorScheme.onSurface
+                },
+                maxLines   = 1,
+                overflow   = TextOverflow.Ellipsis,
+                textAlign  = TextAlign.Center,
+            )
+            Spacer(Modifier.height(4.dp))
+            val timeColor = when {
+                isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                cancelled -> MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                else      -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Text(
+                text  = lesson.startTime?.format(timeFmt) ?: "–",
+                style = MaterialTheme.typography.labelSmall,
+                color = timeColor,
+                maxLines = 1,
+            )
+            Text(
+                text  = lesson.endTime?.format(timeFmt).orEmpty(),
+                style = MaterialTheme.typography.labelSmall,
+                color = timeColor,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+private fun lessonShortName(lesson: Lesson): String {
+    lesson.subject?.shortName?.takeIf { it.isNotBlank() }?.let { return it }
+    lesson.subject?.name?.takeIf { it.isNotBlank() }?.let { return it.take(4) }
+    lesson.curriculum?.takeIf { it.isNotBlank() }?.let { return it.take(4) }
+    return "?"
 }
 
 @Composable

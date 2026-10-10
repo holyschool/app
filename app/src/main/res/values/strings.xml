@@ -342,6 +342,9 @@
     <string name="settings_experimental_cloud_desc">Browse, upload and manage your EduPage cloud storage.</string>
     <string name="settings_experimental_appearance">Accent colors &amp; appearance</string>
     <string name="settings_experimental_appearance_desc">Custom accent color, font size and more options.</string>
+    <string name="settings_experimental_overview">Overview</string>
+    <string name="settings_overview_timetable_redesign">Overview timetable redesign</string>
+    <string name="settings_overview_timetable_redesign_desc">Show the whole day as a compact period grid, similar to the default EduPage timetable.</string>
 
     <string name="settings_ai_setup">AI provider &amp; key</string>
     <string name="settings_ai_setup_desc">Set up Gemini, OpenRouter, OpenAI or a custom endpoint</string>

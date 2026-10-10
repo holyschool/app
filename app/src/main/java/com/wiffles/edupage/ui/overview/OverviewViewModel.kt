@@ -24,8 +24,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -107,6 +109,10 @@ class OverviewViewModel @Inject constructor(
 
     private val _showSeconds = MutableStateFlow(prefs.showSeconds)
     val showSeconds: StateFlow<Boolean> = _showSeconds.asStateFlow()
+
+    /** Live experimental setting: compact horizontal period grid for the overview timetable. */
+    val overviewTimetableRedesign: StateFlow<Boolean> = prefs.overviewTimetableRedesignFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, prefs.overviewTimetableRedesign)
 
     private val _homeworkItems = MutableStateFlow<List<HomeworkItem>>(homeworkStore.getAll())
     val homeworkItems: StateFlow<List<HomeworkItem>> = _homeworkItems.asStateFlow()

@@ -544,6 +544,9 @@
 
     <string name="settings_experimental_ai_quiz">AI študijné nástroje</string>
     <string name="settings_experimental_ai_quiz_desc">Kvízy, kartičky a študijný chat s vlastným AI kľúčom.</string>
+    <string name="settings_experimental_overview">Prehľad</string>
+    <string name="settings_overview_timetable_redesign">Redizajn rozvrhu v prehľade</string>
+    <string name="settings_overview_timetable_redesign_desc">Zobrazí celý deň ako kompaktnú mriežku hodín, podobne ako predvolený rozvrh EduPage.</string>
     <string name="settings_ai_setup">Poskytovateľ AI a kľúč</string>
     <string name="settings_ai_setup_desc">Nastavte Gemini, OpenRouter, OpenAI alebo vlastný koncový bod</string>
     <string name="settings_ai_step_provider">Vyberte poskytovateľa</string>

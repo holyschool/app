@@ -183,6 +183,9 @@ class SettingsViewModel @Inject constructor(
     private val _compactTimetable = MutableStateFlow(appPreferences.compactTimetable)
     val compactTimetable: StateFlow<Boolean> = _compactTimetable.asStateFlow()
 
+    private val _overviewTimetableRedesign = MutableStateFlow(appPreferences.overviewTimetableRedesign)
+    val overviewTimetableRedesign: StateFlow<Boolean> = _overviewTimetableRedesign.asStateFlow()
+
     private val _autoRefreshIntervalMinutes = MutableStateFlow(appPreferences.autoRefreshIntervalMinutes)
     val autoRefreshIntervalMinutes: StateFlow<Int> = _autoRefreshIntervalMinutes.asStateFlow()
 
@@ -466,6 +469,11 @@ class SettingsViewModel @Inject constructor(
     fun setCompactTimetable(value: Boolean) {
         appPreferences.compactTimetable = value
         _compactTimetable.value = value
+    }
+
+    fun setOverviewTimetableRedesign(value: Boolean) {
+        appPreferences.overviewTimetableRedesign = value
+        _overviewTimetableRedesign.value = value
     }
 
     fun setAutoRefreshIntervalMinutes(value: Int) {
