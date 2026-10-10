@@ -21,6 +21,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -76,11 +77,22 @@ class TimetableViewModel @Inject constructor(
     private val _compactTimetable = MutableStateFlow(appPreferences.compactTimetable)
     val compactTimetable: StateFlow<Boolean> = _compactTimetable.asStateFlow()
 
+    private val _weekMode = MutableStateFlow(appPreferences.timetableWeekView)
+    val weekMode: StateFlow<Boolean> = _weekMode.asStateFlow()
+
+    private val _weekLessons = MutableStateFlow<Map<LocalDate, List<Lesson>>>(emptyMap())
+    val weekLessons: StateFlow<Map<LocalDate, List<Lesson>>> = _weekLessons.asStateFlow()
+
+    private val _weekRefreshing = MutableStateFlow(false)
+    val weekRefreshing: StateFlow<Boolean> = _weekRefreshing.asStateFlow()
+
     init {
-        viewModelScope.launch {
+        // Cache + network access, so keep it off the main thread.
+        viewModelScope.launch(Dispatchers.IO) {
             val resolvedInitialDate = determineInitialDate()
             _selectedDate.value = resolvedInitialDate
             loadTimetable(resolvedInitialDate)
+            if (_weekMode.value) loadWeek(resolvedInitialDate)
 
             launch {
                 while (true) {
@@ -129,7 +141,23 @@ class TimetableViewModel @Inject constructor(
     fun setDate(date: LocalDate) {
         val resolved = if (_showWeekends.value) date else skipWeekend(date, reference = _selectedDate.value)
         _selectedDate.value = resolved
-        loadTimetable(resolved)
+        if (_weekMode.value) loadWeek(resolved) else loadTimetable(resolved)
+    }
+
+    /** Switches between the single-day list and the whole-week columns view. */
+    fun setWeekMode(enabled: Boolean) {
+        appPreferences.timetableWeekView = enabled
+        _weekMode.value = enabled
+        if (enabled) loadWeek(_selectedDate.value)
+    }
+
+    /** Highlights a day inside the week view without reloading the whole week. */
+    fun selectDay(date: LocalDate) {
+        _selectedDate.value = date
+    }
+
+    fun shiftWeek(weeks: Long) {
+        setDate(_selectedDate.value.plusWeeks(weeks))
     }
 
     private fun skipWeekend(date: LocalDate, reference: LocalDate): LocalDate {
@@ -147,7 +175,7 @@ class TimetableViewModel @Inject constructor(
 
     fun refresh() {
         Log.i(TAG, "refresh: reloading timetable for ${_selectedDate.value}")
-        loadTimetable(_selectedDate.value)
+        if (_weekMode.value) loadWeek(_selectedDate.value, force = true) else loadTimetable(_selectedDate.value)
         _breakVisibility.value = appPreferences.breakVisibility
         _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
         _lessonGrouping.value = appPreferences.lessonGrouping
@@ -164,8 +192,54 @@ class TimetableViewModel @Inject constructor(
         edupage.session.gsecHash = null
     }
 
+    /** The Monday..Friday (or ..Sunday) dates of the week containing [reference]. */
+    private fun weekDates(reference: LocalDate): List<LocalDate> {
+        val monday = reference.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val days = if (_showWeekends.value) 7 else 5
+        return (0 until days).map { monday.plusDays(it.toLong()) }
+    }
+
+    /**
+     * Loads the whole week with a cache-first strategy: cached days render immediately and
+     * only stale or missing days are re-fetched, so switching to the week view stays fast.
+     */
+    private fun loadWeek(reference: LocalDate, force: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _weekRefreshing.value = true
+            val dates = weekDates(reference)
+            val merged = LinkedHashMap<LocalDate, List<Lesson>>()
+            val toFetch = mutableListOf<LocalDate>()
+            dates.forEach { day ->
+                val cached = timetableCache.loadWithStale(day)
+                if (cached != null) {
+                    merged[day] = cached.first
+                    if (force || cached.second) toFetch.add(day)
+                } else {
+                    merged[day] = emptyList()
+                    toFetch.add(day)
+                }
+            }
+            _weekLessons.value = merged.toMap()
+
+            if (com.wiffles.edupage.ui.util.ConnectivityObserver.isOnline.value) {
+                dates.forEach { day ->
+                    if (day !in toFetch) return@forEach
+                    try {
+                        val lessons = edupage.getMyTimetable(day)?.lessons.orEmpty()
+                        timetableCache.save(day, lessons)
+                        merged[day] = lessons
+                        _weekLessons.value = merged.toMap()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "week load failed for $day: ${e.message}")
+                    }
+                }
+            }
+            _weekRefreshing.value = false
+        }
+    }
+
     private fun loadTimetable(date: LocalDate) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val current = _uiState.value
             if (current is TimetableUiState.Success) {
                 _uiState.value = current.copy(isRefreshing = true)

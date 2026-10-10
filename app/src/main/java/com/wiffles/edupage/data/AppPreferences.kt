@@ -1,6 +1,7 @@
 package com.wiffles.edupage.data
 
 import android.content.Context
+import com.wiffles.edupage.BuildConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -220,6 +221,7 @@ class AppPreferences @Inject constructor(
         private const val KEY_LIVE_CLASS_SHOW_PROGRESS = "live_class_show_progress"
 
         private const val KEY_COMPACT_TIMETABLE = "compact_timetable"
+        private const val KEY_TIMETABLE_WEEK_VIEW = "timetable_week_view"
         private const val KEY_OVERVIEW_TIMETABLE_REDESIGN = "overview_timetable_redesign"
         private const val KEY_AUTO_REFRESH_MINS = "auto_refresh_mins"
         private const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"
@@ -244,7 +246,8 @@ class AppPreferences @Inject constructor(
         const val DEFAULT_AI_MODEL = "gemini-flash-latest"
 
         private const val OFFICIAL_BACKEND_URL = "https://edupage.stwupid.tech"
-        private const val OFFICIAL_BACKEND_KEY = "change-this-long-random"
+        // Injected at build time (see build.gradle.kts); never committed to the repo.
+        private val OFFICIAL_BACKEND_KEY = BuildConfig.OFFICIAL_BACKEND_KEY
     }
 
     private val prefs by lazy {
@@ -524,6 +527,16 @@ class AppPreferences @Inject constructor(
     var compactTimetable: Boolean
         get() = prefs.getBoolean(KEY_COMPACT_TIMETABLE, false)
         set(value) = prefs.edit().putBoolean(KEY_COMPACT_TIMETABLE, value).apply()
+
+    /** Show the timetable for the whole week as day columns instead of a single day. */
+    var timetableWeekView: Boolean
+        get() = prefs.getBoolean(KEY_TIMETABLE_WEEK_VIEW, false)
+        set(value) = prefs.edit().putBoolean(KEY_TIMETABLE_WEEK_VIEW, value).apply()
+
+    val timetableWeekViewFlow: Flow<Boolean> = prefFlow(
+        key = KEY_TIMETABLE_WEEK_VIEW,
+        current = { timetableWeekView },
+    )
 
     /** Experimental: show the whole day timetable as a compact horizontal period grid. */
     var overviewTimetableRedesign: Boolean

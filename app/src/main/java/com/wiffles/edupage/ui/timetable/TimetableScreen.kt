@@ -1,6 +1,10 @@
 package com.wiffles.edupage.ui.timetable
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +26,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.CalendarViewWeek
+import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Badge
@@ -29,6 +35,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -48,6 +55,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -101,12 +109,19 @@ fun TimetableScreen(
     val showWeekends by viewModel.showWeekends.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
     val compactTimetable by viewModel.compactTimetable.collectAsState()
+    val weekMode by viewModel.weekMode.collectAsState()
+    val weekLessons by viewModel.weekLessons.collectAsState()
+    val weekRefreshing by viewModel.weekRefreshing.collectAsState()
     val haptics = rememberAppHaptics()
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val refreshState   = rememberPullToRefreshState()
 
-    val isRefreshing = (uiState as? TimetableUiState.Success)?.isRefreshing == true
+    val isRefreshing = if (weekMode) {
+        weekRefreshing
+    } else {
+        (uiState as? TimetableUiState.Success)?.isRefreshing == true
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "refresh")
     val rotation by infiniteTransition.animateFloat(
@@ -133,6 +148,15 @@ fun TimetableScreen(
                     }
                 },
                 actions = {
+                    FilledTonalIconButton(onClick = { haptics.virtualKey(); viewModel.setWeekMode(!weekMode) }) {
+                        Icon(
+                            imageVector = if (weekMode) Icons.Rounded.ViewAgenda else Icons.Rounded.CalendarViewWeek,
+                            contentDescription = stringResource(
+                                if (weekMode) R.string.timetable_view_day else R.string.timetable_view_week
+                            )
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     FilledTonalIconButton(onClick = { haptics.virtualKey(); viewModel.refresh() }) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
@@ -168,13 +192,15 @@ fun TimetableScreen(
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    DateNavigationBar(
-                        date = selectedDate,
-                        showWeekends = showWeekends,
-                        onPreviousDay = { haptics.virtualKey(); viewModel.setDate(selectedDate.minusDays(1)) },
-                        onNextDay = { haptics.virtualKey(); viewModel.setDate(selectedDate.plusDays(1)) },
-                        onToday = { haptics.virtualKey(); viewModel.setDate(LocalDate.now()) }
-                    )
+                    if (!weekMode) {
+                        DateNavigationBar(
+                            date = selectedDate,
+                            showWeekends = showWeekends,
+                            onPreviousDay = { haptics.virtualKey(); viewModel.setDate(selectedDate.minusDays(1)) },
+                            onNextDay = { haptics.virtualKey(); viewModel.setDate(selectedDate.plusDays(1)) },
+                            onToday = { haptics.virtualKey(); viewModel.setDate(LocalDate.now()) }
+                        )
+                    }
 
                     when (val state = uiState) {
                         is TimetableUiState.Loading -> {
@@ -221,7 +247,20 @@ fun TimetableScreen(
                         }
 
                         is TimetableUiState.Success -> {
-                            if (state.lessons.isEmpty()) {
+                            if (weekMode) {
+                                WeekTimetableView(
+                                    weekDates = weekDatesFor(selectedDate, showWeekends),
+                                    lessonsByDate = weekLessons,
+                                    selectedDate = selectedDate,
+                                    currentTime = currentTime,
+                                    cancelledLessonStyle = cancelledLessonStyle,
+                                    compact = compactTimetable,
+                                    onSelectDay = { viewModel.selectDay(it) },
+                                    onPreviousWeek = { haptics.virtualKey(); viewModel.shiftWeek(-1) },
+                                    onNextWeek = { haptics.virtualKey(); viewModel.shiftWeek(1) },
+                                    bottomPadding = bottomPadding,
+                                )
+                            } else if (state.lessons.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1155,6 +1194,261 @@ private fun GroupedLessonCard(
             }
         }
     }
+}
+
+/** The Monday..Friday (or ..Sunday) dates of the week containing [reference]. */
+private fun weekDatesFor(reference: LocalDate, showWeekends: Boolean): List<LocalDate> {
+    val monday = reference.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+    val days = if (showWeekends) 7 else 5
+    return (0 until days).map { monday.plusDays(it.toLong()) }
+}
+
+@Composable
+private fun WeekTimetableView(
+    weekDates: List<LocalDate>,
+    lessonsByDate: Map<LocalDate, List<Lesson>>,
+    selectedDate: LocalDate,
+    currentTime: LocalTime,
+    cancelledLessonStyle: CancelledLessonStyle,
+    compact: Boolean,
+    onSelectDay: (LocalDate) -> Unit,
+    onPreviousWeek: () -> Unit,
+    onNextWeek: () -> Unit,
+    bottomPadding: PaddingValues,
+) {
+    val today = LocalDate.now()
+    val dateFormatter = DateTimeFormatter.ofPattern("d MMM")
+    val weekLabel = if (weekDates.isNotEmpty()) {
+        "${weekDates.first().format(dateFormatter)} – ${weekDates.last().format(dateFormatter)}"
+    } else {
+        ""
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onPreviousWeek) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.timetable_previous_week),
+                )
+            }
+            Text(
+                text = weekLabel,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onNextWeek) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = stringResource(R.string.timetable_next_week),
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                weekDates.forEach { date ->
+                    val lessons = lessonsByDate[date].orEmpty()
+                        .sortedWith(
+                            compareBy(
+                                { it.startTime ?: LocalTime.MAX },
+                                { it.period ?: 0 },
+                            )
+                        )
+                    WeekDayColumn(
+                        date = date,
+                        lessons = lessons,
+                        isToday = date == today,
+                        isSelected = date == selectedDate,
+                        currentTime = currentTime,
+                        cancelledLessonStyle = cancelledLessonStyle,
+                        compact = compact,
+                        modifier = Modifier.clickable { onSelectDay(date) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp + bottomPadding.calculateBottomPadding()))
+        }
+    }
+}
+
+@Composable
+private fun WeekDayColumn(
+    date: LocalDate,
+    lessons: List<Lesson>,
+    isToday: Boolean,
+    isSelected: Boolean,
+    currentTime: LocalTime,
+    cancelledLessonStyle: CancelledLessonStyle,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val locale = Locale.getDefault()
+    val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, locale).uppercase(locale)
+
+    Column(
+        modifier = modifier.width(if (compact) 84.dp else 104.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Surface(
+            color = when {
+                isSelected -> MaterialTheme.colorScheme.primaryContainer
+                isToday -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.surfaceContainerHigh
+            },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(vertical = 8.dp),
+            ) {
+                Text(
+                    text = weekday,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                        isToday -> MaterialTheme.colorScheme.onSecondaryContainer
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                Text(
+                    text = date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                        isToday -> MaterialTheme.colorScheme.onSecondaryContainer
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+        }
+
+        if (lessons.isEmpty()) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "—",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            lessons.forEach { lesson ->
+                val start = lesson.startTime
+                val end = lesson.endTime
+                val isCurrent = isToday && start != null && end != null &&
+                    !currentTime.isBefore(start) && currentTime.isBefore(end)
+                WeekLessonBlock(
+                    lesson = lesson,
+                    isCurrent = isCurrent,
+                    cancelledLessonStyle = cancelledLessonStyle,
+                    compact = compact,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekLessonBlock(
+    lesson: Lesson,
+    isCurrent: Boolean,
+    cancelledLessonStyle: CancelledLessonStyle,
+    compact: Boolean,
+) {
+    val isCancelled = lesson.isCancelled
+    val isError = isCancelled && cancelledLessonStyle == CancelledLessonStyle.RED
+    val greyed = isCancelled && cancelledLessonStyle == CancelledLessonStyle.GREYED_OUT
+
+    val containerColor = when {
+        isCurrent -> MaterialTheme.colorScheme.primaryContainer
+        isError -> MaterialTheme.colorScheme.errorContainer
+        lesson.hasChange() -> MaterialTheme.colorScheme.tertiaryContainer
+        lesson.isOnlineLesson() -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceBright
+    }
+    val contentColor = when {
+        isCurrent -> MaterialTheme.colorScheme.onPrimaryContainer
+        isError -> MaterialTheme.colorScheme.onErrorContainer
+        lesson.hasChange() -> MaterialTheme.colorScheme.onTertiaryContainer
+        lesson.isOnlineLesson() -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val alpha = if (greyed) 0.45f else 1f
+    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    val start = lesson.startTime
+    val end = lesson.endTime
+
+    Surface(
+        color = containerColor,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = if (compact) 5.dp else 7.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = weekLessonName(lesson),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor.copy(alpha = alpha),
+                maxLines = 2,
+                textDecoration = if (isCancelled) TextDecoration.LineThrough else TextDecoration.None,
+            )
+            if (start != null) {
+                Text(
+                    text = buildString {
+                        append(start.format(timeFormatter))
+                        end?.let {
+                            append("–")
+                            append(it.format(timeFormatter))
+                        }
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor.copy(alpha = 0.8f * alpha),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+private fun weekLessonName(lesson: Lesson): String {
+    lesson.subject?.shortName?.takeIf { it.isNotBlank() }?.let { return it }
+    lesson.subject?.name?.takeIf { it.isNotBlank() }?.let { return it }
+    lesson.curriculum?.takeIf { it.isNotBlank() }?.let { return it }
+    lesson.origSubject?.shortName?.takeIf { it.isNotBlank() }?.let { return it }
+    return "—"
 }
 
 @Preview(name = "BreakSeparator – Inactive", showBackground = true, widthDp = 360)
