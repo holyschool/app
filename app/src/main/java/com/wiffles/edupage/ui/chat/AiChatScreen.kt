@@ -31,24 +31,22 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -74,8 +72,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
@@ -93,6 +89,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -153,6 +150,7 @@ fun AiChatScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         Scaffold(
+            modifier = Modifier.imePadding(),
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
@@ -344,7 +342,10 @@ private fun MessageBubble(
     val isUser = message.role == "user"
     var menuOpen by remember { mutableStateOf(false) }
 
-    Row(modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+    ) {
         if (!isUser) {
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -364,9 +365,7 @@ private fun MessageBubble(
         }
 
         Box(
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .widthIn(max = 320.dp),
+            modifier = Modifier.widthIn(max = 320.dp),
         ) {
             Surface(
                 color = when {
@@ -649,9 +648,9 @@ private fun ChatComposer(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                .navigationBarsPadding()
                 .padding(horizontal = 12.dp)
-                .padding(top = 10.dp, bottom = 16.dp),
+                .padding(top = 8.dp, bottom = 10.dp),
         ) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -673,9 +672,9 @@ private fun ChatComposer(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         ComposerAttachActions(
                             enabled = enabled && attachmentsEnabled,
@@ -683,35 +682,41 @@ private fun ChatComposer(
                             onAttachPhoto = onAttachPhoto,
                         )
 
-                        TextField(
+                        BasicTextField(
                             value = value,
                             onValueChange = onValueChange,
-                            placeholder = {
-                                Text(
-                                    text = stringResource(R.string.chat_hint),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            },
                             enabled = enabled,
-                            maxLines = 6,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            maxLines = 5,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent,
-                            ),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 11.dp),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (value.isEmpty()) {
+                                        Text(
+                                            text = stringResource(R.string.chat_hint),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                .copy(alpha = 0.7f),
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
                         )
 
                         FilledIconButton(
                             onClick = onSend,
                             enabled = canSend,
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (canSend) MaterialTheme.colorScheme.primary
@@ -753,29 +758,29 @@ private fun ComposerAttachActions(
         IconButton(
             onClick = onAttachFile,
             enabled = enabled,
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(40.dp),
         ) {
             Icon(
                 Icons.Rounded.AttachFile,
                 contentDescription = stringResource(R.string.chat_attach),
                 tint = tint,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
         VerticalDivider(
-            modifier = Modifier.height(20.dp),
+            modifier = Modifier.height(18.dp),
             color = MaterialTheme.colorScheme.outlineVariant,
         )
         IconButton(
             onClick = onAttachPhoto,
             enabled = enabled,
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(40.dp),
         ) {
             Icon(
                 Icons.Rounded.Image,
                 contentDescription = stringResource(R.string.chat_attach_photo),
                 tint = tint,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
