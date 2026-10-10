@@ -160,6 +160,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     var showAiQuiz by remember { mutableStateOf(false) }
     var showAiFlashcards by remember { mutableStateOf(false) }
     var showAiChat by remember { mutableStateOf(false) }
+    var timetableWeekMode by remember { mutableStateOf(false) }
 
     suspend fun consumePendingDeepLink() {
         val deepLinkInfo = MainActivity.pendingDeepLinkInfo ?: return
@@ -359,7 +360,8 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = !showAbout,
+                userScrollEnabled = !showAbout &&
+                    !(tabs.getOrNull(pagerState.currentPage)?.labelRes == R.string.tab_timetable && timetableWeekMode),
                 beyondViewportPageCount = 3,
                 key = { it },
             ) { page ->
@@ -380,7 +382,10 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                         mealsEnabled    = mealsEnabled,
                     )
                     R.string.tab_messages -> MessagesScreen(innerPadding)
-                    R.string.tab_timetable -> TimetableScreen(innerPadding)
+                    R.string.tab_timetable -> TimetableScreen(
+                        innerPadding,
+                        onWeekModeChanged = { timetableWeekMode = it },
+                    )
                     R.string.tab_grades -> GradesScreen(innerPadding, viewModel = gradesVm)
                     R.string.tab_meals -> MealsScreen(innerPadding)
                 }

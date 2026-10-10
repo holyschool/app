@@ -98,6 +98,7 @@ import com.wiffles.edupage.ui.util.rememberAppHaptics
 @Composable
 fun TimetableScreen(
     bottomPadding: PaddingValues,
+    onWeekModeChanged: (Boolean) -> Unit = {},
     viewModel: TimetableViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -113,6 +114,8 @@ fun TimetableScreen(
     val weekLessons by viewModel.weekLessons.collectAsState()
     val weekRefreshing by viewModel.weekRefreshing.collectAsState()
     val haptics = rememberAppHaptics()
+
+    LaunchedEffect(weekMode) { onWeekModeChanged(weekMode) }
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val refreshState   = rememberPullToRefreshState()
