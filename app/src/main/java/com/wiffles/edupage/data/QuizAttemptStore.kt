@@ -5,9 +5,13 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,6 +21,8 @@ data class QuizAttempt(
     val timestampMs: Long = System.currentTimeMillis(),
     val score: Int,
     val total: Int,
+    /** Texts of the questions answered incorrectly, used to find study weak spots. */
+    val wrongQuestions: List<String> = emptyList(),
 ) {
     val fraction: Float get() = if (total > 0) score.toFloat() / total else 0f
 }
@@ -37,6 +43,7 @@ class QuizAttemptStore @Inject constructor(
 
     private val gson = Gson()
     private val file: File get() = File(context.filesDir, FILE_NAME)
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val items = java.util.concurrent.ConcurrentHashMap<String, MutableList<QuizAttempt>>().apply {
         loadFromDisk()?.forEach { (id, list) -> put(id, list.toMutableList()) }
@@ -47,9 +54,9 @@ class QuizAttemptStore @Inject constructor(
 
     fun forQuiz(quizId: String): List<QuizAttempt> = items[quizId]?.toList().orEmpty()
 
-    fun record(quizId: String, score: Int, total: Int) {
+    fun record(quizId: String, score: Int, total: Int, wrongQuestions: List<String> = emptyList()) {
         val list = items.getOrPut(quizId) { mutableListOf() }
-        list.add(QuizAttempt(score = score, total = total))
+        list.add(QuizAttempt(score = score, total = total, wrongQuestions = wrongQuestions))
         while (list.size > MAX_PER_QUIZ) list.removeAt(0)
         publish()
     }
@@ -68,9 +75,12 @@ class QuizAttemptStore @Inject constructor(
     }
 
     private fun persist() {
-        runCatching {
-            file.writeText(gson.toJson(snapshot()))
-        }.onFailure { Log.e(TAG, "failed to persist quiz attempts", it) }
+        val snapshot = snapshot()
+        ioScope.launch {
+            runCatching {
+                file.writeText(gson.toJson(snapshot))
+            }.onFailure { Log.e(TAG, "failed to persist quiz attempts", it) }
+        }
     }
 
     private fun loadFromDisk(): Map<String, List<QuizAttempt>>? = runCatching {

@@ -37,6 +37,8 @@
     <string name="timetable_today">Dnes</string>
     <string name="timetable_retry">Znovu</string>
     <string name="timetable_no_lessons">Žádné předměty dneska</string>
+    <string name="timetable_previous_week">Předchozí týden</string>
+    <string name="timetable_next_week">Následující týden</string>
     <string name="timetable_unknown_subject">Neznámy předmět</string>
     <string name="timetable_event">Událost</string>
     <string name="timetable_view_day">Den</string>
@@ -632,6 +634,15 @@
     <string name="quiz_explain_loading">Připravuji vysvětlení…</string>
     <string name="quiz_explain_retry">Zkusit znovu</string>
     <string name="quiz_explain_empty">AI nevrátila žádné vysvětlení.</string>
+    <string name="quiz_more">Další možnosti</string>
+    <string name="quiz_regenerate_refresh">Nové otázky</string>
+    <string name="quiz_regenerate_weak">Procvičit chyby</string>
+    <string name="quiz_insights_title">Přehled studia</string>
+    <string name="quiz_insights_attempts">pokusů</string>
+    <string name="quiz_insights_average">průměr</string>
+    <string name="quiz_insights_weak_title">K procvičení</string>
+    <string name="quiz_insights_wrong_count">%1$d×</string>
+    <string name="quiz_insights_recent_title">Nedávné výsledky</string>
 
     <string name="flash_title">AI kartičky</string>
     <string name="flash_new">Nová sada</string>

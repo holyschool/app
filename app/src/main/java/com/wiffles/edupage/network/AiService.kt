@@ -41,7 +41,8 @@ class AiService @Inject constructor(
 
     private fun geminiModels(config: AiConfig): List<String> {
         val request = Request.Builder()
-            .url("${config.effectiveBaseUrl}/models?pageSize=200&key=${config.apiKey}")
+            .url("${config.effectiveBaseUrl}/models?pageSize=200")
+            .addHeader("x-goog-api-key", config.apiKey)
             .get()
             .build()
 
@@ -262,6 +263,7 @@ class AiService @Inject constructor(
         count: Int,
         difficulty: String,
         material: String? = null,
+        focus: String? = null,
         languageHint: String? = null,
     ): List<QuizQuestion> {
         val prompt = buildString {
@@ -274,6 +276,12 @@ class AiService @Inject constructor(
                 append("Base the questions strictly on the following study material:\n")
                 append("---\n")
                 append(material.trim().take(8000))
+                append("\n---\n")
+            }
+            if (!focus.isNullOrBlank()) {
+                append("The student previously got these concepts wrong. Write NEW questions with different wording that re-test the same underlying ideas:\n")
+                append("---\n")
+                append(focus.trim().take(4000))
                 append("\n---\n")
             }
             append("Difficulty: $difficulty.\n")

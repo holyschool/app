@@ -53,6 +53,12 @@ class AiQuizViewModel @Inject constructor(
     private val _generateState = MutableStateFlow<GenerateState>(GenerateState.Idle)
     val generateState: StateFlow<GenerateState> = _generateState.asStateFlow()
 
+    private val _regenerating = MutableStateFlow(false)
+    val regenerating: StateFlow<Boolean> = _regenerating.asStateFlow()
+
+    private val _regenerateError = MutableStateFlow<String?>(null)
+    val regenerateError: StateFlow<String?> = _regenerateError.asStateFlow()
+
     private val _explainState = MutableStateFlow<ExplainState>(ExplainState.Idle)
     val explainState: StateFlow<ExplainState> = _explainState.asStateFlow()
 
@@ -128,9 +134,63 @@ class AiQuizViewModel @Inject constructor(
         attemptStore.remove(id)
     }
 
-    fun recordResult(id: String, score: Int, total: Int) {
+    fun recordResult(id: String, score: Int, total: Int, wrongQuestions: List<String> = emptyList()) {
         quizStore.recordResult(id, score, total)
-        attemptStore.record(id, score, total)
+        attemptStore.record(id, score, total, wrongQuestions)
+    }
+
+    fun consumeRegenerateError() {
+        _regenerateError.value = null
+    }
+
+    /**
+     * Builds a brand-new quiz for [quiz] without touching the original. When [focusWeak]
+     * is true the new questions target the concepts the student got wrong before;
+     * otherwise it is a fresh set of questions on the same topic.
+     */
+    fun regenerate(quiz: AiQuiz, focusWeak: Boolean, onCreated: (AiQuiz) -> Unit) {
+        if (_regenerating.value) return
+        val config = aiCredentialsStore.current()
+        if (config.apiKey.isBlank()) {
+            _regenerateError.value = context.getString(R.string.quiz_no_key)
+            return
+        }
+        val focus = if (focusWeak) {
+            attemptStore.forQuiz(quiz.id)
+                .flatMap { it.wrongQuestions }
+                .distinct()
+                .take(20)
+                .joinToString("\n") { "- $it" }
+                .takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+        viewModelScope.launch {
+            _regenerating.value = true
+            try {
+                val questions = aiService.generateQuiz(
+                    config = config,
+                    topic = quiz.topic,
+                    count = quiz.questions.size.coerceIn(5, 20),
+                    difficulty = quiz.difficulty,
+                    focus = focus,
+                    languageHint = languageHint(),
+                )
+                val newQuiz = AiQuiz(
+                    topic = quiz.topic,
+                    difficulty = quiz.difficulty,
+                    questions = questions,
+                )
+                quizStore.add(newQuiz)
+                onCreated(newQuiz)
+            } catch (e: Exception) {
+                _regenerateError.value =
+                    if (e.isNetworkError()) context.getString(R.string.network_error)
+                    else e.message ?: context.getString(R.string.cloud_error_loading)
+            } finally {
+                _regenerating.value = false
+            }
+        }
     }
 
     fun resetExplain() {

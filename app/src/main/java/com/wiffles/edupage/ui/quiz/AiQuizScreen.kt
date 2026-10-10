@@ -47,8 +47,11 @@ import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Quiz
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,6 +66,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -114,9 +119,20 @@ fun AiQuizScreen(
     val examState by viewModel.examMaterials.collectAsState()
     val explainState by viewModel.explainState.collectAsState()
     val attemptsByQuiz by viewModel.attempts.collectAsState()
+    val regenerating by viewModel.regenerating.collectAsState()
+    val regenerateError by viewModel.regenerateError.collectAsState()
     var showNewSheet by remember { mutableStateOf(false) }
     var activeQuiz by remember { mutableStateOf<AiQuiz?>(null) }
     val haptics = rememberAppHaptics()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val hasInsights = attemptsByQuiz.values.any { it.isNotEmpty() }
+
+    LaunchedEffect(regenerateError) {
+        regenerateError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeRegenerateError()
+        }
+    }
 
     BackHandler(enabled = activeQuiz != null) {
         viewModel.resetExplain()
@@ -126,6 +142,7 @@ fun AiQuizScreen(
     Box(Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -167,10 +184,28 @@ fun AiQuizScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    if (hasInsights) {
+                        item(key = "insights") {
+                            QuizInsights(
+                                quizzes = quizzes,
+                                attemptsByQuiz = attemptsByQuiz,
+                            )
+                        }
+                    }
                     items(quizzes, key = { it.id }) { quiz ->
                         QuizRow(
                             quiz = quiz,
+                            attemptsForQuiz = attemptsByQuiz[quiz.id].orEmpty(),
+                            regenerating = regenerating,
                             onStart = { haptics.virtualKey(); activeQuiz = quiz },
+                            onRefresh = {
+                                haptics.virtualKey()
+                                viewModel.regenerate(quiz, focusWeak = false) { created -> activeQuiz = created }
+                            },
+                            onPracticeMistakes = {
+                                haptics.virtualKey()
+                                viewModel.regenerate(quiz, focusWeak = true) { created -> activeQuiz = created }
+                            },
                             onDelete = { viewModel.delete(quiz.id) },
                         )
                     }
@@ -184,9 +219,15 @@ fun AiQuizScreen(
                 attempts = attemptsByQuiz[quiz.id].orEmpty(),
                 explainState = explainState,
                 modifier = Modifier.fillMaxSize(),
-                onRecord = { score, total -> viewModel.recordResult(quiz.id, score, total) },
+                onRecord = { score, total, wrong -> viewModel.recordResult(quiz.id, score, total, wrong) },
                 onExplain = { answers -> viewModel.explain(quiz, answers) },
                 onResetExplain = { viewModel.resetExplain() },
+                onPracticeMistakes = {
+                    viewModel.regenerate(quiz, focusWeak = true) { created -> activeQuiz = created }
+                },
+                onRefreshQuestions = {
+                    viewModel.regenerate(quiz, focusWeak = false) { created -> activeQuiz = created }
+                },
                 onExit = {
                     viewModel.resetExplain()
                     activeQuiz = null
@@ -244,7 +285,19 @@ private fun EmptyState(modifier: Modifier, onNew: () -> Unit) {
 }
 
 @Composable
-private fun QuizRow(quiz: AiQuiz, onStart: () -> Unit, onDelete: () -> Unit) {
+private fun QuizRow(
+    quiz: AiQuiz,
+    attemptsForQuiz: List<QuizAttempt>,
+    regenerating: Boolean,
+    onStart: () -> Unit,
+    onRefresh: () -> Unit,
+    onPracticeMistakes: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMistakes = remember(attemptsForQuiz) {
+        attemptsForQuiz.any { it.wrongQuestions.isNotEmpty() }
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -278,10 +331,186 @@ private fun QuizRow(quiz: AiQuiz, onStart: () -> Unit, onDelete: () -> Unit) {
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.quiz_delete), tint = MaterialTheme.colorScheme.error)
+            Box {
+                IconButton(onClick = { menuOpen = true }, enabled = !regenerating) {
+                    if (regenerating) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = stringResource(R.string.quiz_more),
+                        )
+                    }
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.quiz_regenerate_refresh)) },
+                        leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
+                        onClick = { menuOpen = false; onRefresh() },
+                    )
+                    if (hasMistakes) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.quiz_regenerate_weak)) },
+                            leadingIcon = { Icon(Icons.Rounded.School, contentDescription = null) },
+                            onClick = { menuOpen = false; onPracticeMistakes() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.quiz_delete),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        onClick = { menuOpen = false; onDelete() },
+                    )
+                }
             }
         }
+    }
+}
+
+/** A compact overview of recent quiz activity and the concepts that need practice. */
+@Composable
+private fun QuizInsights(
+    quizzes: List<AiQuiz>,
+    attemptsByQuiz: Map<String, List<QuizAttempt>>,
+) {
+    val allAttempts = remember(attemptsByQuiz) { attemptsByQuiz.values.flatten() }
+    if (allAttempts.isEmpty()) return
+
+    val weakSpots = remember(attemptsByQuiz) {
+        attemptsByQuiz.values.flatten()
+            .flatMap { it.wrongQuestions }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedByDescending { it.value }
+            .take(5)
+    }
+    val recent = remember(attemptsByQuiz, quizzes) {
+        val topics = quizzes.associate { it.id to it.topic }
+        attemptsByQuiz.entries
+            .flatMap { (id, list) -> list.map { topics[id] to it } }
+            .sortedByDescending { it.second.timestampMs }
+            .take(4)
+    }
+    val average = remember(allAttempts) { allAttempts.map { it.fraction }.average() }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader(text = stringResource(R.string.quiz_insights_title))
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceBright,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    InsightStat(
+                        value = allAttempts.size.toString(),
+                        label = stringResource(R.string.quiz_insights_attempts),
+                    )
+                    InsightStat(
+                        value = "${(average * 100).toInt()}%",
+                        label = stringResource(R.string.quiz_insights_average),
+                    )
+                }
+                if (weakSpots.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.School,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Text(
+                                text = stringResource(R.string.quiz_insights_weak_title),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        weakSpots.forEach { (question, count) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = question,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = stringResource(R.string.quiz_insights_wrong_count, count),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (recent.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = stringResource(R.string.quiz_insights_recent_title),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        recent.forEach { (topic, attempt) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = topic ?: stringResource(R.string.quiz_title),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = "${attempt.score}/${attempt.total}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsightStat(value: String, label: String) {
+    Column {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -600,9 +829,11 @@ private fun QuizRunner(
     attempts: List<QuizAttempt>,
     explainState: AiQuizViewModel.ExplainState,
     modifier: Modifier = Modifier,
-    onRecord: (Int, Int) -> Unit,
+    onRecord: (Int, Int, List<String>) -> Unit,
     onExplain: (List<Int?>) -> Unit,
     onResetExplain: () -> Unit,
+    onPracticeMistakes: () -> Unit,
+    onRefreshQuestions: () -> Unit,
     onExit: () -> Unit,
 ) {
     var index by remember(quiz.id) { mutableIntStateOf(0) }
@@ -610,10 +841,16 @@ private fun QuizRunner(
     var score by remember(quiz.id) { mutableIntStateOf(0) }
     var finished by remember(quiz.id) { mutableStateOf(false) }
     var finishedAtMs by remember(quiz.id) { mutableLongStateOf(0L) }
-    val answers = remember(quiz.id) { mutableStateListOf<Int?>().apply { repeat(quiz.questions.size) { add(null) } } }
+    // Bumping the nonce reshuffles the options and starts a fresh attempt.
+    var shuffleNonce by remember(quiz.id) { mutableIntStateOf(0) }
+    // Answer options are shuffled each session so the correct position is never predictable.
+    val questions = remember(quiz.id, shuffleNonce) { quiz.questions.shuffledOptions() }
+    val answers = remember(quiz.id, shuffleNonce) {
+        mutableStateListOf<Int?>().apply { repeat(questions.size) { add(null) } }
+    }
     val haptics = rememberAppHaptics()
 
-    if (quiz.questions.isEmpty()) {
+    if (questions.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
             TextButton(onClick = onExit) { Text(stringResource(R.string.quiz_back)) }
         }
@@ -624,6 +861,7 @@ private fun QuizRunner(
         if (finished) {
             ResultScreen(
                 quiz = quiz,
+                questions = questions,
                 score = score,
                 answers = answers.toList(),
                 attempts = attempts,
@@ -632,9 +870,11 @@ private fun QuizRunner(
                 onExplain = { onExplain(answers.toList()) },
                 onRetry = {
                     onResetExplain()
+                    shuffleNonce++
                     index = 0; selected = null; score = 0; finished = false
-                    answers.indices.forEach { answers[it] = null }
                 },
+                onPracticeMistakes = onPracticeMistakes,
+                onRefreshQuestions = onRefreshQuestions,
                 onDone = onExit,
             )
             return@Surface
@@ -642,7 +882,7 @@ private fun QuizRunner(
 
         val answered = selected != null
         val progress by animateFloatAsState(
-            targetValue = (index + if (answered) 1 else 0).toFloat() / quiz.questions.size,
+            targetValue = (index + if (answered) 1 else 0).toFloat() / questions.size,
             animationSpec = tween(450),
             label = "quizProgress",
         )
@@ -661,7 +901,7 @@ private fun QuizRunner(
                                     maxLines = 1,
                                 )
                                 Text(
-                                    text = stringResource(R.string.quiz_question, index + 1, quiz.questions.size),
+                                    text = stringResource(R.string.quiz_question, index + 1, questions.size),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -694,7 +934,7 @@ private fun QuizRunner(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 label = "quizQuestion",
             ) { targetIndex ->
-                val question = quiz.questions[targetIndex]
+                val question = questions[targetIndex]
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -753,8 +993,11 @@ private fun QuizRunner(
                             Button(
                                 onClick = {
                                     haptics.virtualKey()
-                                    if (index == quiz.questions.lastIndex) {
-                                        onRecord(score, quiz.questions.size)
+                                    if (index == questions.lastIndex) {
+                                        val wrong = questions.filterIndexed { i, q ->
+                                            answers.getOrNull(i) != q.correctIndex
+                                        }.map { it.question }
+                                        onRecord(score, questions.size, wrong)
                                         finishedAtMs = System.currentTimeMillis()
                                         finished = true
                                     } else {
@@ -766,7 +1009,7 @@ private fun QuizRunner(
                                 modifier = Modifier.fillMaxWidth().height(54.dp),
                             ) {
                                 Text(
-                                    text = if (index == quiz.questions.lastIndex) {
+                                    text = if (index == questions.lastIndex) {
                                         stringResource(R.string.quiz_finish)
                                     } else {
                                         stringResource(R.string.quiz_next)
@@ -790,6 +1033,17 @@ private fun optionState(optionIndex: Int, selected: Int?, correctIndex: Int): Op
     optionIndex == correctIndex -> OptionState.CORRECT
     optionIndex == selected -> OptionState.WRONG
     else -> OptionState.IDLE
+}
+
+/** Returns the questions with their answer options shuffled and correctIndex remapped. */
+private fun List<QuizQuestion>.shuffledOptions(): List<QuizQuestion> = map { question ->
+    if (question.options.size < 2) return@map question
+    val shuffled = question.options.withIndex().shuffled()
+    val newCorrect = shuffled.indexOfFirst { it.index == question.correctIndex }
+    question.copy(
+        options = shuffled.map { it.value },
+        correctIndex = newCorrect.coerceAtLeast(0),
+    )
 }
 
 @Composable
@@ -861,6 +1115,7 @@ private fun OptionRow(
 @Composable
 private fun ResultScreen(
     quiz: AiQuiz,
+    questions: List<QuizQuestion>,
     score: Int,
     answers: List<Int?>,
     attempts: List<QuizAttempt>,
@@ -868,10 +1123,13 @@ private fun ResultScreen(
     explainState: AiQuizViewModel.ExplainState,
     onExplain: () -> Unit,
     onRetry: () -> Unit,
+    onPracticeMistakes: () -> Unit,
+    onRefreshQuestions: () -> Unit,
     onDone: () -> Unit,
 ) {
     val haptics = rememberAppHaptics()
-    val total = quiz.questions.size
+    val total = questions.size
+    val wrongCount = questions.indices.count { answers.getOrNull(it) != questions[it].correctIndex }
     val fraction = if (total > 0) score.toFloat() / total else 0f
     val progress by animateFloatAsState(
         targetValue = fraction,
@@ -972,13 +1230,48 @@ private fun ResultScreen(
 
             ProgressGraphCard(attempts = attempts)
 
-            ReviewCard(quiz = quiz, answers = answers)
+            ReviewCard(questions = questions, answers = answers)
 
             ExplainCard(
                 state = explainState,
                 onExplain = { haptics.virtualKey(); onExplain() },
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (wrongCount > 0) {
+                    OutlinedButton(
+                        onClick = { haptics.virtualKey(); onPracticeMistakes() },
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        modifier = Modifier.weight(1f).height(54.dp),
+                    ) {
+                        Icon(Icons.Rounded.School, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.quiz_regenerate_weak),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                OutlinedButton(
+                    onClick = { haptics.virtualKey(); onRefreshQuestions() },
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    modifier = Modifier.weight(1f).height(54.dp),
+                ) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.quiz_regenerate_refresh),
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1111,10 +1404,10 @@ private fun ProgressLineChart(attempts: List<QuizAttempt>, modifier: Modifier = 
 }
 
 @Composable
-private fun ReviewCard(quiz: AiQuiz, answers: List<Int?>) {
+private fun ReviewCard(questions: List<QuizQuestion>, answers: List<Int?>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionHeader(text = stringResource(R.string.quiz_review_title))
-        quiz.questions.forEachIndexed { index, question ->
+        questions.forEachIndexed { index, question ->
             val given = answers.getOrNull(index)
             val isCorrect = given == question.correctIndex
             Surface(

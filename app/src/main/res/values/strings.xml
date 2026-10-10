@@ -37,6 +37,8 @@
     <string name="timetable_today">Today</string>
     <string name="timetable_retry">Retry</string>
     <string name="timetable_no_lessons">No lessons today</string>
+    <string name="timetable_previous_week">Previous week</string>
+    <string name="timetable_next_week">Next week</string>
     <string name="timetable_unknown_subject">Unknown subject</string>
     <string name="timetable_event">Event</string>
     <string name="timetable_view_day">Day</string>
@@ -489,6 +491,15 @@
     <string name="quiz_explain_loading">Preparing your explanation…</string>
     <string name="quiz_explain_retry">Try again</string>
     <string name="quiz_explain_empty">The AI didn\'t return an explanation.</string>
+    <string name="quiz_more">More options</string>
+    <string name="quiz_regenerate_refresh">New questions</string>
+    <string name="quiz_regenerate_weak">Practice mistakes</string>
+    <string name="quiz_insights_title">Study insights</string>
+    <string name="quiz_insights_attempts">attempts</string>
+    <string name="quiz_insights_average">average</string>
+    <string name="quiz_insights_weak_title">Needs practice</string>
+    <string name="quiz_insights_wrong_count">%1$d×</string>
+    <string name="quiz_insights_recent_title">Recent results</string>
 
     <string name="flash_title">AI Flashcards</string>
     <string name="flash_new">New deck</string>
