@@ -2,11 +2,9 @@ package com.wiffles.edupage.ui.timetable
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -57,7 +55,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.animation.core.LinearEasing
@@ -1253,16 +1253,25 @@ private fun WeekTimetableView(
             }
         }
 
-        Column(
+        val maxLessons = weekDates.maxOfOrNull { lessonsByDate[it].orEmpty().size } ?: 0
+
+        BoxWithConstraints(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 12.dp),
         ) {
+            val spacing = 6.dp
+            val headerHeight = 48.dp
+            val blocksArea = maxHeight - headerHeight - bottomPadding.calculateBottomPadding() - 8.dp
+            val blockHeight = if (maxLessons > 0) {
+                ((blocksArea - spacing * (maxLessons - 1)) / maxLessons).coerceAtLeast(26.dp)
+            } else {
+                44.dp
+            }
+
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 weekDates.forEach { date ->
@@ -1281,11 +1290,12 @@ private fun WeekTimetableView(
                         currentTime = currentTime,
                         cancelledLessonStyle = cancelledLessonStyle,
                         compact = compact,
-                        modifier = Modifier.clickable { onSelectDay(date) },
+                        blockHeight = blockHeight,
+                        headerHeight = headerHeight,
+                        modifier = Modifier.weight(1f).clickable { onSelectDay(date) },
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp + bottomPadding.calculateBottomPadding()))
         }
     }
 }
@@ -1299,13 +1309,15 @@ private fun WeekDayColumn(
     currentTime: LocalTime,
     cancelledLessonStyle: CancelledLessonStyle,
     compact: Boolean,
+    blockHeight: Dp,
+    headerHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     val locale = Locale.getDefault()
     val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, locale).uppercase(locale)
 
     Column(
-        modifier = modifier.width(if (compact) 84.dp else 104.dp),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Surface(
@@ -1315,11 +1327,12 @@ private fun WeekDayColumn(
                 else -> MaterialTheme.colorScheme.surfaceContainerHigh
             },
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(headerHeight),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize(),
             ) {
                 Text(
                     text = weekday,
@@ -1348,10 +1361,10 @@ private fun WeekDayColumn(
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(blockHeight),
             ) {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -1372,6 +1385,7 @@ private fun WeekDayColumn(
                     isCurrent = isCurrent,
                     cancelledLessonStyle = cancelledLessonStyle,
                     compact = compact,
+                    blockHeight = blockHeight,
                 )
             }
         }
@@ -1384,6 +1398,7 @@ private fun WeekLessonBlock(
     isCurrent: Boolean,
     cancelledLessonStyle: CancelledLessonStyle,
     compact: Boolean,
+    blockHeight: Dp,
 ) {
     val isCancelled = lesson.isCancelled
     val isError = isCancelled && cancelledLessonStyle == CancelledLessonStyle.RED
@@ -1408,24 +1423,31 @@ private fun WeekLessonBlock(
     val start = lesson.startTime
     val end = lesson.endTime
 
+    val tight = blockHeight < 42.dp
+
     Surface(
         color = containerColor,
         shape = RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(blockHeight),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = if (compact) 5.dp else 7.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp, vertical = if (tight) 2.dp else if (compact) 5.dp else 7.dp),
+            verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 text = weekLessonName(lesson),
-                style = MaterialTheme.typography.labelLarge,
+                style = if (tight) MaterialTheme.typography.labelMedium
+                        else MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = contentColor.copy(alpha = alpha),
-                maxLines = 2,
+                maxLines = if (blockHeight < 56.dp) 1 else 2,
+                overflow = TextOverflow.Ellipsis,
                 textDecoration = if (isCancelled) TextDecoration.LineThrough else TextDecoration.None,
             )
-            if (start != null) {
+            if (start != null && !tight) {
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = buildString {
                         append(start.format(timeFormatter))
