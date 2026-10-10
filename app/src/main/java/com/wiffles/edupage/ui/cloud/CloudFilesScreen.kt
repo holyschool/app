@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.edupage.api.model.EduCloudFile
 import com.wiffles.edupage.R
+import com.wiffles.edupage.data.CloudFileStore
 import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
 import com.wiffles.edupage.ui.util.ShimmerBox
 import com.wiffles.edupage.ui.util.rememberAppHaptics
@@ -157,10 +158,10 @@ fun CloudFilesScreen(
                         item(key = "cloud-files-${state.files.size}") {
                             RoundedCardContainer {
                                 state.files.forEach { file ->
-                                    key(file.fileId) {
+                                    key(CloudFileStore.keyOf(file)) {
                                         CloudFileRow(
                                             file = file,
-                                            deleting = state.deletingId == file.fileId,
+                                            deleting = state.deletingId == CloudFileStore.keyOf(file),
                                             opening = state.openingId == file.fileId,
                                             onOpen = { viewModel.open(file) },
                                             onCopy = { haptics.virtualKey(); viewModel.copyLink(file) },
@@ -183,7 +184,7 @@ fun CloudFilesScreen(
             text = { Text(stringResource(R.string.cloud_delete_confirm, file.fileName)) },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.delete(file.fileId)
+                    viewModel.delete(file)
                     confirmDelete = null
                 }) { Text(stringResource(R.string.cloud_delete_action)) }
             },

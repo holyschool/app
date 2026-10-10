@@ -13,6 +13,7 @@ import com.edupage.api.Edupage
 import com.edupage.api.exceptions.NotLoggedInException
 import com.edupage.api.model.EduCloudFile
 import com.wiffles.edupage.R
+import com.wiffles.edupage.data.CloudFileStore
 import com.wiffles.edupage.data.SessionRepository
 import com.wiffles.edupage.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +47,7 @@ class CloudFilesViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val edupage: Edupage,
     private val sessionRepository: SessionRepository,
+    private val cloudFileStore: CloudFileStore,
 ) : ViewModel() {
 
     companion object { private const val TAG = "CloudFilesViewModel" }
@@ -60,24 +62,30 @@ class CloudFilesViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
+            val local = cloudFileStore.current()
             val cur = _uiState.value
-            if (cur is CloudUiState.Success) _uiState.value = cur.copy(isRefreshing = true)
-            else _uiState.value = CloudUiState.Loading
+            if (cur is CloudUiState.Success) {
+                _uiState.value = cur.copy(isRefreshing = true)
+            } else {
+                _uiState.value = CloudUiState.Success(local, isRefreshing = true)
+            }
             try {
-                val files = try {
+                val server = try {
                     edupage.cloudList()
                 } catch (e: NotLoggedInException) {
                     Log.w(TAG, "session expired, re-authenticating and retrying once")
                     sessionRepository.ensureValidSession()
                     edupage.cloudList()
                 }
+                val files = merge(local, server)
                 _uiState.value = CloudUiState.Success(files, isRefreshing = false)
-                Log.i(TAG, "cloud has ${files.size} files")
+                Log.i(TAG, "cloud has ${files.size} files (${local.size} local)")
             } catch (e: Exception) {
                 Log.e(TAG, "failed to list cloud files: ${e.message}", e)
-                val prev = _uiState.value
-                if (prev is CloudUiState.Success) {
-                    _uiState.value = prev.copy(isRefreshing = false)
+                val latest = _uiState.value as? CloudUiState.Success
+                if (latest != null && latest.files.isNotEmpty()) {
+                    // Keep showing locally remembered uploads.
+                    _uiState.value = latest.copy(isRefreshing = false)
                 } else {
                     _uiState.value = CloudUiState.Error(
                         if (e.isNetworkError()) context.getString(R.string.network_error)
@@ -88,33 +96,42 @@ class CloudFilesViewModel @Inject constructor(
         }
     }
 
-    fun delete(fileId: String) {
+    /** Local uploads first, then any server-listed files, de-duplicated by identity. */
+    private fun merge(local: List<EduCloudFile>, server: List<EduCloudFile>): List<EduCloudFile> {
+        val seen = HashSet<String>()
+        return (local + server).filter { seen.add(CloudFileStore.keyOf(it)) }
+    }
+
+    fun delete(file: EduCloudFile) {
         viewModelScope.launch {
             val cur = _uiState.value as? CloudUiState.Success ?: return@launch
-            _uiState.value = cur.copy(deletingId = fileId)
-            try {
-                val ok = try {
-                    edupage.cloudDelete(fileId)
-                } catch (e: NotLoggedInException) {
-                    Log.w(TAG, "session expired, re-authenticating and retrying once")
-                    sessionRepository.ensureValidSession()
-                    edupage.cloudDelete(fileId)
+            val key = CloudFileStore.keyOf(file)
+            _uiState.value = cur.copy(deletingId = key)
+
+            // Remembered uploads only live locally, so always drop them from the list;
+            // the server call is best-effort (the listing endpoint doesn't track them).
+            cloudFileStore.remove(file)
+
+            if (file.fileId.isNotBlank()) {
+                try {
+                    val ok = try {
+                        edupage.cloudDelete(file.fileId)
+                    } catch (e: NotLoggedInException) {
+                        Log.w(TAG, "session expired, re-authenticating and retrying once")
+                        sessionRepository.ensureValidSession()
+                        edupage.cloudDelete(file.fileId)
+                    }
+                    if (!ok) Log.w(TAG, "cloud delete returned false for ${file.fileId}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "cloud delete failed: ${e.message}", e)
                 }
-                val latest = _uiState.value as? CloudUiState.Success ?: cur
-                if (ok) {
-                    _uiState.value = latest.copy(
-                        files = latest.files.filterNot { it.fileId == fileId },
-                        deletingId = null,
-                    )
-                } else {
-                    Log.w(TAG, "cloud delete returned false for $fileId")
-                    _uiState.value = latest.copy(deletingId = null)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "cloud delete failed: ${e.message}", e)
-                val latest = _uiState.value as? CloudUiState.Success ?: cur
-                _uiState.value = latest.copy(deletingId = null)
             }
+
+            val latest = _uiState.value as? CloudUiState.Success ?: cur
+            _uiState.value = latest.copy(
+                files = latest.files.filterNot { CloudFileStore.keyOf(it) == key },
+                deletingId = null,
+            )
         }
     }
 
@@ -134,9 +151,10 @@ class CloudFilesViewModel @Inject constructor(
                 }
                 val uploaded = edupage.cloudUpload(temp)
                 temp.delete()
+                cloudFileStore.add(uploaded)
                 val latest = _uiState.value as? CloudUiState.Success ?: cur
                 _uiState.value = latest.copy(
-                    files = latest.files + uploaded,
+                    files = merge(cloudFileStore.current(), latest.files),
                     uploading = false,
                 )
                 _messages.tryEmit(R.string.cloud_upload_success)
