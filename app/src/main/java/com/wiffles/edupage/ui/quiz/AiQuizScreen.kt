@@ -106,6 +106,7 @@ import com.wiffles.edupage.data.QuizKind
 import com.wiffles.edupage.data.StudyMaterial
 import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
 import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
+import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 import java.time.format.DateTimeFormatter
 
@@ -126,6 +127,7 @@ fun AiQuizScreen(
     var activeQuiz by remember { mutableStateOf<AiQuiz?>(null) }
     val haptics = rememberAppHaptics()
     val snackbarHostState = remember { SnackbarHostState() }
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
 
     LaunchedEffect(regenerateError) {
         regenerateError?.let {
@@ -189,6 +191,7 @@ fun AiQuizScreen(
                             quiz = quiz,
                             attemptsForQuiz = attemptsByQuiz[quiz.id].orEmpty(),
                             regenerating = regenerating,
+                            online = isOnline,
                             onStart = { haptics.virtualKey(); activeQuiz = quiz },
                             onRefresh = {
                                 haptics.virtualKey()
@@ -231,6 +234,7 @@ fun AiQuizScreen(
     if (showNewSheet) {
         NewQuizSheet(
             generating = genState is AiQuizViewModel.GenerateState.Generating,
+            online = isOnline,
             error = (genState as? AiQuizViewModel.GenerateState.Error)?.message,
             homeworkProvider = { viewModel.homeworkMaterials() },
             examState = examState,
@@ -281,6 +285,7 @@ private fun QuizRow(
     quiz: AiQuiz,
     attemptsForQuiz: List<QuizAttempt>,
     regenerating: Boolean,
+    online: Boolean,
     onStart: () -> Unit,
     onRefresh: () -> Unit,
     onPracticeMistakes: () -> Unit,
@@ -346,12 +351,14 @@ private fun QuizRow(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.quiz_regenerate_refresh)) },
                         leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
+                        enabled = online,
                         onClick = { menuOpen = false; onRefresh() },
                     )
                     if (hasMistakes) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.quiz_regenerate_weak)) },
                             leadingIcon = { Icon(Icons.Rounded.School, contentDescription = null) },
+                            enabled = online,
                             onClick = { menuOpen = false; onPracticeMistakes() },
                         )
                     }
@@ -381,6 +388,7 @@ private fun QuizRow(
 @Composable
 private fun NewQuizSheet(
     generating: Boolean,
+    online: Boolean,
     error: String?,
     homeworkProvider: () -> List<StudyMaterial>,
     examState: MaterialLoadState,
@@ -684,12 +692,19 @@ private fun NewQuizSheet(
                     )
                 }
             }
+            if (!online) {
+                Text(
+                    text = stringResource(R.string.ai_offline_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Button(
                 onClick = {
                     haptics.virtualKey()
                     onGenerate(topic, count, difficulty, material, quizKind, instructions)
                 },
-                enabled = topic.isNotBlank() && !generating,
+                enabled = topic.isNotBlank() && !generating && online,
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth().height(54.dp),
             ) {
@@ -1024,6 +1039,7 @@ private fun ResultScreen(
     onDone: () -> Unit,
 ) {
     val haptics = rememberAppHaptics()
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val total = questions.size
     val wrongCount = questions.indices.count { answers.getOrNull(it) != questions[it].correctIndex }
     val fraction = if (total > 0) score.toFloat() / total else 0f
@@ -1130,6 +1146,7 @@ private fun ResultScreen(
 
             ExplainCard(
                 state = explainState,
+                online = isOnline,
                 onExplain = { haptics.virtualKey(); onExplain() },
             )
 
@@ -1140,6 +1157,7 @@ private fun ResultScreen(
                 if (wrongCount > 0) {
                     OutlinedButton(
                         onClick = { haptics.virtualKey(); onPracticeMistakes() },
+                        enabled = isOnline,
                         shape = RoundedCornerShape(20.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp),
                         modifier = Modifier.weight(1f).height(54.dp),
@@ -1155,6 +1173,7 @@ private fun ResultScreen(
                 }
                 OutlinedButton(
                     onClick = { haptics.virtualKey(); onRefreshQuestions() },
+                    enabled = isOnline,
                     shape = RoundedCornerShape(20.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp),
                     modifier = Modifier.weight(1f).height(54.dp),
@@ -1363,7 +1382,11 @@ private fun ReviewCard(questions: List<QuizQuestion>, answers: List<Int?>) {
 }
 
 @Composable
-private fun ExplainCard(state: AiQuizViewModel.ExplainState, onExplain: () -> Unit) {
+private fun ExplainCard(
+    state: AiQuizViewModel.ExplainState,
+    online: Boolean,
+    onExplain: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(
@@ -1407,6 +1430,7 @@ private fun ExplainCard(state: AiQuizViewModel.ExplainState, onExplain: () -> Un
                         )
                         OutlinedButton(
                             onClick = onExplain,
+                            enabled = online,
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -1421,6 +1445,7 @@ private fun ExplainCard(state: AiQuizViewModel.ExplainState, onExplain: () -> Un
                         )
                         Button(
                             onClick = onExplain,
+                            enabled = online,
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                         ) {
@@ -1429,6 +1454,7 @@ private fun ExplainCard(state: AiQuizViewModel.ExplainState, onExplain: () -> Un
                     }
                     else -> Button(
                         onClick = onExplain,
+                        enabled = online,
                         shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                     ) {

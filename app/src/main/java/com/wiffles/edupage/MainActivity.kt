@@ -35,6 +35,7 @@ import com.wiffles.edupage.navigation.Screen
 import com.wiffles.edupage.notification.DeepLinkHelper
 import com.wiffles.edupage.ui.about.WhatsNewCenter
 import com.wiffles.edupage.ui.about.WhatsNewHost
+import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.lock.LockScreen
 import com.wiffles.edupage.ui.lock.LockViewModel
 import com.wiffles.edupage.ui.settings.SettingsViewModel
@@ -88,6 +89,18 @@ class MainActivity : FragmentActivity() {
                         popUpTo(Screen.Main.route) { inclusive = true }
                     }
                 }
+            }
+        }
+
+        // When the network comes back, silently re-validate the session (no-op if still valid).
+        lifecycleScope.launch {
+            var wasOnline = ConnectivityObserver.isOnline.value
+            ConnectivityObserver.isOnline.collect { online ->
+                if (online && !wasOnline) {
+                    Log.i(TAG, "network restored, validating session")
+                    sessionRepository.ensureValidSessionAsync()
+                }
+                wasOnline = online
             }
         }
 

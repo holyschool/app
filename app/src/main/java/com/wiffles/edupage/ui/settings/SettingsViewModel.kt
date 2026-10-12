@@ -186,6 +186,9 @@ class SettingsViewModel @Inject constructor(
     private val _overviewTimetableRedesign = MutableStateFlow(appPreferences.overviewTimetableRedesign)
     val overviewTimetableRedesign: StateFlow<Boolean> = _overviewTimetableRedesign.asStateFlow()
 
+    private val _fastStart = MutableStateFlow(appPreferences.fastStart)
+    val fastStart: StateFlow<Boolean> = _fastStart.asStateFlow()
+
     private val _autoRefreshIntervalMinutes = MutableStateFlow(appPreferences.autoRefreshIntervalMinutes)
     val autoRefreshIntervalMinutes: StateFlow<Int> = _autoRefreshIntervalMinutes.asStateFlow()
 
@@ -474,6 +477,11 @@ class SettingsViewModel @Inject constructor(
     fun setOverviewTimetableRedesign(value: Boolean) {
         appPreferences.overviewTimetableRedesign = value
         _overviewTimetableRedesign.value = value
+    }
+
+    fun setFastStart(value: Boolean) {
+        appPreferences.fastStart = value
+        _fastStart.value = value
     }
 
     fun setAutoRefreshIntervalMinutes(value: Int) {

@@ -107,6 +107,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.wiffles.edupage.R
 import com.wiffles.edupage.data.ChatAttachment
 import com.wiffles.edupage.data.ChatMessage
+import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -121,6 +122,7 @@ fun AiChatScreen(
     val thinking by viewModel.thinking.collectAsState()
     val pendingAttachments by viewModel.attachments.collectAsState()
     val attachError by viewModel.attachError.collectAsState()
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     var input by remember { mutableStateOf("") }
     val haptics = rememberAppHaptics()
     val listState = rememberLazyListState()
@@ -146,6 +148,7 @@ fun AiChatScreen(
     }
 
     fun send(text: String = input) {
+        if (!isOnline) return
         if (text.isBlank() && pendingAttachments.isEmpty()) return
         haptics.virtualKey()
         viewModel.send(text)
@@ -215,17 +218,30 @@ fun AiChatScreen(
                 )
             },
             bottomBar = {
-                ChatComposer(
-                    value = input,
-                    onValueChange = { input = it },
-                    onSend = { send() },
-                    onAttachFile = { picker.launch("*/*") },
-                    onAttachPhoto = { picker.launch("image/*") },
-                    attachmentsEnabled = viewModel.attachmentsEnabled(),
-                    enabled = !thinking,
-                    pendingAttachments = pendingAttachments,
-                    onRemoveAttachment = { viewModel.removeAttachment(it) },
-                )
+                Column {
+                    if (!isOnline) {
+                        Text(
+                            text = stringResource(R.string.ai_offline_hint),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
+                    ChatComposer(
+                        value = input,
+                        onValueChange = { input = it },
+                        onSend = { send() },
+                        onAttachFile = { picker.launch("*/*") },
+                        onAttachPhoto = { picker.launch("image/*") },
+                        attachmentsEnabled = viewModel.attachmentsEnabled(),
+                        enabled = !thinking && isOnline,
+                        pendingAttachments = pendingAttachments,
+                        onRemoveAttachment = { viewModel.removeAttachment(it) },
+                    )
+                }
             },
         ) { padding ->
             Box(

@@ -192,6 +192,7 @@
     <string name="overview_retry">Skúsiť znova</string>
     <string name="network_error">Žiadne pripojenie na internet. Skontrolujte pripojenie a skúste to znova.</string>
     <string name="offline_banner">Ste offline — zobrazujú sa uložené dáta</string>
+    <string name="ai_offline_hint">AI nástroje potrebujú pripojenie na internet.</string>
     <string name="overview_show_less">Zobraziť menej</string>
     <string name="overview_see_timetable">Celý rozvrh</string>
     <string name="overview_see_grades">Všetky známky</string>
@@ -550,6 +551,9 @@
 
     <string name="settings_experimental_ai_quiz">AI študijné nástroje</string>
     <string name="settings_experimental_ai_quiz_desc">Kvízy, kartičky a študijný chat s vlastným AI kľúčom.</string>
+    <string name="settings_experimental_startup">Spustenie</string>
+    <string name="settings_fast_start">Rýchly štart</string>
+    <string name="settings_fast_start_desc">Otvorí sa okamžite z uložených údajov a na pozadí ich obnoví. Aplikácia funguje aj bez pripojenia.</string>
     <string name="settings_experimental_overview">Prehľad</string>
     <string name="settings_overview_timetable_redesign">Redizajn rozvrhu v prehľade</string>
     <string name="settings_overview_timetable_redesign_desc">Zobrazí celý deň ako kompaktnú mriežku hodín, podobne ako predvolený rozvrh EduPage.</string>

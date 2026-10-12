@@ -75,6 +75,7 @@ import com.wiffles.edupage.data.FlashcardDeck
 import com.wiffles.edupage.data.MaterialLoadState
 import com.wiffles.edupage.data.StudyMaterial
 import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
+import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +90,7 @@ fun AiFlashcardsScreen(
     var showNewSheet by remember { mutableStateOf(false) }
     var activeDeck by remember { mutableStateOf<FlashcardDeck?>(null) }
     val haptics = rememberAppHaptics()
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
 
     BackHandler(enabled = activeDeck != null) { activeDeck = null }
 
@@ -157,6 +159,7 @@ fun AiFlashcardsScreen(
     if (showNewSheet) {
         NewDeckSheet(
             generating = genState is AiFlashcardsViewModel.GenerateState.Generating,
+            online = isOnline,
             error = (genState as? AiFlashcardsViewModel.GenerateState.Error)?.message,
             homeworkProvider = { viewModel.homeworkMaterials() },
             examState = examState,
@@ -255,6 +258,7 @@ private enum class FlashSource { TOPIC, MATERIAL }
 @Composable
 private fun NewDeckSheet(
     generating: Boolean,
+    online: Boolean,
     error: String?,
     homeworkProvider: () -> List<StudyMaterial>,
     examState: MaterialLoadState,
@@ -469,12 +473,19 @@ private fun NewDeckSheet(
                     )
                 }
             }
+            if (!online) {
+                Text(
+                    text = stringResource(R.string.ai_offline_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Button(
                 onClick = {
                     haptics.virtualKey()
                     onGenerate(topic, count, if (source == FlashSource.MATERIAL) material else null)
                 },
-                enabled = topic.isNotBlank() && !generating,
+                enabled = topic.isNotBlank() && !generating && online,
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth().height(54.dp),
             ) {

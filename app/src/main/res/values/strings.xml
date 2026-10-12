@@ -208,6 +208,7 @@
     <string name="overview_retry">Retry</string>
     <string name="network_error">No internet connection. Check your connection and try again.</string>
     <string name="offline_banner">You\'re offline — showing saved data</string>
+    <string name="ai_offline_hint">AI tools need an internet connection.</string>
     <string name="overview_show_less">Show less</string>
     <string name="overview_see_timetable">Full timetable</string>
     <string name="overview_see_grades">All grades</string>
@@ -344,6 +345,9 @@
     <string name="settings_experimental_cloud_desc">Browse, upload and manage your EduPage cloud storage.</string>
     <string name="settings_experimental_appearance">Accent colors &amp; appearance</string>
     <string name="settings_experimental_appearance_desc">Custom accent color, font size and more options.</string>
+    <string name="settings_experimental_startup">Startup</string>
+    <string name="settings_fast_start">Fast start</string>
+    <string name="settings_fast_start_desc">Open instantly from cached data and refresh in the background. The app also keeps working when you are offline.</string>
     <string name="settings_experimental_overview">Overview</string>
     <string name="settings_overview_timetable_redesign">Overview timetable redesign</string>
     <string name="settings_overview_timetable_redesign_desc">Show the whole day as a compact period grid, similar to the default EduPage timetable.</string>

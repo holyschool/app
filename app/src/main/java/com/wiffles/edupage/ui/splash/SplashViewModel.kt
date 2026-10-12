@@ -5,7 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
 import com.wiffles.edupage.data.AccountProfileStore
+import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.CredentialStore
+import com.wiffles.edupage.data.SessionRepository
+import com.wiffles.edupage.ui.util.ConnectivityObserver
+import com.wiffles.edupage.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +27,9 @@ sealed interface SplashUiState {
 class SplashViewModel @Inject constructor(
     private val edupage: Edupage,
     private val credentialStore: CredentialStore,
-    private val accountProfileStore: AccountProfileStore
+    private val accountProfileStore: AccountProfileStore,
+    private val appPreferences: AppPreferences,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     companion object {
@@ -44,6 +50,20 @@ class SplashViewModel @Inject constructor(
             if (saved == null) {
                 Log.i(TAG, "no saved credentials, navigating to login")
                 _uiState.value = SplashUiState.GoToLogin()
+                return@launch
+            }
+
+            // Offline, or fast start enabled: show the cached UI right away and validate in the
+            // background (the app-singleton scope means this survives leaving the splash screen).
+            val offline = !ConnectivityObserver.isOnline.value
+            if (offline || appPreferences.fastStart) {
+                Log.i(
+                    TAG,
+                    if (offline) "offline start: entering offline mode"
+                    else "fast start: rendering from cache"
+                )
+                _uiState.value = SplashUiState.Success
+                sessionRepository.ensureValidSessionAsync()
                 return@launch
             }
 
@@ -74,9 +94,9 @@ class SplashViewModel @Inject constructor(
             }
 
             Log.i(TAG, "attempting full re-login for ${saved.username}@${saved.subdomain}")
-            runCatching {
+            val loginError = runCatching {
                 edupage.login(saved.username, saved.password, saved.subdomain)
-            }
+            }.exceptionOrNull()
 
             if (edupage.isLoggedIn) {
                 val newSessionId = edupage.session.cookieJar
@@ -85,6 +105,11 @@ class SplashViewModel @Inject constructor(
                 refreshActiveProfile(newSessionId)
                 Log.i(TAG, "full re-login success for ${saved.username}@${saved.subdomain}")
                 _uiState.value = SplashUiState.Success
+            } else if (loginError?.isNetworkError() == true || !ConnectivityObserver.isOnline.value) {
+                // Network dropped mid-login: keep the credentials and open in offline mode.
+                Log.w(TAG, "network failure during login, entering offline mode")
+                _uiState.value = SplashUiState.Success
+                sessionRepository.ensureValidSessionAsync()
             } else {
                 Log.w(TAG, "all login attempts failed for ${saved.username}@${saved.subdomain}, going to login screen")
                 _uiState.value = SplashUiState.GoToLogin(

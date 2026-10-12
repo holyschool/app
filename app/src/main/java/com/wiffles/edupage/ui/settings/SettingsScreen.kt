@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
@@ -1383,6 +1384,23 @@ private fun androidx.compose.foundation.lazy.LazyListScope.experimentalDetail(
             }
         }
         RoundedCardContainer { Rows() }
+    }
+
+    item {
+        SettingsSectionHeader(text = stringResource(R.string.settings_experimental_startup))
+        @Composable
+        fun StartupRows() {
+            val fastStart by viewModel.fastStart.collectAsState()
+
+            IconToggleItem(
+                icon = Icons.Rounded.Bolt,
+                title = stringResource(R.string.settings_fast_start),
+                description = stringResource(R.string.settings_fast_start_desc),
+                checked = fastStart,
+                onCheckedChange = { viewModel.setFastStart(it) },
+            )
+        }
+        RoundedCardContainer { StartupRows() }
     }
 
     item {

@@ -40,6 +40,7 @@ import com.wiffles.edupage.R
 import com.wiffles.edupage.data.SubjectStyle
 import com.wiffles.edupage.ui.core.containers.SectionLabel
 import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
+import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +54,7 @@ fun SubjectIconEditorSheet(
     val subjectsState by viewModel.subjectsState.collectAsState()
     val aiAvailable by viewModel.aiAvailable.collectAsState()
     val aiState by viewModel.aiState.collectAsState()
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
 
     var selected by remember { mutableStateOf(listOf<String>()) }
     var editingIndex by remember { mutableStateOf(-1) }
@@ -113,6 +115,7 @@ fun SubjectIconEditorSheet(
                         others = state.others,
                         selected = selected,
                         aiAvailable = aiAvailable,
+                        online = isOnline,
                         aiState = aiState,
                         onAutoAssign = {
                             haptics.virtualKey()
@@ -170,6 +173,7 @@ private fun SelectSubjectsStep(
     others: List<SubjectInfo>,
     selected: List<String>,
     aiAvailable: Boolean,
+    online: Boolean,
     aiState: SubjectAiState,
     onAutoAssign: () -> Unit,
     onToggle: (String) -> Unit,
@@ -247,7 +251,7 @@ private fun SelectSubjectsStep(
         if (aiAvailable) {
             Button(
                 onClick = onAutoAssign,
-                enabled = aiState !is SubjectAiState.Running,
+                enabled = aiState !is SubjectAiState.Running && online,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -278,6 +282,14 @@ private fun SelectSubjectsStep(
                     )
                 }
                 else -> Unit
+            }
+            if (!online) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.ai_offline_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
             Spacer(Modifier.height(4.dp))
         }
