@@ -565,6 +565,8 @@
     <string name="settings_ai_step_verify">Overiť a dokončiť</string>
     <string name="settings_ai_provider_gemini">Google Gemini</string>
     <string name="settings_ai_provider_gemini_desc">Dostupná bezplatná úroveň · kľúč z Google AI Studio</string>
+    <string name="settings_ai_provider_anthropic">Anthropic (Claude)</string>
+    <string name="settings_ai_provider_anthropic_desc">Modely Claude priamo od Anthropicu</string>
     <string name="settings_ai_provider_openrouter">OpenRouter</string>
     <string name="settings_ai_provider_openrouter_desc">Jeden kľúč pre stovky modelov od mnohých poskytovateľov</string>
     <string name="settings_ai_provider_openai">OpenAI (ChatGPT)</string>

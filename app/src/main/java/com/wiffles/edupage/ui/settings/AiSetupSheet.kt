@@ -66,6 +66,7 @@ private const val AI_STEP_COUNT = 4
 fun aiProviderLabel(provider: AiProvider): String = stringResource(
     when (provider) {
         AiProvider.GEMINI -> R.string.settings_ai_provider_gemini
+        AiProvider.ANTHROPIC -> R.string.settings_ai_provider_anthropic
         AiProvider.OPENROUTER -> R.string.settings_ai_provider_openrouter
         AiProvider.OPENAI -> R.string.settings_ai_provider_openai
         AiProvider.CUSTOM -> R.string.settings_ai_provider_custom
@@ -470,6 +471,7 @@ private fun ProviderOption(
                     text = stringResource(
                         when (provider) {
                             AiProvider.GEMINI -> R.string.settings_ai_provider_gemini_desc
+                            AiProvider.ANTHROPIC -> R.string.settings_ai_provider_anthropic_desc
                             AiProvider.OPENROUTER -> R.string.settings_ai_provider_openrouter_desc
                             AiProvider.OPENAI -> R.string.settings_ai_provider_openai_desc
                             AiProvider.CUSTOM -> R.string.settings_ai_provider_custom_desc

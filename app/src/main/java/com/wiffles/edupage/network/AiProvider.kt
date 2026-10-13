@@ -11,6 +11,7 @@ enum class AiProvider(
     val needsBaseUrl: Boolean,
 ) {
     GEMINI("gemini", "https://generativelanguage.googleapis.com/v1beta", false),
+    ANTHROPIC("anthropic", "https://api.anthropic.com/v1", false),
     OPENROUTER("openrouter", "https://openrouter.ai/api/v1", false),
     OPENAI("openai", "https://api.openai.com/v1", false),
     CUSTOM("custom", "", true);
@@ -18,6 +19,7 @@ enum class AiProvider(
     val defaultModel: String
         get() = when (this) {
             GEMINI -> "gemini-flash-latest"
+            ANTHROPIC -> "claude-sonnet-4-6"
             OPENROUTER -> "openai/gpt-4o-mini"
             OPENAI -> "gpt-4o-mini"
             CUSTOM -> ""
@@ -25,6 +27,9 @@ enum class AiProvider(
 
     /** Gemini uses its own request/response shape; everything else is OpenAI-compatible. */
     val isGemini: Boolean get() = this == GEMINI
+
+    /** Anthropic (Claude) uses the Messages API, which has its own request/response shape. */
+    val isAnthropic: Boolean get() = this == ANTHROPIC
 
     companion object {
         val DEFAULT = GEMINI
@@ -63,11 +68,12 @@ data class AiConfig(
         get() = (baseUrl.ifBlank { provider.defaultBaseUrl }).trimEnd('/')
 
     /**
-     * Attachments are only sent to Gemini's multimodal endpoint, and only once a
-     * vision model has been chosen. Otherwise the attach action stays disabled.
+     * Attachments are sent to Gemini's multimodal endpoint once a vision model has been
+     * chosen, and to Claude's Messages API (all current Claude models are multimodal).
+     * Otherwise the attach action stays disabled.
      */
     val hasVision: Boolean
-        get() = provider.isGemini && visionModel.isNotBlank()
+        get() = (provider.isGemini && visionModel.isNotBlank()) || provider.isAnthropic
 
     val isReady: Boolean
         get() = effectiveModel.isNotBlank() && effectiveBaseUrl.isNotBlank() && apiKey.isNotBlank()

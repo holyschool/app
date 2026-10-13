@@ -360,6 +360,8 @@
     <string name="settings_ai_step_verify">Verify and finish</string>
     <string name="settings_ai_provider_gemini">Google Gemini</string>
     <string name="settings_ai_provider_gemini_desc">Free tier available · key from Google AI Studio</string>
+    <string name="settings_ai_provider_anthropic">Anthropic (Claude)</string>
+    <string name="settings_ai_provider_anthropic_desc">Claude models straight from Anthropic</string>
     <string name="settings_ai_provider_openrouter">OpenRouter</string>
     <string name="settings_ai_provider_openrouter_desc">One key for hundreds of models from many providers</string>
     <string name="settings_ai_provider_openai">OpenAI (ChatGPT)</string>
@@ -819,6 +821,12 @@
     <string name="whats_new_title">What\'s new</string>
     <string name="whats_new_dismiss">Let me in</string>
     <string name="whats_new_retrigger_desc">Show the highlights again</string>
+    <string name="whats_new_fast_start">Fast start</string>
+    <string name="whats_new_fast_start_desc">Turn it on in Experimental settings to open the app instantly and refresh in the background.</string>
+    <string name="whats_new_offline">Works offline</string>
+    <string name="whats_new_offline_desc">Losing your connection no longer signs you out — keep browsing saved data.</string>
+    <string name="whats_new_claude">Anthropic Claude support</string>
+    <string name="whats_new_claude_desc">Use your Claude API key for quizzes, flashcards and the study chat.</string>
     <string name="whats_new_grammar">Grammar exams (Diktát)</string>
     <string name="whats_new_grammar_desc">Build a full grammar exam and pick the right i/y or mixed form for each item.</string>
     <string name="whats_new_week">Timetable week view</string>

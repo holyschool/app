@@ -29,6 +29,8 @@ class AiService @Inject constructor(
 ) {
     companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()
+        private const val ANTHROPIC_VERSION = "2023-06-01"
+        private const val ANTHROPIC_MAX_TOKENS = 4096
     }
 
     // ---------------------------------------------------------------- models
@@ -36,8 +38,29 @@ class AiService @Inject constructor(
     /** Fetches the list of model ids the given key can use. */
     suspend fun listModels(config: AiConfig): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
-            if (config.provider.isGemini) geminiModels(config) else openAiModels(config)
+            when {
+                config.provider.isGemini -> geminiModels(config)
+                config.provider.isAnthropic -> anthropicModels(config)
+                else -> openAiModels(config)
+            }
         }
+    }
+
+    private fun anthropicModels(config: AiConfig): List<String> {
+        val request = Request.Builder()
+            .url("${config.effectiveBaseUrl}/models?limit=1000")
+            .addHeader("x-api-key", config.apiKey)
+            .addHeader("anthropic-version", ANTHROPIC_VERSION)
+            .get()
+            .build()
+
+        val body = execute(request)
+        val root = JsonParser.parseString(body).asJsonObject
+        val data = root.getAsJsonArray("data") ?: return emptyList()
+        return data.mapNotNull { element ->
+            val obj = runCatching { element.asJsonObject }.getOrNull() ?: return@mapNotNull null
+            obj.get("id")?.asString?.trim()?.takeIf { it.isNotBlank() }
+        }.distinct().sorted()
     }
 
     private fun geminiModels(config: AiConfig): List<String> {
@@ -90,8 +113,51 @@ class AiService @Inject constructor(
         messages: List<AiMessage>,
         jsonMode: Boolean = false,
     ): String = withContext(Dispatchers.IO) {
-        if (config.provider.isGemini) geminiComplete(config, messages, jsonMode)
-        else openAiComplete(config, messages, jsonMode)
+        when {
+            config.provider.isGemini -> geminiComplete(config, messages, jsonMode)
+            config.provider.isAnthropic -> anthropicComplete(config, messages)
+            else -> openAiComplete(config, messages, jsonMode)
+        }
+    }
+
+    private fun anthropicComplete(config: AiConfig, messages: List<AiMessage>): String {
+        val system = messages.filter { it.role == "system" }.joinToString("\n") { it.content }
+        val body = JsonObject().apply {
+            addProperty("model", config.effectiveModel)
+            addProperty("max_tokens", ANTHROPIC_MAX_TOKENS)
+            if (system.isNotBlank()) addProperty("system", system)
+            add("messages", JsonArray().apply {
+                messages.filter { it.role != "system" }.forEach { msg ->
+                    add(JsonObject().apply {
+                        addProperty("role", msg.role)
+                        addProperty("content", msg.content)
+                    })
+                }
+            })
+        }
+        val raw = execute(
+            Request.Builder()
+                .url("${config.effectiveBaseUrl}/messages")
+                .addHeader("x-api-key", config.apiKey)
+                .addHeader("anthropic-version", ANTHROPIC_VERSION)
+                .post(gson.toJson(body).toRequestBody(JSON))
+                .build()
+        )
+        return extractAnthropicText(raw)
+    }
+
+    private fun extractAnthropicText(raw: String): String {
+        val json = JsonParser.parseString(raw).asJsonObject
+        val content = json.getAsJsonArray("content")
+            ?: throw RuntimeException("The model returned no answer")
+        val text = content.mapNotNull { part ->
+            runCatching {
+                val obj = part.asJsonObject
+                if (obj.get("type")?.asString == "text") obj.get("text")?.asString else null
+            }.getOrNull()
+        }.joinToString("")
+        if (text.isBlank()) throw RuntimeException("The model returned an empty answer")
+        return text
     }
 
     private fun geminiComplete(config: AiConfig, messages: List<AiMessage>, jsonMode: Boolean): String {
@@ -194,7 +260,10 @@ class AiService @Inject constructor(
         attachments: List<AiAttachment>,
         model: String,
     ): String = withContext(Dispatchers.IO) {
-        require(config.provider.isGemini) { "Attachments are only supported with Google Gemini" }
+        if (config.provider.isAnthropic) {
+            return@withContext anthropicCompleteWithAttachments(config, messages, attachments)
+        }
+        require(config.provider.isGemini) { "Attachments are only supported with Google Gemini or Anthropic" }
         val system = messages.filter { it.role == "system" }.joinToString("\n") { it.content }
         val convo = messages.filter { it.role != "system" }
         val contents = JsonArray().apply {
@@ -251,6 +320,67 @@ class AiService @Inject constructor(
         }.joinToString("")
         if (text.isBlank()) throw RuntimeException("The model returned an empty answer")
         text
+    }
+
+    /**
+     * Anthropic variant of [completeWithAttachments]. Claude takes images as `image` content
+     * blocks and PDFs as `document` blocks, both with base64 sources.
+     */
+    private fun anthropicCompleteWithAttachments(
+        config: AiConfig,
+        messages: List<AiMessage>,
+        attachments: List<AiAttachment>,
+    ): String {
+        val system = messages.filter { it.role == "system" }.joinToString("\n") { it.content }
+        val convo = messages.filter { it.role != "system" }
+        val body = JsonObject().apply {
+            addProperty("model", config.effectiveModel)
+            addProperty("max_tokens", ANTHROPIC_MAX_TOKENS)
+            if (system.isNotBlank()) addProperty("system", system)
+            add("messages", JsonArray().apply {
+                convo.forEachIndexed { index, msg ->
+                    add(JsonObject().apply {
+                        addProperty("role", msg.role)
+                        // Attach binary content to the final user turn.
+                        if (index == convo.lastIndex && msg.role == "user" && attachments.isNotEmpty()) {
+                            add("content", JsonArray().apply {
+                                if (msg.content.isNotBlank()) {
+                                    add(JsonObject().apply {
+                                        addProperty("type", "text")
+                                        addProperty("text", msg.content)
+                                    })
+                                }
+                                attachments.forEach { attachment ->
+                                    val isPdf = attachment.mimeType.contains("pdf", ignoreCase = true)
+                                    add(JsonObject().apply {
+                                        addProperty("type", if (isPdf) "document" else "image")
+                                        add("source", JsonObject().apply {
+                                            addProperty("type", "base64")
+                                            addProperty("media_type", attachment.mimeType)
+                                            addProperty(
+                                                "data",
+                                                Base64.encodeToString(attachment.data, Base64.NO_WRAP),
+                                            )
+                                        })
+                                    })
+                                }
+                            })
+                        } else {
+                            addProperty("content", msg.content)
+                        }
+                    })
+                }
+            })
+        }
+        val raw = execute(
+            Request.Builder()
+                .url("${config.effectiveBaseUrl}/messages")
+                .addHeader("x-api-key", config.apiKey)
+                .addHeader("anthropic-version", ANTHROPIC_VERSION)
+                .post(gson.toJson(body).toRequestBody(JSON))
+                .build()
+        )
+        return extractAnthropicText(raw)
     }
 
     // --------------------------------------------------------------- quiz
