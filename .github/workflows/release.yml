@@ -61,3 +61,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/app-release.apk
+          # Tags like v1.7.0-beta.1 are published as pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}

@@ -11,11 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,9 +70,19 @@ fun WhatsNewHost(
             }
             RoundedCardContainer {
                 WhatsNewRow(
-                    icon = Icons.Rounded.School,
-                    title = stringResource(R.string.whats_new_grammar),
-                    description = stringResource(R.string.whats_new_grammar_desc),
+                    icon = Icons.Rounded.Bolt,
+                    title = stringResource(R.string.whats_new_fast_start),
+                    description = stringResource(R.string.whats_new_fast_start_desc),
+                )
+                WhatsNewRow(
+                    icon = Icons.Rounded.CloudOff,
+                    title = stringResource(R.string.whats_new_offline),
+                    description = stringResource(R.string.whats_new_offline_desc),
+                )
+                WhatsNewRow(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = stringResource(R.string.whats_new_claude),
+                    description = stringResource(R.string.whats_new_claude_desc),
                 )
                 WhatsNewRow(
                     icon = Icons.Rounded.CalendarViewWeek,
@@ -80,19 +90,9 @@ fun WhatsNewHost(
                     description = stringResource(R.string.whats_new_week_desc),
                 )
                 WhatsNewRow(
-                    icon = Icons.Rounded.AutoAwesome,
-                    title = stringResource(R.string.whats_new_quiz),
-                    description = stringResource(R.string.whats_new_quiz_desc),
-                )
-                WhatsNewRow(
                     icon = Icons.Rounded.Cloud,
                     title = stringResource(R.string.whats_new_cloud),
                     description = stringResource(R.string.whats_new_cloud_desc),
-                )
-                WhatsNewRow(
-                    icon = Icons.Rounded.Notifications,
-                    title = stringResource(R.string.whats_new_polish),
-                    description = stringResource(R.string.whats_new_polish_desc),
                 )
             }
             Button(
