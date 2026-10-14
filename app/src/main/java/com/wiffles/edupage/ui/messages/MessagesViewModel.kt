@@ -208,12 +208,18 @@ class MessagesViewModel @Inject constructor(
     fun loadRecipients() {
         if (_recipientsState.value is RecipientsState.Loading ||
             _recipientsState.value is RecipientsState.Ready) return
+        if (!com.wiffles.edupage.ui.util.ConnectivityObserver.isOnline.value) {
+            _recipientsState.value = RecipientsState.Error(context.getString(R.string.network_error))
+            return
+        }
         viewModelScope.launch {
             _recipientsState.value = RecipientsState.Loading
             try {
-                val studentsDeferred = async { edupage.getStudents() ?: emptyList() }
-                val teachersDeferred = async { edupage.getTeachers() ?: emptyList() }
-                val all: List<EduAccount> = studentsDeferred.await() + teachersDeferred.await()
+                // runCatching keeps an inline failure from cancelling this coroutine before await().
+                val studentsDeferred = async { runCatching { edupage.getStudents() ?: emptyList() } }
+                val teachersDeferred = async { runCatching { edupage.getTeachers() ?: emptyList() } }
+                val all: List<EduAccount> =
+                    studentsDeferred.await().getOrThrow() + teachersDeferred.await().getOrThrow()
                 Log.i(TAG, "loaded ${all.size} recipients")
                 _recipientsState.value = RecipientsState.Ready(all)
             } catch (e: Exception) {

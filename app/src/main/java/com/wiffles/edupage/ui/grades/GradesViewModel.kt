@@ -11,6 +11,8 @@ import com.wiffles.edupage.R
 import com.edupage.api.model.grades.SLOVAK_GRADE_MAP
 import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.GradesCache
+import com.wiffles.edupage.data.SessionRepository
+import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -50,6 +52,7 @@ class GradesViewModel @Inject constructor(
     private val edupage: Edupage,
     private val prefs: AppPreferences,
     private val cache: GradesCache,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     companion object {
@@ -70,6 +73,15 @@ class GradesViewModel @Inject constructor(
     init {
         Log.i(TAG, "init: loading grades")
         loadGradesAutoTerm()
+
+        // Fast start / silent re-login may finish after this screen appears. Refresh then so the
+        // cached grades get replaced by fresh ones instead of staying stale.
+        viewModelScope.launch {
+            sessionRepository.sessionRestored.collect {
+                Log.i(TAG, "session restored, refreshing grades")
+                loadGrades(_selectedTerm.value)
+            }
+        }
     }
 
     fun setTerm(term: Term) {
@@ -160,16 +172,30 @@ class GradesViewModel @Inject constructor(
                 _uiState.value = GradesUiState.Loading
             }
 
+            if (!ConnectivityObserver.isOnline.value) {
+                // Offline: keep whatever the cache produced above instead of trying the network.
+                val offline = _uiState.value
+                _uiState.value = if (offline is GradesUiState.Success) {
+                    offline.copy(isRefreshing = false)
+                } else {
+                    GradesUiState.Error(context.getString(R.string.network_error))
+                }
+                return@launch
+            }
+
             try {
                 val resolvedYear = year
                     ?: edupage.getSchoolYear()
                     ?: throw IllegalStateException(context.getString(R.string.grades_error_failed_to_load))
 
-                val t1Deferred = async { edupage.getGradesForTerm(resolvedYear, Term.FIRST) }
-                val t2Deferred = async { edupage.getGradesForTerm(resolvedYear, Term.SECOND) }
+                // Wrap the calls in runCatching so an inline failure (e.g. NotLoggedInException
+                // while the session is still restoring) cannot cancel this coroutine before the
+                // exception is rethrown into the catch below.
+                val t1Deferred = async { runCatching { edupage.getGradesForTerm(resolvedYear, Term.FIRST) } }
+                val t2Deferred = async { runCatching { edupage.getGradesForTerm(resolvedYear, Term.SECOND) } }
 
-                val t1Raw = t1Deferred.await()
-                val t2Raw = t2Deferred.await()
+                val t1Raw = t1Deferred.await().getOrThrow()
+                val t2Raw = t2Deferred.await().getOrThrow()
 
                 cache.save(Term.FIRST,  resolvedYear, t1Raw)
                 cache.save(Term.SECOND, resolvedYear, t2Raw)
