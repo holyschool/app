@@ -235,6 +235,7 @@ class OverviewViewModel @Inject constructor(
                 val nextDay = nextSchoolDay(today)
                 val nextTimetable = edupage.getMyTimetable(nextDay)
                 val nextLessons = nextTimetable?.lessons ?: emptyList()
+                if (nextLessons.isNotEmpty()) timetableCache.save(nextDay, nextLessons)
                 _timetableState.value = TimetableOverviewState.Success(
                     date = nextDay,
                     lessons = nextLessons,
@@ -259,11 +260,11 @@ class OverviewViewModel @Inject constructor(
 
     private suspend fun loadGrades(forceRefresh: Boolean, silent: Boolean = false) {
 
-        val cachedYear = try {
+        val cachedYear = (try {
             edupage.getSchoolYear()
         } catch (_: Exception) {
             null
-        }
+        }) ?: gradesCache.cachedYear()
         val cached = cachedYear?.let {
             gradesCache.load(Term.SECOND, it) ?: gradesCache.load(Term.FIRST, it)
         }
@@ -283,7 +284,7 @@ class OverviewViewModel @Inject constructor(
         }
 
         try {
-            val year = edupage.getSchoolYear() ?: run {
+            val year = edupage.getSchoolYear() ?: gradesCache.cachedYear() ?: run {
                 if (_gradesState.value !is GradesOverviewState.Success) {
                     _gradesState.value = GradesOverviewState.Unavailable
                 }

@@ -1,16 +1,19 @@
 package com.wiffles.edupage.data
 
 import android.content.Context
+import android.util.Log
 import com.edupage.api.model.Classroom
 import com.edupage.api.model.Subject
 import com.edupage.api.model.people.EduTeacher
 import com.edupage.api.model.timetable.Lesson
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,81 +43,178 @@ data class CachedLesson(
         if (endTimeHour != null && endTimeMinute != null) LocalTime.of(endTimeHour, endTimeMinute) else null
 }
 
+private data class TimetableCacheEntry(
+    val fetchedAtMs: Long,
+    val lessons: List<CachedLesson>,
+)
+
 private data class TimetableCacheFile(
+    val entries: Map<String, TimetableCacheEntry> = emptyMap(),
+)
+
+/** Pre-multi-day cache format: a single day stored at the root of the file. */
+private data class LegacyTimetableCacheFile(
     val date: String,
     val fetchedAtMs: Long,
     val lessons: List<CachedLesson>,
 )
 
+/**
+ * Persistent, multi-day timetable cache.
+ *
+ * Every day is stored under its own key so the week view and offline browsing can read as many
+ * days as we have ever fetched. Entries are pruned to a rolling window around today, and the
+ * whole file is kept in memory so repeated reads (week columns, prefetch) stay cheap.
+ */
 @Singleton
 class TimetableCache @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     companion object {
         private const val FILE_NAME = "timetable_cache.json"
+        private const val TAG = "TimetableCache"
 
-    private const val STALE_AFTER_HOURS = 23L
+        /** Today and future days refresh this often, so substitutions show up quickly. */
+        private const val STALE_AFTER_HOURS = 2L
+
+        /** Past days are mostly history; only refresh them eventually. */
+        private const val PAST_STALE_AFTER_HOURS = 7L * 24
+
+        private const val KEEP_PAST_DAYS = 42L
+        private const val KEEP_FUTURE_DAYS = 42L
     }
 
     private val gson = Gson()
+    private val lock = Any()
+
+    @Volatile
+    private var memory: Map<String, TimetableCacheEntry>? = null
+
     private val file: File get() = File(context.filesDir, FILE_NAME)
 
     fun save(date: LocalDate, lessons: List<Lesson>) {
-        val cached = lessons.map { lesson ->
-            CachedLesson(
-                period = lesson.period,
-                startTimeHour = lesson.startTime?.hour,
-                startTimeMinute = lesson.startTime?.minute,
-                endTimeHour = lesson.endTime?.hour,
-                endTimeMinute = lesson.endTime?.minute,
-                duration = lesson.duration,
-                subjectName = lesson.subject?.name,
-                subjectShortName = lesson.subject?.shortName,
-                teacherNames = lesson.teachers?.mapNotNull { it.name },
-                classroomNames = lesson.classrooms?.mapNotNull { it.name },
-                curriculum = lesson.curriculum,
-                onlineLessonLink = lesson.onlineLessonLink,
-                isCancelled = lesson.isCancelled,
-                isEvent = lesson.isEvent,
-                origSubjectName = lesson.origSubject?.name,
-                origSubjectShortName = lesson.origSubject?.shortName,
-                origTeacherNames = lesson.origTeachers?.mapNotNull { it.name },
-                origClassroomNames = lesson.origClassrooms?.mapNotNull { it.name },
-            )
-        }
-        val cacheFile = TimetableCacheFile(
-            date = date.toString(),
+        val entry = TimetableCacheEntry(
             fetchedAtMs = System.currentTimeMillis(),
-            lessons = cached,
+            lessons = lessons.map { it.toCached() },
         )
-        file.writeText(gson.toJson(cacheFile))
+        synchronized(lock) {
+            val current = memory ?: readFromDisk().also { memory = it }
+            val updated = prune(current + (date.toString() to entry))
+            memory = updated
+            write(updated)
+        }
     }
 
+    /** Cached lessons for [date] regardless of age, with a flag telling whether they are stale. */
     fun loadWithStale(date: LocalDate = LocalDate.now()): Pair<List<Lesson>, Boolean>? {
-        if (!file.exists()) return null
+        val entry = snapshot()[date.toString()] ?: return null
         return try {
-            val type = object : TypeToken<TimetableCacheFile>() {}.type
-            val cacheFile: TimetableCacheFile = gson.fromJson(file.readText(), type)
-            if (cacheFile.date != date.toString()) return null
-            val ageHours = (System.currentTimeMillis() - cacheFile.fetchedAtMs) / 3_600_000L
-            val isStale = ageHours >= STALE_AFTER_HOURS
-            val lessons = cacheFile.lessons.map { it.toLesson() }
-            lessons to isStale
-        } catch (_: Exception) {
+            entry.lessons.map { it.toLesson() } to isStale(date, entry.fetchedAtMs)
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to read entry for $date: ${e.message}")
             null
         }
     }
 
+    /** Cached lessons for [date] only when they are still fresh; null otherwise. */
     fun load(date: LocalDate = LocalDate.now()): List<Lesson>? {
         val cached = loadWithStale(date) ?: return null
         return if (cached.second) null else cached.first
     }
 
-    fun isFreshForToday(): Boolean = load(LocalDate.now()) != null
+    fun isFresh(date: LocalDate): Boolean = load(date) != null
+
+    fun hasData(date: LocalDate): Boolean = snapshot().containsKey(date.toString())
+
+    fun isFreshForToday(): Boolean = isFresh(LocalDate.now())
 
     fun clear() {
-        file.delete()
+        synchronized(lock) {
+            memory = emptyMap()
+            file.delete()
+        }
     }
+
+    // ------------------------------------------------------------------ internals
+
+    private fun snapshot(): Map<String, TimetableCacheEntry> {
+        memory?.let { return it }
+        synchronized(lock) {
+            memory?.let { return it }
+            val loaded = readFromDisk()
+            memory = loaded
+            return loaded
+        }
+    }
+
+    private fun readFromDisk(): Map<String, TimetableCacheEntry> {
+        if (!file.exists()) return emptyMap()
+        return try {
+            val text = file.readText()
+            val root = JsonParser.parseString(text).asJsonObject
+            when {
+                root.has("entries") -> {
+                    val type = object : TypeToken<TimetableCacheFile>() {}.type
+                    val parsed: TimetableCacheFile = gson.fromJson(text, type)
+                    prune(parsed.entries)
+                }
+                root.has("date") -> {
+                    // Migrate the old single-day file so the last cached day survives the upgrade.
+                    val type = object : TypeToken<LegacyTimetableCacheFile>() {}.type
+                    val legacy: LegacyTimetableCacheFile = gson.fromJson(text, type)
+                    prune(mapOf(legacy.date to TimetableCacheEntry(legacy.fetchedAtMs, legacy.lessons)))
+                }
+                else -> emptyMap()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to read cache: ${e.message}")
+            emptyMap()
+        }
+    }
+
+    private fun write(entries: Map<String, TimetableCacheEntry>) {
+        try {
+            file.writeText(gson.toJson(TimetableCacheFile(entries)))
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to write cache: ${e.message}")
+        }
+    }
+
+    private fun prune(entries: Map<String, TimetableCacheEntry>): Map<String, TimetableCacheEntry> {
+        val today = LocalDate.now()
+        return entries.filterKeys { key ->
+            val date = runCatching { LocalDate.parse(key) }.getOrNull() ?: return@filterKeys false
+            val delta = ChronoUnit.DAYS.between(today, date)
+            delta in (-KEEP_PAST_DAYS)..KEEP_FUTURE_DAYS
+        }
+    }
+
+    private fun isStale(date: LocalDate, fetchedAtMs: Long): Boolean {
+        val ageHours = (System.currentTimeMillis() - fetchedAtMs) / 3_600_000L
+        val limit = if (date.isBefore(LocalDate.now())) PAST_STALE_AFTER_HOURS else STALE_AFTER_HOURS
+        return ageHours >= limit
+    }
+
+    private fun Lesson.toCached(): CachedLesson = CachedLesson(
+        period = period,
+        startTimeHour = startTime?.hour,
+        startTimeMinute = startTime?.minute,
+        endTimeHour = endTime?.hour,
+        endTimeMinute = endTime?.minute,
+        duration = duration,
+        subjectName = subject?.name,
+        subjectShortName = subject?.shortName,
+        teacherNames = teachers?.mapNotNull { it.name },
+        classroomNames = classrooms?.mapNotNull { it.name },
+        curriculum = curriculum,
+        onlineLessonLink = onlineLessonLink,
+        isCancelled = isCancelled,
+        isEvent = isEvent,
+        origSubjectName = origSubject?.name,
+        origSubjectShortName = origSubject?.shortName,
+        origTeacherNames = origTeachers?.mapNotNull { it.name },
+        origClassroomNames = origClassrooms?.mapNotNull { it.name },
+    )
 
     private fun CachedLesson.toLesson(): Lesson {
         val subject = if (subjectName != null || subjectShortName != null) {
@@ -192,4 +292,3 @@ class TimetableCache @Inject constructor(
         )
     }
 }
-

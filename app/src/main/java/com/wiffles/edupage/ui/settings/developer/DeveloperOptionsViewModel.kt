@@ -268,6 +268,7 @@ class DeveloperOptionsViewModel @Inject constructor(
         gradesCache.clear()
         timelineCache.clear()
         mealsCache.clear()
+        appPreferences.lastDataWarmMs = 0L
     }
 
     fun resetOnboarding() {

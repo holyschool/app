@@ -7,6 +7,7 @@ import com.edupage.api.Edupage
 import com.wiffles.edupage.data.AccountProfileStore
 import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.CredentialStore
+import com.wiffles.edupage.data.DataWarmer
 import com.wiffles.edupage.data.SessionRepository
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.isNetworkError
@@ -30,6 +31,7 @@ class SplashViewModel @Inject constructor(
     private val accountProfileStore: AccountProfileStore,
     private val appPreferences: AppPreferences,
     private val sessionRepository: SessionRepository,
+    private val dataWarmer: DataWarmer,
 ) : ViewModel() {
 
     companion object {
@@ -62,7 +64,7 @@ class SplashViewModel @Inject constructor(
                     if (offline) "offline start: entering offline mode"
                     else "fast start: rendering from cache"
                 )
-                _uiState.value = SplashUiState.Success
+                enterApp()
                 sessionRepository.ensureValidSessionAsync()
                 return@launch
             }
@@ -87,7 +89,7 @@ class SplashViewModel @Inject constructor(
                 if (sessionOk && edupage.isLoggedIn) {
                     Log.i(TAG, "session restore success for ${saved.username}@${saved.subdomain}")
                     refreshActiveProfile(saved.sessionId)
-                    _uiState.value = SplashUiState.Success
+                    enterApp()
                     return@launch
                 }
                 Log.w(TAG, "session restore failed, falling back to full login")
@@ -104,11 +106,11 @@ class SplashViewModel @Inject constructor(
                 credentialStore.updateSessionId(newSessionId)
                 refreshActiveProfile(newSessionId)
                 Log.i(TAG, "full re-login success for ${saved.username}@${saved.subdomain}")
-                _uiState.value = SplashUiState.Success
+                enterApp()
             } else if (loginError?.isNetworkError() == true || !ConnectivityObserver.isOnline.value) {
                 // Network dropped mid-login: keep the credentials and open in offline mode.
                 Log.w(TAG, "network failure during login, entering offline mode")
-                _uiState.value = SplashUiState.Success
+                enterApp()
                 sessionRepository.ensureValidSessionAsync()
             } else {
                 Log.w(TAG, "all login attempts failed for ${saved.username}@${saved.subdomain}, going to login screen")
@@ -118,6 +120,12 @@ class SplashViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** Enters the app and kick-starts a background cache warm so offline data stays complete. */
+    private fun enterApp() {
+        _uiState.value = SplashUiState.Success
+        dataWarmer.warmAsync(force = true)
     }
 
     private fun refreshActiveProfile(sessionId: String?) {

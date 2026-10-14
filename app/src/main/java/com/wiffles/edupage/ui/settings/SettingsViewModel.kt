@@ -446,6 +446,7 @@ class SettingsViewModel @Inject constructor(
         timetableCache.clear()
         mealsCache.clear()
         appPreferences.clearNotifiedIds()
+        appPreferences.lastDataWarmMs = 0L
         loadChildren()
     }
 
@@ -636,6 +637,7 @@ class SettingsViewModel @Inject constructor(
             gradesCache.clear()
             timelineCache.clear()
             mealsCache.clear()
+            appPreferences.lastDataWarmMs = 0L
             Log.i(TAG, "Cleared timetable/grades/timeline/meals caches")
         }
     }
@@ -862,6 +864,7 @@ class SettingsViewModel @Inject constructor(
             gradesCache.clear()
             timelineCache.clear()
             mealsCache.clear()
+            appPreferences.lastDataWarmMs = 0L
         }
         credentialStore.clear()
         edupage.session.cookieJar.clear()

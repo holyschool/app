@@ -115,6 +115,26 @@ class GradesCache @Inject constructor(
 
     fun hasCacheFor(term: Term): Boolean = file(term.termKey()).exists()
 
+    /**
+     * School year of the most recently fetched grades, or null when nothing is cached yet.
+     * Grade screens use this so they can render cached data offline, before the session's
+     * in-memory school year is available after a cold start.
+     */
+    fun cachedYear(): Int? {
+        val candidates = listOf("T1", "T2").mapNotNull { key ->
+            val f = file(key)
+            if (!f.exists()) return@mapNotNull null
+            try {
+                val type = object : TypeToken<GradesCacheFile>() {}.type
+                val cf: GradesCacheFile = gson.fromJson(f.readText(), type)
+                cf.year to cf.fetchedAtMs
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return candidates.maxByOrNull { it.second }?.first
+    }
+
     fun clear() {
         Log.i(TAG, "clearing all grade caches")
         file("T1").delete()

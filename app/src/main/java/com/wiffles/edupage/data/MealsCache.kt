@@ -7,9 +7,12 @@ import com.edupage.api.model.MealOrderInfo
 import com.edupage.api.model.Meals
 import com.edupage.api.model.MenuChoice
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,7 +51,20 @@ private data class CachedMealOrderInfo(
     val amountOfFoods: Int? = null,
 )
 
+private data class MealsCacheEntry(
+    val fetchedAtMs: Long,
+    val meals: List<CachedMeal>,
+    val credit: String? = null,
+    val boarderId: String? = null,
+    val mealOrderInfo: List<CachedMealOrderInfo>? = null,
+)
+
 private data class MealsCacheFile(
+    val entries: Map<String, MealsCacheEntry> = emptyMap(),
+)
+
+/** Pre-multi-day cache format: a single date stored at the root of the file. */
+private data class LegacyMealsCacheFile(
     val date: String,
     val fetchedAtMs: Long,
     val meals: List<CachedMeal>,
@@ -57,6 +73,10 @@ private data class MealsCacheFile(
     val mealOrderInfo: List<CachedMealOrderInfo>? = null,
 )
 
+/**
+ * Persistent, multi-day meals cache so the canteen can be browsed (and orders reviewed) offline.
+ * Kept in memory to make repeated reads across date navigation cheap.
+ */
 @Singleton
 class MealsCache @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -65,9 +85,16 @@ class MealsCache @Inject constructor(
         private const val FILE_NAME = "meals_cache.json"
         private const val TAG = "MealsCache"
         private const val STALE_AFTER_HOURS = 2L
+        private const val KEEP_PAST_DAYS = 21L
+        private const val KEEP_FUTURE_DAYS = 42L
     }
 
     private val gson = Gson()
+    private val lock = Any()
+
+    @Volatile
+    private var memory: Map<String, MealsCacheEntry>? = null
+
     private val file: File get() = File(context.filesDir, FILE_NAME)
 
     fun save(meals: Meals) {
@@ -109,72 +136,113 @@ class MealsCache @Inject constructor(
                 amountOfFoods = oi.amountOfFoods,
             )
         }
-        val cacheFile = MealsCacheFile(
-            date          = meals.date.toString(),
+        val entry = MealsCacheEntry(
             fetchedAtMs   = System.currentTimeMillis(),
             meals         = cached,
             credit        = meals.credit,
             boarderId     = meals.boarderId,
             mealOrderInfo = cachedOrderInfo,
         )
-        file.writeText(gson.toJson(cacheFile))
+        synchronized(lock) {
+            val current = memory ?: readFromDisk().also { memory = it }
+            val updated = prune(current + (meals.date.toString() to entry))
+            memory = updated
+            write(updated)
+        }
     }
 
-    fun load(date: String = java.time.LocalDate.now().toString()): Meals? {        if (!file.exists()) {
-            Log.i(TAG, "cache miss: no file")
-            return null
-        }
-        return try {
-            val type = object : TypeToken<MealsCacheFile>() {}.type
-            val cf: MealsCacheFile = gson.fromJson(file.readText(), type)
-            if (cf.date != date) {
-                Log.i(TAG, "cache stale: cached date=${cf.date}, requested date=$date")
-                return null
-            }
-            val ageHours = (System.currentTimeMillis() - cf.fetchedAtMs) / 3_600_000L
-            if (ageHours >= STALE_AFTER_HOURS) {
-                Log.i(TAG, "cache expired: $ageHours hours old")
-                return null
-            }
-            val meals = cf.meals.map { it.toMeal() }
-            val orderInfo = cf.mealOrderInfo?.map { it.toMealOrderInfo() }
-            Log.i(TAG, "cache hit: ${meals.size} meals for $date")
-            Meals(
-                date = java.time.LocalDate.parse(date),
-                meals = meals,
-                mealOrderInfo = orderInfo,
-                credit = cf.credit,
-                boarderId = cf.boarderId,
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "failed to read cache: ${e.message}", e)
-            null
-        }
+    /** Fresh cache for [date] (used as the normal cache-first render). */
+    fun load(date: String = LocalDate.now().toString()): Meals? = read(date) { entry ->
+        val ageHours = (System.currentTimeMillis() - entry.fetchedAtMs) / 3_600_000L
+        ageHours < STALE_AFTER_HOURS
     }
+
+    /** Any cache for [date], even expired — this is what keeps meals usable offline. */
+    fun loadLenient(date: String = LocalDate.now().toString()): Meals? = read(date) { true }
+
+    fun isFresh(date: LocalDate): Boolean = load(date.toString()) != null
 
     fun clear() {
-        Log.i(TAG, "clearing meals cache")
-        file.delete()
+        synchronized(lock) {
+            memory = emptyMap()
+            file.delete()
+        }
     }
 
-    fun loadLenient(date: String = java.time.LocalDate.now().toString()): Meals? {
-        if (!file.exists()) return null
+    // ------------------------------------------------------------------ internals
+
+    private inline fun read(date: String, accept: (MealsCacheEntry) -> Boolean): Meals? {
+        val entry = snapshot()[date] ?: return null
+        if (!accept(entry)) return null
         return try {
-            val type = object : TypeToken<MealsCacheFile>() {}.type
-            val cf: MealsCacheFile = gson.fromJson(file.readText(), type)
-            if (cf.date != date) return null
-            val meals = cf.meals.map { it.toMeal() }
-            val orderInfo = cf.mealOrderInfo?.map { it.toMealOrderInfo() }
             Meals(
-                date = java.time.LocalDate.parse(date),
-                meals = meals,
-                mealOrderInfo = orderInfo,
-                credit = cf.credit,
-                boarderId = cf.boarderId,
+                date = LocalDate.parse(date),
+                meals = entry.meals.map { it.toMeal() },
+                mealOrderInfo = entry.mealOrderInfo?.map { it.toMealOrderInfo() },
+                credit = entry.credit,
+                boarderId = entry.boarderId,
             )
         } catch (e: Exception) {
-            Log.e(TAG, "failed to read lenient cache: ${e.message}", e)
+            Log.e(TAG, "failed to read cache for $date: ${e.message}", e)
             null
+        }
+    }
+
+    private fun snapshot(): Map<String, MealsCacheEntry> {
+        memory?.let { return it }
+        synchronized(lock) {
+            memory?.let { return it }
+            val loaded = readFromDisk()
+            memory = loaded
+            return loaded
+        }
+    }
+
+    private fun readFromDisk(): Map<String, MealsCacheEntry> {
+        if (!file.exists()) return emptyMap()
+        return try {
+            val text = file.readText()
+            val root = JsonParser.parseString(text).asJsonObject
+            when {
+                root.has("entries") -> {
+                    val type = object : TypeToken<MealsCacheFile>() {}.type
+                    val parsed: MealsCacheFile = gson.fromJson(text, type)
+                    prune(parsed.entries)
+                }
+                root.has("date") -> {
+                    val type = object : TypeToken<LegacyMealsCacheFile>() {}.type
+                    val legacy: LegacyMealsCacheFile = gson.fromJson(text, type)
+                    val entry = MealsCacheEntry(
+                        fetchedAtMs   = legacy.fetchedAtMs,
+                        meals         = legacy.meals,
+                        credit        = legacy.credit,
+                        boarderId     = legacy.boarderId,
+                        mealOrderInfo = legacy.mealOrderInfo,
+                    )
+                    prune(mapOf(legacy.date to entry))
+                }
+                else -> emptyMap()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "failed to read cache: ${e.message}", e)
+            emptyMap()
+        }
+    }
+
+    private fun write(entries: Map<String, MealsCacheEntry>) {
+        try {
+            file.writeText(gson.toJson(MealsCacheFile(entries)))
+        } catch (e: Exception) {
+            Log.e(TAG, "failed to write cache: ${e.message}", e)
+        }
+    }
+
+    private fun prune(entries: Map<String, MealsCacheEntry>): Map<String, MealsCacheEntry> {
+        val today = LocalDate.now()
+        return entries.filterKeys { key ->
+            val date = runCatching { LocalDate.parse(key) }.getOrNull() ?: return@filterKeys false
+            val delta = ChronoUnit.DAYS.between(today, date)
+            delta in (-KEEP_PAST_DAYS)..KEEP_FUTURE_DAYS
         }
     }
 
@@ -213,4 +281,3 @@ class MealsCache @Inject constructor(
         amountOfFoods = amountOfFoods,
     )
 }
-

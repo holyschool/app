@@ -127,7 +127,9 @@ class GradesViewModel @Inject constructor(
     private fun loadGradesAutoTerm() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val year = runCatching { edupage.getSchoolYear() }.getOrNull()
+            // Fall back to the year recorded in the cache so grades still render offline after a
+            // cold start, when the session's in-memory school year is not available yet.
+            val year = runCatching { edupage.getSchoolYear() }.getOrNull() ?: cache.cachedYear()
 
             if (year != null) {
                 val t1Cached = cache.load(Term.FIRST, year)
@@ -208,7 +210,7 @@ class GradesViewModel @Inject constructor(
     private fun loadGrades(term: Term) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val year = runCatching { edupage.getSchoolYear() }.getOrNull()
+            val year = runCatching { edupage.getSchoolYear() }.getOrNull() ?: cache.cachedYear()
 
             if (year != null) {
                 val cached = cache.load(term, year)
@@ -244,7 +246,7 @@ class GradesViewModel @Inject constructor(
             return
         }
         try {
-            val year = edupage.getSchoolYear()
+            val year = edupage.getSchoolYear() ?: cache.cachedYear()
                 ?: throw IllegalStateException(context.getString(R.string.grades_error_failed_to_load))
             val raw = edupage.getGradesForTerm(year, term)
             cache.save(term, year, raw)

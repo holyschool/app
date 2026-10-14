@@ -250,10 +250,10 @@ class TimetableViewModel @Inject constructor(
             val cached = timetableCache.loadWithStale(date)
             if (cached != null) {
                 val (lessons, isStale) = cached
-                if (lessons.isNotEmpty()) {
-                    _uiState.value = TimetableUiState.Success(lessons, isRefreshing = isStale)
-                    if (!isStale) return@launch
-                }
+                // Render even an empty cached day: a day with no lessons is a valid result and
+                // should not turn into an error when the device is offline.
+                _uiState.value = TimetableUiState.Success(lessons, isRefreshing = isStale)
+                if (!isStale) return@launch
             }
             if (!com.wiffles.edupage.ui.util.ConnectivityObserver.isOnline.value) {
                 val offline = _uiState.value

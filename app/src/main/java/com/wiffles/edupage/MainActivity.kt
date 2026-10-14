@@ -29,6 +29,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavHostController
 import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.DarkModePreference
+import com.wiffles.edupage.data.DataWarmer
 import com.wiffles.edupage.data.SessionRepository
 import com.wiffles.edupage.navigation.AppNavGraph
 import com.wiffles.edupage.navigation.Screen
@@ -50,6 +51,7 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var appPreferences: AppPreferences
     @Inject lateinit var sessionRepository: SessionRepository
+    @Inject lateinit var dataWarmer: DataWarmer
 
     private var navController: NavHostController? = null
 
@@ -92,13 +94,24 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // When the network comes back, silently re-validate the session (no-op if still valid).
+        // A successful (re)login means the session is usable: refill the offline caches.
+        lifecycleScope.launch {
+            sessionRepository.sessionRestored.collect {
+                dataWarmer.warmAsync(force = true)
+            }
+        }
+
+        // When the network comes back, silently re-validate the session (no-op if still valid)
+        // and warm the caches so the offline experience stays complete.
         lifecycleScope.launch {
             var wasOnline = ConnectivityObserver.isOnline.value
             ConnectivityObserver.isOnline.collect { online ->
                 if (online && !wasOnline) {
                     Log.i(TAG, "network restored, validating session")
-                    sessionRepository.ensureValidSessionAsync()
+                    sessionRepository.ensureValidSession()
+                    if (ConnectivityObserver.isOnline.value) {
+                        dataWarmer.warmAsync(force = true)
+                    }
                 }
                 wasOnline = online
             }
@@ -167,6 +180,7 @@ class MainActivity : FragmentActivity() {
                         if (route == null || route == Screen.Splash.route) return
                         lifecycleScope.launch {
                             sessionRepository.ensureValidSession()
+                            dataWarmer.warmAsync()
                         }
                     }
 

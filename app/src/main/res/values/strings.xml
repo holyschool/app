@@ -824,7 +824,7 @@
     <string name="whats_new_fast_start">Fast start</string>
     <string name="whats_new_fast_start_desc">Turn it on in Experimental settings to open the app instantly and refresh in the background.</string>
     <string name="whats_new_offline">Works offline</string>
-    <string name="whats_new_offline_desc">Losing your connection no longer signs you out — keep browsing saved data.</string>
+    <string name="whats_new_offline_desc">Timetable, grades, messages and meals are cached, so the app keeps working without a connection.</string>
     <string name="whats_new_claude">Anthropic Claude support</string>
     <string name="whats_new_claude_desc">Use your Claude API key for quizzes, flashcards and the study chat.</string>
     <string name="whats_new_grammar">Grammar exams (Diktát)</string>

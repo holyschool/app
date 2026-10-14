@@ -173,7 +173,8 @@ class MealsViewModel @Inject constructor(
     private fun loadMeals(date: LocalDate) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val cached = cache.load(date.toString())
+            // Lenient read: even an expired menu should render when there is no network.
+            val cached = cache.loadLenient(date.toString())
             if (cached != null && cached.date == date) {
                 Log.i(TAG, "cache hit: showing ${cached.meals.size} meals for $date")
                 _uiState.value = MealsUiState.Success(
