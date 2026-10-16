@@ -12,6 +12,7 @@ import com.wiffles.edupage.R
 import com.wiffles.edupage.data.MealsCache
 import com.wiffles.edupage.data.SessionRepository
 import com.wiffles.edupage.ui.util.isNetworkError
+import com.wiffles.edupage.ui.util.loadErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -200,7 +201,7 @@ class MealsViewModel @Inject constructor(
             if (offline is MealsUiState.Success) {
                 _uiState.value = offline.copy(isRefreshing = false)
             } else {
-                _uiState.value = MealsUiState.Error(context.getString(R.string.network_error))
+                _uiState.value = MealsUiState.Error(context.getString(R.string.offline_no_cache))
             }
             return
         }
@@ -241,10 +242,7 @@ class MealsViewModel @Inject constructor(
                 _uiState.value = current.copy(isRefreshing = false)
             } else {
                 _uiState.value = MealsUiState.Error(
-                    if (e.isNetworkError())
-                        context.getString(R.string.network_error)
-                    else
-                        e.message ?: context.getString(R.string.meals_error)
+                    loadErrorMessage(context, e, R.string.meals_error)
                 )
             }
         }

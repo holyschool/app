@@ -15,6 +15,7 @@ import com.wiffles.edupage.data.MessagesViewMode
 import com.wiffles.edupage.data.TimelineCache
 import com.wiffles.edupage.network.BackendRegistrationManager
 import com.wiffles.edupage.ui.util.isNetworkError
+import com.wiffles.edupage.ui.util.loadErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -451,7 +452,7 @@ class MessagesViewModel @Inject constructor(
             if (offline is MessagesUiState.Success) {
                 _uiState.value = offline.copy(isRefreshing = false, isLoadingMore = false)
             } else {
-                _uiState.value = MessagesUiState.Error(context.getString(R.string.network_error))
+                _uiState.value = MessagesUiState.Error(context.getString(R.string.offline_no_cache))
             }
             return
         }
@@ -480,10 +481,7 @@ class MessagesViewModel @Inject constructor(
             } else {
                 Log.e(TAG, "fetchAndUpdate failed: ${e.message}", e)
                 _uiState.value = MessagesUiState.Error(
-                    if (e.isNetworkError())
-                        context.getString(R.string.network_error)
-                    else
-                        e.message ?: context.getString(R.string.messages_error_failed_to_load)
+                    loadErrorMessage(context, e, R.string.messages_error_failed_to_load)
                 )
             }
         }

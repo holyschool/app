@@ -441,7 +441,14 @@ private fun TimetableCard(
     OverviewCard {
         when (state) {
             is TimetableOverviewState.Loading -> TimetableCardLoading()
-            is TimetableOverviewState.Error   -> TimetableCardError(onRetry = onRetry)
+            is TimetableOverviewState.Error   -> TimetableCardError(
+                text = stringResource(R.string.overview_error_timetable),
+                onRetry = onRetry,
+            )
+            is TimetableOverviewState.OfflineNoCache -> TimetableCardError(
+                text = stringResource(R.string.offline_no_cache_short),
+                onRetry = onRetry,
+            )
             is TimetableOverviewState.Success -> TimetableCardContent(
                 state        = state,
                 currentTime  = currentTime,
@@ -470,13 +477,13 @@ private fun TimetableCardLoading() {
 }
 
 @Composable
-private fun TimetableCardError(onRetry: () -> Unit) {
+private fun TimetableCardError(text: String, onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         CardSectionHeader(
             title = stringResource(R.string.overview_today_schedule),
             icon  = Icons.Default.DateRange,
         )
-        ErrorMessageBanner(text = stringResource(R.string.overview_error_timetable))
+        ErrorMessageBanner(text = text)
         RetryButton(onRetry = onRetry)
     }
 }
@@ -1046,6 +1053,10 @@ private fun GradesCard(
                     ErrorMessageBanner(text = stringResource(R.string.overview_no_grades))
                     RetryButton(onRetry = onRetry)
                 }
+                is GradesOverviewState.OfflineNoCache -> {
+                    ErrorMessageBanner(text = stringResource(R.string.offline_no_cache_short))
+                    RetryButton(onRetry = onRetry)
+                }
                 is GradesOverviewState.Success -> {
                     if (state.recentGrades.isEmpty()) {
                         Text(
@@ -1381,6 +1392,10 @@ private fun MessagesCard(
                     ErrorMessageBanner(text = stringResource(R.string.overview_no_messages))
                     RetryButton(onRetry = onRetry)
                 }
+                is MessagesOverviewState.OfflineNoCache -> {
+                    ErrorMessageBanner(text = stringResource(R.string.offline_no_cache_short))
+                    RetryButton(onRetry = onRetry)
+                }
                 is MessagesOverviewState.Success -> {
                     if (state.recentMessages.isEmpty()) {
                         Text(
@@ -1537,6 +1552,10 @@ private fun MealsCard(
                 }
                 is MealsOverviewState.Unavailable -> {
                     ErrorMessageBanner(text = stringResource(R.string.overview_no_meals))
+                    RetryButton(onRetry = onRetry)
+                }
+                is MealsOverviewState.OfflineNoCache -> {
+                    ErrorMessageBanner(text = stringResource(R.string.offline_no_cache_short))
                     RetryButton(onRetry = onRetry)
                 }
                 is MealsOverviewState.Success -> {

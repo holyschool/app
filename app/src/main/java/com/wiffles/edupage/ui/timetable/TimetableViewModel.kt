@@ -14,6 +14,7 @@ import com.wiffles.edupage.data.LessonGrouping
 import com.wiffles.edupage.data.CredentialStore
 import com.wiffles.edupage.data.TimetableCache
 import com.wiffles.edupage.ui.util.isNetworkError
+import com.wiffles.edupage.ui.util.loadErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.DayOfWeek
@@ -260,7 +261,9 @@ class TimetableViewModel @Inject constructor(
                 if (offline is TimetableUiState.Success) {
                     _uiState.value = offline.copy(isRefreshing = false)
                 } else {
-                    _uiState.value = TimetableUiState.Error(context.getString(R.string.network_error))
+                    _uiState.value = TimetableUiState.Error(
+                        context.getString(R.string.offline_no_cache)
+                    )
                 }
                 return@launch
             }
@@ -277,10 +280,9 @@ class TimetableViewModel @Inject constructor(
                     _uiState.value = afterFail.copy(isRefreshing = false)
                     Log.w(TAG, "background refresh failed, keeping cached data: ${e.message}")
                 } else {
-                    _uiState.value = TimetableUiState.Error(if (e.isNetworkError())
-                        context.getString(R.string.network_error)
-                    else
-                        e.message ?: context.getString(R.string.timetable_error_failed_to_load))
+                    _uiState.value = TimetableUiState.Error(
+                        loadErrorMessage(context, e, R.string.timetable_error_failed_to_load)
+                    )
                 }
             }
         }

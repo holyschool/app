@@ -38,6 +38,9 @@ import javax.inject.Inject
 sealed interface TimetableOverviewState {
     object Loading : TimetableOverviewState
     object Error : TimetableOverviewState
+
+    /** Offline and this day was never downloaded — tell the user instead of showing an error. */
+    object OfflineNoCache : TimetableOverviewState
     data class Success(
         val date: LocalDate,
         val lessons: List<Lesson>,
@@ -49,12 +52,14 @@ sealed interface TimetableOverviewState {
 sealed interface GradesOverviewState {
     object Loading : GradesOverviewState
     object Unavailable : GradesOverviewState
+    object OfflineNoCache : GradesOverviewState
     data class Success(val recentGrades: List<EduGrade>) : GradesOverviewState
 }
 
 sealed interface MessagesOverviewState {
     object Loading : MessagesOverviewState
     object Unavailable : MessagesOverviewState
+    object OfflineNoCache : MessagesOverviewState
     data class Success(
         val recentMessages: List<TimelineEvent>,
         val unreadCount: Int,
@@ -64,6 +69,7 @@ sealed interface MessagesOverviewState {
 sealed interface MealsOverviewState {
     object Loading : MealsOverviewState
     object Unavailable : MealsOverviewState
+    object OfflineNoCache : MealsOverviewState
     data class Success(val meals: List<Meal>) : MealsOverviewState
 }
 
@@ -210,7 +216,18 @@ class OverviewViewModel @Inject constructor(
                         isNextDay = false,
                     )
                 } else {
-                    _timetableState.value = TimetableOverviewState.Error
+                    // Today isn't cached; the next school day may be.
+                    val nextDay = nextSchoolDay(today)
+                    val nextCached = timetableCache.loadWithStale(nextDay)?.first.orEmpty()
+                    _timetableState.value = if (nextCached.isNotEmpty()) {
+                        TimetableOverviewState.Success(
+                            date = nextDay,
+                            lessons = nextCached,
+                            isNextDay = true,
+                        )
+                    } else {
+                        TimetableOverviewState.OfflineNoCache
+                    }
                 }
             }
             return
@@ -253,7 +270,11 @@ class OverviewViewModel @Inject constructor(
             Log.e(TAG, "timetable load failed: ${e.message}", e)
             val current = _timetableState.value
             if (current !is TimetableOverviewState.Success) {
-                _timetableState.value = TimetableOverviewState.Error
+                _timetableState.value = if (isOnline()) {
+                    TimetableOverviewState.Error
+                } else {
+                    TimetableOverviewState.OfflineNoCache
+                }
             }
         }
     }
@@ -278,7 +299,7 @@ class OverviewViewModel @Inject constructor(
 
         if (!isOnline()) {
             if (_gradesState.value !is GradesOverviewState.Success) {
-                _gradesState.value = GradesOverviewState.Unavailable
+                _gradesState.value = GradesOverviewState.OfflineNoCache
             }
             return
         }
@@ -307,7 +328,11 @@ class OverviewViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "grades load failed: ${e.message}", e)
             if (_gradesState.value !is GradesOverviewState.Success) {
-                _gradesState.value = GradesOverviewState.Unavailable
+                _gradesState.value = if (isOnline()) {
+                    GradesOverviewState.Unavailable
+                } else {
+                    GradesOverviewState.OfflineNoCache
+                }
             }
         }
     }
@@ -321,7 +346,7 @@ class OverviewViewModel @Inject constructor(
 
         if (!isOnline()) {
             if (_messagesState.value !is MessagesOverviewState.Success) {
-                _messagesState.value = MessagesOverviewState.Unavailable
+                _messagesState.value = MessagesOverviewState.OfflineNoCache
             }
             return
         }
@@ -346,7 +371,11 @@ class OverviewViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "messages load failed: ${e.message}", e)
             if (_messagesState.value !is MessagesOverviewState.Success) {
-                _messagesState.value = MessagesOverviewState.Unavailable
+                _messagesState.value = if (isOnline()) {
+                    MessagesOverviewState.Unavailable
+                } else {
+                    MessagesOverviewState.OfflineNoCache
+                }
             }
         }
     }
@@ -389,7 +418,7 @@ class OverviewViewModel @Inject constructor(
 
         if (!isOnline()) {
             if (_mealsState.value !is MealsOverviewState.Success) {
-                _mealsState.value = MealsOverviewState.Unavailable
+                _mealsState.value = MealsOverviewState.OfflineNoCache
             }
             return
         }
@@ -407,7 +436,11 @@ class OverviewViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "meals load failed: ${e.message}", e)
             if (_mealsState.value !is MealsOverviewState.Success) {
-                _mealsState.value = MealsOverviewState.Unavailable
+                _mealsState.value = if (isOnline()) {
+                    MealsOverviewState.Unavailable
+                } else {
+                    MealsOverviewState.OfflineNoCache
+                }
             }
         }
     }

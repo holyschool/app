@@ -207,6 +207,8 @@
     <string name="overview_error_timetable">Couldn\'t load timetable</string>
     <string name="overview_retry">Retry</string>
     <string name="network_error">No internet connection. Check your connection and try again.</string>
+    <string name="offline_no_cache">This isn\'t saved for offline use yet. Go online once to download it.</string>
+    <string name="offline_no_cache_short">Not saved for offline yet</string>
     <string name="offline_banner">You\'re offline — showing saved data</string>
     <string name="ai_offline_hint">AI tools need an internet connection.</string>
     <string name="overview_show_less">Show less</string>
@@ -448,6 +450,8 @@
     <string name="cloud_open_action">Open</string>
     <string name="cloud_no_app">No app can open this file</string>
     <string name="cloud_open_failed">Could not open file</string>
+    <string name="cloud_view_list">List view</string>
+    <string name="cloud_view_gallery">Gallery view</string>
 
     <string name="quiz_title">AI Quiz Maker</string>
     <string name="quiz_new">New quiz</string>

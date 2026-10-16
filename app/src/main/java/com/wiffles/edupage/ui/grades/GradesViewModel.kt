@@ -14,6 +14,7 @@ import com.wiffles.edupage.data.GradesCache
 import com.wiffles.edupage.data.SessionRepository
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.isNetworkError
+import com.wiffles.edupage.ui.util.loadErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -178,7 +179,7 @@ class GradesViewModel @Inject constructor(
                 _uiState.value = if (offline is GradesUiState.Success) {
                     offline.copy(isRefreshing = false)
                 } else {
-                    GradesUiState.Error(context.getString(R.string.network_error))
+                    GradesUiState.Error(context.getString(R.string.offline_no_cache))
                 }
                 return@launch
             }
@@ -223,10 +224,7 @@ class GradesViewModel @Inject constructor(
                 } else {
                     Log.e(TAG, "failed to load grades: ${e.message}", e)
                     _uiState.value = GradesUiState.Error(
-                        if (e.isNetworkError())
-                            context.getString(R.string.network_error)
-                        else
-                            e.message ?: context.getString(R.string.grades_error_failed_to_load)
+                        loadErrorMessage(context, e, R.string.grades_error_failed_to_load)
                     )
                 }
             }
@@ -267,7 +265,7 @@ class GradesViewModel @Inject constructor(
             if (offline is GradesUiState.Success) {
                 _uiState.value = offline.copy(isRefreshing = false)
             } else {
-                _uiState.value = GradesUiState.Error(context.getString(R.string.network_error))
+                _uiState.value = GradesUiState.Error(context.getString(R.string.offline_no_cache))
             }
             return
         }
@@ -292,7 +290,7 @@ class GradesViewModel @Inject constructor(
             } else {
                 Log.e(TAG, "fetchAndUpdate failed for $term: ${e.message}", e)
                 _uiState.value = GradesUiState.Error(
-                    e.message ?: context.getString(R.string.grades_error_failed_to_load)
+                    loadErrorMessage(context, e, R.string.grades_error_failed_to_load)
                 )
             }
         }
