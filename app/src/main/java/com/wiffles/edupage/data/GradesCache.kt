@@ -143,11 +143,22 @@ class GradesCache @Inject constructor(
 
     private fun CachedGrade.toEduGrade(): EduGrade? {
         val date = try { LocalDateTime.parse(dateIso, DATE_FMT) } catch (_: Exception) { return null }
+        // Older caches may still hold a grade whose comment was folded into the value
+        // (e.g. "2 (horšie)"). Split it back out so it renders like a fresh fetch.
+        val splitComment = gradeNString?.let { raw ->
+            val idx = raw.indexOf('(')
+            if (idx > 0 && raw.trimEnd().endsWith(")")) {
+                raw.substring(0, idx).trim() to
+                    raw.substring(idx + 1, raw.lastIndexOf(')')).trim().ifBlank { null }
+            } else null
+        }
         val gradeN: Any? = when {
             gradeNDouble != null -> gradeNDouble
+            splitComment != null -> splitComment.first.toDoubleOrNull() ?: splitComment.first
             gradeNString != null -> gradeNString
             else                 -> null
         }
+        val effectiveComment = comment ?: splitComment?.second
         val teacher: EduTeacher? = if (teacherId != null && teacherName != null) {
             EduTeacher(
                 personId       = teacherId,
@@ -163,7 +174,7 @@ class GradesCache @Inject constructor(
             eventId       = eventId,
             title         = title,
             gradeN        = gradeN,
-            comment       = comment,
+            comment       = effectiveComment,
             date          = date,
             subjectId     = subjectId,
             subjectName   = subjectName,

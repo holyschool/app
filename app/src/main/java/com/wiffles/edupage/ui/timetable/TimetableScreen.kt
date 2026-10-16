@@ -339,7 +339,8 @@ fun TimetableScreen(
                                     contentPadding = PaddingValues(
                                         start = 16.dp, end = 16.dp,
                                         top = if (compactTimetable) 8.dp else 16.dp,
-                                        bottom = if (compactTimetable) 8.dp else (16.dp + bottomPadding.calculateBottomPadding())
+                                        bottom = (if (compactTimetable) 8.dp else 16.dp) +
+                                            bottomPadding.calculateBottomPadding()
                                     ),
                                     verticalArrangement = Arrangement.spacedBy(if (compactTimetable) 8.dp else 14.dp)
                                 ) {

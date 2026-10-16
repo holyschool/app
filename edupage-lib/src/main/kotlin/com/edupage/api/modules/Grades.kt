@@ -169,13 +169,18 @@ internal class Grades(private val session: EdupageSession) {
 
                 val dataElem = grade.get("data")
                 if (dataElem == null || dataElem.isJsonNull) continue
-                val dataStr = dataElem.asString
+                // EduPage folds a grade's comment into the data string, e.g. "2 (horšie)"
+                // or "2(horšie)". Normalise the separator (which may be a non-breaking
+                // space) so the numeric/verbal grade is split from the trailing comment.
+                val dataStr = dataElem.asString.replace('\u00A0', ' ').trim()
                 if (dataStr.isBlank()) continue
 
-                val splitIdx = dataStr.indexOf(" (")
-                val gradeStr = if (splitIdx >= 0) dataStr.substring(0, splitIdx) else dataStr
-                val comment = if (splitIdx >= 0 && dataStr.endsWith(")"))
-                    dataStr.substring(splitIdx + 2, dataStr.length - 1) else null
+                val parenIdx = dataStr.indexOf('(')
+                val hasComment = parenIdx > 0 && dataStr.endsWith(")")
+                val gradeStr = if (hasComment) dataStr.substring(0, parenIdx).trim() else dataStr
+                val comment = if (hasComment)
+                    dataStr.substring(parenIdx + 1, dataStr.length - 1).trim().ifBlank { null }
+                else null
 
                 val gradeN: Any? = gradeStr.toDoubleOrNull() ?: gradeStr
 

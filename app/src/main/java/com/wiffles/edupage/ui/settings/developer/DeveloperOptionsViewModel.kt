@@ -85,14 +85,14 @@ class DeveloperOptionsViewModel @Inject constructor(
         )
 
         val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_GRADES)
-            .setSmallIcon(R.drawable.ic_notif_grade)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(DeepLinkHelper.createGradesIntent(context, title, body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_notif_grade, context.getString(R.string.notif_mark_read), markReadPendingIntent)
+            .addAction(R.drawable.ic_notification, context.getString(R.string.notif_mark_read), markReadPendingIntent)
             .build()
         nm.notify(notifId, notification)
     }
@@ -114,14 +114,14 @@ class DeveloperOptionsViewModel @Inject constructor(
         )
 
         val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_MESSAGES)
-            .setSmallIcon(R.drawable.ic_notif_message)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(DeepLinkHelper.createMessagesIntent(context, title, body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_notif_message, context.getString(R.string.notif_mark_read), markReadPendingIntent)
+            .addAction(R.drawable.ic_notification, context.getString(R.string.notif_mark_read), markReadPendingIntent)
             .build()
         nm.notify(notifId, notification)
     }
@@ -129,7 +129,7 @@ class DeveloperOptionsViewModel @Inject constructor(
     fun testHomeworkNotification() {
         postGenericNotification(
             notifId = 9997,
-            iconRes = R.drawable.ic_notif_homework,
+            iconRes = R.drawable.ic_notification,
             title = context.getString(R.string.notif_homework_title),
             body = "Chapter 5 exercises 1-10. Due on Monday.",
             channel = GradeMessageCheckWorker.CHANNEL_MESSAGES,
@@ -154,14 +154,14 @@ class DeveloperOptionsViewModel @Inject constructor(
         )
 
         val notification = NotificationCompat.Builder(context, GradeMessageCheckWorker.CHANNEL_SUBSTITUTIONS)
-            .setSmallIcon(R.drawable.ic_notif_substitution)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(DeepLinkHelper.createTimetableIntent(context, title, body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(R.drawable.ic_notif_substitution, context.getString(R.string.notif_mark_read), markReadPendingIntent)
+            .addAction(R.drawable.ic_notification, context.getString(R.string.notif_mark_read), markReadPendingIntent)
             .build()
         nm.notify(notifId, notification)
     }
@@ -169,7 +169,7 @@ class DeveloperOptionsViewModel @Inject constructor(
     fun testEventNotification() {
         postGenericNotification(
             notifId = 9995,
-            iconRes = R.drawable.ic_notif_event,
+            iconRes = R.drawable.ic_notification,
             title = context.getString(R.string.notif_event_title),
             body = "School Trip: Science Museum. Meeting at 8:00 AM in front of the school.",
             channel = GradeMessageCheckWorker.CHANNEL_MESSAGES,

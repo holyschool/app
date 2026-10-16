@@ -59,21 +59,11 @@ object NotificationType {
         else -> GradeMessageCheckWorker.CHANNEL_MESSAGES
     }
 
-    fun iconFor(type: String?): Int = when (normalize(type)) {
-        "message" -> R.drawable.ic_notif_message
-        "homework" -> R.drawable.ic_notif_homework
-        "test" -> R.drawable.ic_notif_test
-        "announcement" -> R.drawable.ic_notif_announcement
-        "grade" -> R.drawable.ic_notif_grade
-        "substitution" -> R.drawable.ic_notif_substitution
-        "event", "absence" -> R.drawable.ic_notif_event
-        "payment" -> R.drawable.ic_notif_generic
-        "signin" -> R.drawable.ic_notif_generic
-        "behaviour" -> R.drawable.ic_notif_generic
-        "album" -> R.drawable.ic_notif_generic
-        "notification" -> R.drawable.ic_notification
-        else -> R.drawable.ic_notification
-    }
+    /**
+     * The small status-bar icon. Every notification uses the EduPage logo (a graduation
+     * cap) so the app is instantly recognisable in the notification shade.
+     */
+    fun iconFor(type: String?): Int = R.drawable.ic_notification
 
     fun isGrade(raw: String?) = normalize(raw) == "grade"
 
