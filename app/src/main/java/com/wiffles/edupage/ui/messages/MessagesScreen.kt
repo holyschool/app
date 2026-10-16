@@ -125,6 +125,7 @@ import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.people.EduAccount
 import com.wiffles.edupage.R
 import com.wiffles.edupage.data.MessagesViewMode
+import com.wiffles.edupage.ui.chat.MarkdownMessage
 import com.wiffles.edupage.ui.core.cards.IconToggleItem
 import com.wiffles.edupage.ui.core.cards.PastelIcon
 import com.wiffles.edupage.ui.core.cards.PastelIcon
@@ -134,6 +135,7 @@ import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
 import com.wiffles.edupage.ui.modifiers.MotionBlurGate
 import com.wiffles.edupage.ui.modifiers.scrollMotionBlur
 import com.wiffles.edupage.ui.theme.Edupage2Theme
+import com.wiffles.edupage.ui.util.ThumbnailImage
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.debounce
@@ -197,15 +199,33 @@ private fun categoryInfo(labelRes: Int): FilterCategory =
         ?: FilterCategory(R.string.messages_type_notification, Icons.Default.Notifications)
 
 private val HtmlTagRegex = Regex("<[^>]*>")
+private val HtmlLinkRegex = Regex(
+    "<a\\b[^>]*href\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
+    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
+private val HtmlBreakRegex = Regex("<\\s*br\\s*/?\\s*>", RegexOption.IGNORE_CASE)
+private val HtmlBlockEndRegex = Regex("</\\s*(p|div|li|tr|h[1-6])\\s*>", RegexOption.IGNORE_CASE)
 
+/**
+ * Turns the HTML fragment EduPage stores for messages into the Markdown subset understood
+ * by [MarkdownMessage]: links are preserved, `<br>`/paragraph breaks become newlines and the
+ * remaining tags are stripped.
+ */
 private fun String.unescapeHtml(): String = this
+    .replace(HtmlLinkRegex) { m ->
+        val label = m.groupValues[2].replace(HtmlTagRegex, "").trim()
+        "[$label](${m.groupValues[1]})"
+    }
+    .replace(HtmlBreakRegex, "\n")
+    .replace(HtmlBlockEndRegex, "\n\n")
+    .replace(HtmlTagRegex, "")
     .replace("&lt;", "<")
     .replace("&gt;", ">")
-    .replace("&amp;", "&")
-    .replace("&nbsp;", "\u00A0")
     .replace("&quot;", "\"")
     .replace("&#39;", "'")
-    .replace(HtmlTagRegex, "")
+    .replace("&amp;", "&")
+    .replace("&nbsp;", " ")
+    .replace(Regex("\n{3,}"), "\n\n")
     .trim()
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1673,10 +1693,10 @@ private fun DetailSheetContent(
                 ?: event.title?.unescapeHtml()?.takeIf { it.isNotBlank() }
             if (body != null) {
                 Spacer(Modifier.height(6.dp))
-                Text(
+                MarkdownMessage(
                     text = body,
-                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                    preserveLineBreaks = true,
                 )
             }
 
@@ -1964,10 +1984,10 @@ private fun ReplyItem(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Text(
+            MarkdownMessage(
                 text = (reply.text ?: reply.title ?: "").unescapeHtml(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                preserveLineBreaks = true,
             )
             if (reply.attachments.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -1977,53 +1997,105 @@ private fun ReplyItem(
     }
 }
 
-/** A tappable list of message/reply attachments. */
+/** A tappable list of message/reply attachments, with inline previews for images. */
 @Composable
 private fun AttachmentsCard(
     attachments: List<com.edupage.api.model.MessageAttachment>,
     onOpen: (com.edupage.api.model.MessageAttachment) -> Unit,
 ) {
     val haptics = rememberAppHaptics()
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         attachments.forEach { attachment ->
+            val isImage = attachment.name.isImageName() || attachment.url.isImageName()
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { haptics.virtualKey(); onOpen(attachment) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.AttachFile,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        text = attachment.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Icon(
-                        Icons.Rounded.Download,
-                        contentDescription = stringResource(R.string.messages_attachment_open),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
+                if (isImage) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { haptics.virtualKey(); onOpen(attachment) },
+                    ) {
+                        ThumbnailImage(
+                            cacheKey = "msg:" + attachment.url,
+                            remotePath = attachment.url,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.AttachFile,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = attachment.name,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                Icons.Rounded.Download,
+                                contentDescription = stringResource(R.string.messages_attachment_open),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { haptics.virtualKey(); onOpen(attachment) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.AttachFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = attachment.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            Icons.Rounded.Download,
+                            contentDescription = stringResource(R.string.messages_attachment_open),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif")
+
+/** Heuristic: image attachments get a thumbnail preview, everything else a plain row. */
+private fun String.isImageName(): Boolean =
+    substringBefore('?').substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

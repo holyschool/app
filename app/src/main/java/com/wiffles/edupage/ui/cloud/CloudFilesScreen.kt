@@ -2,8 +2,10 @@ package com.wiffles.edupage.ui.cloud
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,10 +18,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.InsertDriveFile
@@ -50,6 +57,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +71,7 @@ import com.wiffles.edupage.R
 import com.wiffles.edupage.data.CloudFileStore
 import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
 import com.wiffles.edupage.ui.util.ShimmerBox
+import com.wiffles.edupage.ui.util.ThumbnailImage
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +82,7 @@ fun CloudFilesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var confirmDelete by remember { mutableStateOf<EduCloudFile?>(null) }
+    var galleryMode by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
     val context = LocalContext.current
 
@@ -104,6 +115,19 @@ fun CloudFilesScreen(
                     }
                 },
                 actions = {
+                    val hasImages = (uiState as? CloudUiState.Success)
+                        ?.files?.any { it.fileName.isImageFileName() } == true
+                    if (hasImages) {
+                        FilledTonalIconButton(onClick = { haptics.virtualKey(); galleryMode = !galleryMode }) {
+                            Icon(
+                                imageVector = if (galleryMode) Icons.Rounded.ViewAgenda else Icons.Rounded.GridView,
+                                contentDescription = stringResource(
+                                    if (galleryMode) R.string.cloud_view_list else R.string.cloud_view_gallery
+                                ),
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
                     FilledTonalIconButton(onClick = { haptics.virtualKey(); picker.launch(arrayOf("*/*")) }) {
                         Icon(Icons.Rounded.Upload, contentDescription = stringResource(R.string.cloud_upload_action))
                     }
@@ -134,6 +158,25 @@ fun CloudFilesScreen(
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
+                        }
+                    }
+                } else if (galleryMode) {
+                    val images = state.files.filter {
+                        it.fileName.isImageFileName() && it.uploadPath.isNotBlank()
+                    }
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize().padding(paddingValues),
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(images, key = { CloudFileStore.keyOf(it) }) { file ->
+                            CloudGalleryCell(
+                                file = file,
+                                opening = state.openingId == file.fileId,
+                                onOpen = { haptics.virtualKey(); viewModel.open(file) },
+                            )
                         }
                     }
                 } else {
@@ -218,8 +261,18 @@ private fun CloudFileRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(Icons.Rounded.InsertDriveFile, contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            if (file.fileName.isImageFileName() && file.uploadPath.isNotBlank()) {
+                ThumbnailImage(
+                    cacheKey = "cloud:" + CloudFileStore.keyOf(file),
+                    remotePath = file.uploadPath,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                )
+            } else {
+                Icon(Icons.Rounded.InsertDriveFile, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            }
             Text(
                 text = file.fileName.ifBlank { file.fileId },
                 style = MaterialTheme.typography.bodyLarge,
@@ -246,6 +299,47 @@ private fun CloudFileRow(
         }
     }
 }
+
+@Composable
+private fun CloudGalleryCell(
+    file: EduCloudFile,
+    opening: Boolean,
+    onOpen: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onOpen() },
+        contentAlignment = Alignment.Center,
+    ) {
+        ThumbnailImage(
+            cacheKey = "cloud:" + CloudFileStore.keyOf(file),
+            remotePath = file.uploadPath,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (opening) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+private val CLOUD_IMAGE_EXTENSIONS =
+    setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif")
+
+private fun String.isImageFileName(): Boolean =
+    substringBefore('?').substringAfterLast('.', "").lowercase() in CLOUD_IMAGE_EXTENSIONS
 
 private fun queryFileName(context: android.content.Context, uri: android.net.Uri): String? {
     return runCatching {

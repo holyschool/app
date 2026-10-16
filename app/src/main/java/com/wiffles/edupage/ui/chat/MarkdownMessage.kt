@@ -47,8 +47,11 @@ fun MarkdownMessage(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface,
     mathColor: Color = color,
+    preserveLineBreaks: Boolean = false,
 ) {
-    val blocks = remember(text) { MarkdownParser(text).parse() }
+    val blocks = remember(text, preserveLineBreaks) {
+        MarkdownParser(text, preserveLineBreaks).parse()
+    }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         blocks.forEach { block -> MarkdownBlockView(block, color, mathColor) }
     }
@@ -262,6 +265,24 @@ private fun expandForFlow(spans: List<MdSpan>, baseColor: Color): List<MdSpan> {
 
 // ------------------------------------------------------------------ model
 
+private val BARE_URL = Regex("^(?:https?://|www\\.)[^\\s<>]+", RegexOption.IGNORE_CASE)
+
+private fun matchesUrlStart(text: String, index: Int): Boolean {
+    val rest = text.substring(index)
+    return rest.startsWith("http://", ignoreCase = true) ||
+        rest.startsWith("https://", ignoreCase = true) ||
+        rest.startsWith("www.", ignoreCase = true)
+}
+
+/** Drops sentence punctuation that commonly trails a pasted URL. */
+private fun trimUrl(url: String): String {
+    var trimmed = url.trimEnd('.', ',', ';', ':', '!', '?', '"', '\'', '’')
+    while (trimmed.endsWith(")") && trimmed.count { it == ')' } > trimmed.count { it == '(' }) {
+        trimmed = trimmed.dropLast(1)
+    }
+    return trimmed
+}
+
 private sealed interface MdSpan {
     data class Text(
         val text: String,
@@ -285,7 +306,10 @@ private sealed interface MdBlock {
     data class MathBlock(val latex: String) : MdBlock
 }
 
-private class MarkdownParser(private val source: String) {
+private class MarkdownParser(
+    private val source: String,
+    private val preserveLineBreaks: Boolean = false,
+) {
 
     fun parse(): List<MdBlock> {
         val lines = source.replace("\r\n", "\n").split("\n")
@@ -376,7 +400,11 @@ private class MarkdownParser(private val source: String) {
                             l.trimStart().startsWith(">") || l.trimStart().startsWith("```") ||
                             l.trim() == "$$" || l.trim() == "---"
                         ) break
-                        builder.append(if (builder.isEmpty()) "" else " ").append(l.trim())
+                        builder.append(
+                            if (builder.isEmpty()) ""
+                            else if (preserveLineBreaks) "\n"
+                            else " "
+                        ).append(l.trim())
                         idx++
                     }
                     if (builder.isNotEmpty()) blocks.add(MdBlock.Paragraph(parseInline(builder.toString())))
@@ -464,6 +492,18 @@ private class MarkdownParser(private val source: String) {
                         val url = text.substring(open + 1, endParen)
                         spans.add(MdSpan.Text(label, link = url))
                         i = endParen + 1
+                    } else { sb.append(c); i++ }
+                }
+                (c == 'h' || c == 'H' || c == 'w' || c == 'W') && matchesUrlStart(text, i) -> {
+                    val match = BARE_URL.find(text.substring(i))
+                    if (match != null) {
+                        val url = trimUrl(match.value)
+                        if (url.isNotEmpty()) {
+                            flush()
+                            val href = if (url.startsWith("www.", ignoreCase = true)) "https://$url" else url
+                            spans.add(MdSpan.Text(url, link = href))
+                            i += url.length
+                        } else { sb.append(c); i++ }
                     } else { sb.append(c); i++ }
                 }
                 else -> {
