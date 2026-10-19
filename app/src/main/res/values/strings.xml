@@ -593,6 +593,17 @@
     <string name="chat_copied">Copied to clipboard</string>
     <string name="chat_share">Share</string>
     <string name="chat_share_title">Share message</string>
+    <string name="chat_sessions_title">Chat sessions</string>
+    <string name="chat_sessions_empty">No saved sessions yet.</string>
+    <string name="chat_session_new">New session</string>
+    <string name="chat_session_edit">Edit session</string>
+    <string name="chat_session_title">Title</string>
+    <string name="chat_session_subject">Subject (optional)</string>
+    <string name="chat_session_delete">Delete session</string>
+    <string name="chat_session_untitled">Untitled session</string>
+    <string name="chat_quiz_card_title">Quiz ready</string>
+    <string name="chat_quiz_card_desc">The assistant built a quiz for you.</string>
+    <string name="chat_quiz_take">Start quiz</string>
 
     <string name="overview_ai_study">AI Study</string>
     <string name="overview_ai_quiz_desc">Generate and take quizzes</string>

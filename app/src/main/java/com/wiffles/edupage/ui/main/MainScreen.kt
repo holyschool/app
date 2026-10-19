@@ -160,6 +160,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     var showAiQuiz by remember { mutableStateOf(false) }
     var showAiFlashcards by remember { mutableStateOf(false) }
     var showAiChat by remember { mutableStateOf(false) }
+    var pendingQuizId by remember { mutableStateOf<String?>(null) }
     var timetableWeekMode by remember { mutableStateOf(false) }
 
     suspend fun consumePendingDeepLink() {
@@ -460,7 +461,8 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                 visible = showAiQuiz,
             ) {
                     com.wiffles.edupage.ui.quiz.AiQuizScreen(
-                        onBack = { showAiQuiz = false }
+                        onBack = { showAiQuiz = false; pendingQuizId = null },
+                        initialQuizId = pendingQuizId,
                     )
             }
 
@@ -477,7 +479,12 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                 motionBlur = false,
             ) {
                     com.wiffles.edupage.ui.chat.AiChatScreen(
-                        onBack = { showAiChat = false }
+                        onBack = { showAiChat = false },
+                        onOpenQuiz = { quizId ->
+                            pendingQuizId = quizId
+                            showAiChat = false
+                            showAiQuiz = true
+                        },
                     )
             }
         }

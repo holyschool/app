@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
@@ -56,26 +57,37 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
@@ -107,6 +119,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.wiffles.edupage.R
 import com.wiffles.edupage.data.ChatAttachment
 import com.wiffles.edupage.data.ChatMessage
+import com.wiffles.edupage.data.ChatSession
+import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.rememberAppHaptics
 import kotlinx.coroutines.Dispatchers
@@ -116,17 +130,27 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AiChatScreen(
     onBack: () -> Unit,
+    onOpenQuiz: (String) -> Unit,
     viewModel: AiChatViewModel = hiltViewModel(),
 ) {
     val messages by viewModel.messages.collectAsState()
+    val sessions by viewModel.sessions.collectAsState()
+    val currentSessionId by viewModel.currentSessionId.collectAsState()
     val thinking by viewModel.thinking.collectAsState()
     val pendingAttachments by viewModel.attachments.collectAsState()
     val attachError by viewModel.attachError.collectAsState()
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     var input by remember { mutableStateOf("") }
+    var showSessions by remember { mutableStateOf(false) }
+    var showNewSession by remember { mutableStateOf(false) }
+    var editSession by remember { mutableStateOf<ChatSession?>(null) }
     val haptics = rememberAppHaptics()
     val listState = rememberLazyListState()
     val context = LocalContext.current
+
+    val currentSession = remember(sessions, currentSessionId) {
+        sessions.firstOrNull { it.id == currentSessionId }
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -180,12 +204,15 @@ fun AiChatScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = stringResource(R.string.chat_title),
+                                    text = currentSession?.title?.takeIf { it.isNotBlank() }
+                                        ?: stringResource(R.string.chat_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
                                 )
                                 Text(
-                                    text = stringResource(R.string.chat_subtitle),
+                                    text = currentSession?.subjectTag?.takeIf { it.isNotBlank() }
+                                        ?: stringResource(R.string.chat_subtitle),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -201,8 +228,14 @@ fun AiChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { haptics.virtualKey(); showSessions = true }) {
+                            Icon(
+                                Icons.Rounded.History,
+                                contentDescription = stringResource(R.string.chat_sessions_title),
+                            )
+                        }
                         if (messages.isNotEmpty()) {
-                            IconButton(onClick = { haptics.virtualKey(); viewModel.clear() }) {
+                            IconButton(onClick = { haptics.virtualKey(); viewModel.clearCurrent() }) {
                                 Icon(
                                     Icons.Rounded.Delete,
                                     contentDescription = stringResource(R.string.chat_clear),
@@ -264,6 +297,7 @@ fun AiChatScreen(
                                 onOpenAttachment = { openChatAttachment(context, it) },
                                 onCopy = { copyToClipboard(context, it) },
                                 onShare = { shareMessage(context, it) },
+                                onOpenQuiz = onOpenQuiz,
                             )
                         }
                         if (thinking) {
@@ -284,6 +318,44 @@ fun AiChatScreen(
                 }
             }
         }
+    }
+
+    if (showSessions) {
+        ChatSessionsSheet(
+            sessions = sessions,
+            currentId = currentSessionId,
+            onDismiss = { showSessions = false },
+            onSelect = { viewModel.selectSession(it); showSessions = false },
+            onNew = { showSessions = false; showNewSession = true },
+            onEdit = { editSession = it },
+            onDelete = { viewModel.deleteSession(it) },
+        )
+    }
+
+    if (showNewSession) {
+        SessionEditDialog(
+            initialTitle = "",
+            initialSubject = "",
+            titleRes = R.string.chat_session_new,
+            onDismiss = { showNewSession = false },
+            onConfirm = { _, subject ->
+                viewModel.newSession(subject)
+                showNewSession = false
+            },
+        )
+    }
+
+    editSession?.let { session ->
+        SessionEditDialog(
+            initialTitle = session.title,
+            initialSubject = session.subjectTag.orEmpty(),
+            titleRes = R.string.chat_session_edit,
+            onDismiss = { editSession = null },
+            onConfirm = { title, subject ->
+                viewModel.renameSession(session.id, title, subject)
+                editSession = null
+            },
+        )
     }
 }
 
@@ -358,6 +430,7 @@ private fun MessageBubble(
     onOpenAttachment: (ChatAttachment) -> Unit,
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
+    onOpenQuiz: (String) -> Unit,
 ) {
     val isUser = message.role == "user"
     var menuOpen by remember { mutableStateOf(false) }
@@ -407,22 +480,24 @@ private fun MessageBubble(
                     ),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    if (!isUser && !message.error) {
-                        MarkdownMessage(
-                            text = message.content,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            mathColor = MaterialTheme.colorScheme.onSurface,
-                        )
-                    } else {
-                        Text(
-                            text = message.content,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = when {
-                                isUser -> MaterialTheme.colorScheme.onPrimary
-                                message.error -> MaterialTheme.colorScheme.onErrorContainer
-                                else -> MaterialTheme.colorScheme.onSurface
-                            },
-                        )
+                    if (message.content.isNotBlank()) {
+                        if (!isUser && !message.error) {
+                            MarkdownMessage(
+                                text = message.content,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                mathColor = MaterialTheme.colorScheme.onSurface,
+                            )
+                        } else {
+                            Text(
+                                text = message.content,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = when {
+                                    isUser -> MaterialTheme.colorScheme.onPrimary
+                                    message.error -> MaterialTheme.colorScheme.onErrorContainer
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
                     }
 
                     if (message.attachments.isNotEmpty()) {
@@ -432,6 +507,11 @@ private fun MessageBubble(
                             isUser = isUser,
                             onOpen = { onOpenAttachment(it) },
                         )
+                    }
+
+                    message.quizIds.forEach { quizId ->
+                        Spacer(Modifier.height(8.dp))
+                        QuizHandoffCard(onStart = { onOpenQuiz(quizId) })
                     }
                 }
             }
@@ -898,5 +978,246 @@ private fun shareMessage(context: Context, text: String) {
     }
     context.startActivity(
         Intent.createChooser(intent, context.getString(R.string.chat_share_title)),
+    )
+}
+
+/** A card the assistant can drop into its reply to hand the student a ready-made quiz. */
+@Composable
+private fun QuizHandoffCard(onStart: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.Quiz,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(22.dp),
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.chat_quiz_card_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Text(
+                        text = stringResource(R.string.chat_quiz_card_desc),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+            Button(
+                onClick = onStart,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.chat_quiz_take), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatSessionsSheet(
+    sessions: List<ChatSession>,
+    currentId: String?,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+    onNew: () -> Unit,
+    onEdit: (ChatSession) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.chat_sessions_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                FilledTonalButton(onClick = onNew, shape = RoundedCornerShape(16.dp)) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.chat_session_new))
+                }
+            }
+            if (sessions.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.chat_sessions_empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(sessions, key = { it.id }) { session ->
+                        SessionRowItem(
+                            session = session,
+                            selected = session.id == currentId,
+                            onSelect = { onSelect(session.id) },
+                            onEdit = { onEdit(session) },
+                            onDelete = { onDelete(session.id) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionRowItem(
+    session: ChatSession,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Surface(
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onSelect),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = session.title.ifBlank { stringResource(R.string.chat_session_untitled) },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 1,
+                )
+                val dateText = remember(session.updatedAtMs) {
+                    java.time.Instant.ofEpochMilli(session.updatedAtMs)
+                        .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy"))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    session.subjectTag?.takeIf { it.isNotBlank() }?.let { tag ->
+                        Text(
+                            text = tag,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Text(
+                        text = dateText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Rounded.MoreVert, contentDescription = null)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_session_edit)) },
+                        leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                        onClick = { menuOpen = false; onEdit() },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.chat_session_delete),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        onClick = { menuOpen = false; onDelete() },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionEditDialog(
+    initialTitle: String,
+    initialSubject: String,
+    titleRes: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String?) -> Unit,
+) {
+    var title by remember { mutableStateOf(initialTitle) }
+    var subject by remember { mutableStateOf(initialSubject) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(titleRes)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(stringResource(R.string.chat_session_title)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = subject,
+                    onValueChange = { subject = it },
+                    label = { Text(stringResource(R.string.chat_session_subject)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(title.trim(), subject.trim().takeIf { it.isNotBlank() })
+                },
+            ) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.quiz_cancel)) }
+        },
     )
 }
