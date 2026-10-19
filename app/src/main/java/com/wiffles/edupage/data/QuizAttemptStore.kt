@@ -67,7 +67,7 @@ class QuizAttemptStore @Inject constructor(
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val items = java.util.concurrent.ConcurrentHashMap<String, MutableList<QuizAttempt>>().apply {
-        loadFromDisk()?.forEach { (id, list) -> put(id, list.map { it.sanitized() }.toMutableList()) }
+        loadFromDisk()?.forEach { (id, list) -> put(id, list.map { it.sanitizedForStorage() }.toMutableList()) }
     }
 
     private val _all = MutableStateFlow(snapshot())
@@ -135,20 +135,25 @@ class QuizAttemptStore @Inject constructor(
         Log.e(TAG, "failed to load quiz sessions", it)
         null
     }
-
-    /** Normalise sessions written before later fields existed (Gson can leave nulls). */
-    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
-    private fun QuizAttempt.sanitized(): QuizAttempt = copy(
-        wrongQuestions = wrongQuestions ?: emptyList(),
-        answers = answers.orEmpty().map { it.sanitized() },
-        subjectTag = subjectTag?.takeIf { it.isNotBlank() },
-    )
-
-    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
-    private fun SessionAnswer.sanitized(): SessionAnswer = copy(
-        question = question ?: "",
-        given = given ?: "",
-        correctAnswer = correctAnswer ?: "",
-        feedback = feedback?.takeIf { it.isNotBlank() },
-    )
 }
+
+/** Normalise sessions written before later fields existed (Gson can leave nulls). */
+@Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+internal fun QuizAttempt.sanitizedForStorage(): QuizAttempt = copy(
+    // Gson skips Kotlin defaults, so sessions saved before `id` existed come back as null;
+    // leaving it null makes every later copy() throw (the session list crashed on open).
+    id = id ?: UUID.randomUUID().toString(),
+    timestampMs = if (timestampMs > 0L) timestampMs else System.currentTimeMillis(),
+    quizTopic = quizTopic?.takeIf { it.isNotBlank() },
+    wrongQuestions = wrongQuestions ?: emptyList(),
+    answers = answers.orEmpty().map { it.sanitizedForStorage() },
+    subjectTag = subjectTag?.takeIf { it.isNotBlank() },
+)
+
+@Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+internal fun SessionAnswer.sanitizedForStorage(): SessionAnswer = copy(
+    question = question ?: "",
+    given = given ?: "",
+    correctAnswer = correctAnswer ?: "",
+    feedback = feedback?.takeIf { it.isNotBlank() },
+)

@@ -164,6 +164,9 @@ class AiQuizStore @Inject constructor(
      */
     @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
     private fun AiQuiz.sanitized(): AiQuiz = copy(
+        // Gson skips Kotlin defaults, so quizzes saved before `id` existed come back as null.
+        id = id ?: UUID.randomUUID().toString(),
+        createdAtMs = if (createdAtMs > 0L) createdAtMs else System.currentTimeMillis(),
         topic = topic ?: "",
         questions = questions.orEmpty().map { it.sanitized() },
         kind = kind ?: QuizKind.QUIZ,

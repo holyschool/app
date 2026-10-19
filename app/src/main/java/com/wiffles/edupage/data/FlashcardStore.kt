@@ -49,7 +49,7 @@ class FlashcardStore @Inject constructor(
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val items = CopyOnWriteArrayList<FlashcardDeck>().apply {
-        loadFromDisk()?.let { addAll(it) }
+        loadFromDisk()?.let { addAll(it.map { deck -> deck.sanitized() }) }
     }
 
     private val _decks = MutableStateFlow(all())
@@ -102,4 +102,24 @@ class FlashcardStore @Inject constructor(
         Log.e(TAG, "failed to load flashcards", it)
         null
     }
+
+    /**
+     * Gson bypasses constructors, so a deck written before a field existed can hold nulls for
+     * Kotlin non-null properties (which would then blow up in [recordProgress]'s copy()).
+     */
+    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+    private fun FlashcardDeck.sanitized(): FlashcardDeck = copy(
+        id = id ?: UUID.randomUUID().toString(),
+        topic = topic ?: "",
+        createdAtMs = if (createdAtMs > 0L) createdAtMs else System.currentTimeMillis(),
+        cards = cards.orEmpty().map { it.sanitized() },
+        knownIndices = knownIndices ?: emptyList(),
+    )
+
+    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+    private fun Flashcard.sanitized(): Flashcard = copy(
+        front = front ?: "",
+        back = back ?: "",
+        hint = hint?.takeIf { it.isNotBlank() },
+    )
 }

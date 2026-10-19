@@ -187,6 +187,21 @@ class ChatStore @Inject constructor(
         publish()
     }
 
+    /**
+     * Updates a message in memory and in the UI flow without writing to disk. Used while a
+     * reply is streamed in, so each token doesn't trigger a file write; finish with [update]
+     * (or [flush]) to persist the final text.
+     */
+    fun updateTransient(id: String, transform: (ChatMessage) -> ChatMessage) {
+        val idx = messages.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        messages[idx] = transform(messages[idx])
+        _messages.value = messages.toList()
+    }
+
+    /** Persists the current in-memory state. */
+    fun flush() = publish()
+
     fun remove(id: String) {
         messages.removeIf { it.id == id }
         publish()
@@ -254,8 +269,10 @@ class ChatStore @Inject constructor(
      */
     @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
     private fun ChatMessage.sanitized(): ChatMessage = copy(
+        id = id ?: UUID.randomUUID().toString(),
         content = content ?: "",
         role = role ?: "assistant",
+        timestampMs = if (timestampMs > 0L) timestampMs else System.currentTimeMillis(),
         attachments = attachments ?: emptyList(),
         quizIds = quizIds ?: emptyList(),
         sessionId = sessionId?.takeIf { it.isNotBlank() },
@@ -263,6 +280,7 @@ class ChatStore @Inject constructor(
 
     @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
     private fun ChatSession.sanitized(): ChatSession = copy(
+        id = id ?: UUID.randomUUID().toString(),
         title = title ?: "",
         subjectTag = subjectTag?.takeIf { it.isNotBlank() },
     )
