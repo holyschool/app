@@ -11,6 +11,7 @@ import javax.inject.Singleton
 class DataExporter @Inject constructor(
     private val homeworkStore: LocalHomeworkStore,
     private val quizStore: AiQuizStore,
+    private val quizAttemptStore: QuizAttemptStore,
     private val flashcardStore: FlashcardStore,
 ) {
 
@@ -22,7 +23,7 @@ class DataExporter @Inject constructor(
             "exportedAtIso",
             DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(java.time.LocalDateTime.now())
         )
-        root.addProperty("schemaVersion", 2)
+        root.addProperty("schemaVersion", 3)
 
         val homework = JsonArray()
         homeworkStore.getAll().forEach { item ->
@@ -47,14 +48,21 @@ class DataExporter @Inject constructor(
             q.addProperty("createdAtMs", quiz.createdAtMs)
             q.addProperty("bestScore", quiz.bestScore)
             q.addProperty("bestTotal", quiz.bestTotal)
+            q.addProperty("subjectTag", quiz.subjectTag)
+            q.addProperty("isGrammar", quiz.isGrammar)
+            val types = JsonArray()
+            quiz.questionTypes.forEach { types.add(it.name.lowercase()) }
+            q.add("questionTypes", types)
             val questions = JsonArray()
             quiz.questions.forEach { question ->
                 val qo = JsonObject()
                 qo.addProperty("question", question.question)
+                qo.addProperty("type", question.type.name.lowercase())
                 val options = JsonArray()
                 question.options.forEach { options.add(it) }
                 qo.add("options", options)
                 qo.addProperty("correctIndex", question.correctIndex)
+                qo.addProperty("answer", question.answer)
                 qo.addProperty("explanation", question.explanation)
                 questions.add(qo)
             }
@@ -62,6 +70,37 @@ class DataExporter @Inject constructor(
             quizzes.add(q)
         }
         root.add("quizzes", quizzes)
+
+        val sessions = JsonArray()
+        quizAttemptStore.all.value.forEach { (quizId, attempts) ->
+            attempts.forEach { attempt ->
+                val s = JsonObject()
+                s.addProperty("id", attempt.id)
+                s.addProperty("quizId", quizId)
+                s.addProperty("timestampMs", attempt.timestampMs)
+                s.addProperty("subjectTag", attempt.subjectTag)
+                s.addProperty("quizTopic", attempt.quizTopic)
+                s.addProperty("score", attempt.score)
+                s.addProperty("total", attempt.total)
+                s.addProperty("durationMs", attempt.durationMs)
+                val wrong = JsonArray()
+                attempt.wrongQuestions.forEach { wrong.add(it) }
+                s.add("wrongQuestions", wrong)
+                val answers = JsonArray()
+                attempt.answers.forEach { answer ->
+                    val a = JsonObject()
+                    a.addProperty("question", answer.question)
+                    a.addProperty("given", answer.given)
+                    a.addProperty("correctAnswer", answer.correctAnswer)
+                    a.addProperty("correct", answer.correct)
+                    a.addProperty("feedback", answer.feedback)
+                    answers.add(a)
+                }
+                s.add("answers", answers)
+                sessions.add(s)
+            }
+        }
+        root.add("quizSessions", sessions)
 
         val decks = JsonArray()
         flashcardStore.all().forEach { deck ->
