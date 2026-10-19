@@ -18,6 +18,7 @@ import com.wiffles.edupage.ui.util.isNetworkError
 import com.wiffles.edupage.ui.util.loadErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -424,7 +426,8 @@ class MessagesViewModel @Inject constructor(
     private fun loadInitial() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val cached = cache.load()
+            // Reading and parsing the cache is file I/O, so keep it off the main thread.
+            val cached = withContext(Dispatchers.IO) { cache.load() }
             if (cached != null) {
                 val (events, isStale) = cached
                 allEvents = events.sortedByDescending { it.timestamp }

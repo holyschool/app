@@ -37,28 +37,31 @@ class EdupageApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannels()
         installNetworkExceptionHandler()
         ConnectivityObserver.init(this)
-        appPreferences.appVersionName = runCatching {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty()
 
-        val pushReady = runCatching { com.google.firebase.FirebaseApp.getInstance() }.isSuccess
-        if (pushReady) {
-            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                applicationScope.launch {
-                    runCatching { backendRegistrationManager.registerIfPossible(token) }
-                }
-            }
-        } else {
-            Log.w(TAG, "FCM not configured, push features disabled")
-        }
-        WidgetUpdater.schedulePeriodic(this)
-        if (appPreferences.liveClassNotif) {
-            com.wiffles.edupage.notification.ClassLiveController.start(this)
-        }
+        // Everything below is not needed for the first frame, so it is deferred off the main
+        // thread. This keeps Application.onCreate cheap and lets the splash screen appear sooner.
         applicationScope.launch {
+            createNotificationChannels()
+            appPreferences.appVersionName = runCatching {
+                packageManager.getPackageInfo(packageName, 0).versionName
+            }.getOrNull().orEmpty()
+
+            val pushReady = runCatching { com.google.firebase.FirebaseApp.getInstance() }.isSuccess
+            if (pushReady) {
+                FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                    applicationScope.launch {
+                        runCatching { backendRegistrationManager.registerIfPossible(token) }
+                    }
+                }
+            } else {
+                Log.w(TAG, "FCM not configured, push features disabled")
+            }
+            WidgetUpdater.schedulePeriodic(this@EdupageApp)
+            if (appPreferences.liveClassNotif) {
+                com.wiffles.edupage.notification.ClassLiveController.start(this@EdupageApp)
+            }
             UpdateCenter.checkOnBoot(appPreferences, appPreferences.appVersionName)
         }
     }

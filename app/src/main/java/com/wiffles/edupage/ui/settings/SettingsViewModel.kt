@@ -43,6 +43,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.wiffles.edupage.notification.NotificationScheduler
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -362,10 +363,10 @@ class SettingsViewModel @Inject constructor(
     private val _parentSwitchEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val parentSwitchEvent: SharedFlow<Unit> = _parentSwitchEvent.asSharedFlow()
 
-    private val _profiles = MutableStateFlow<List<AccountProfile>>(accountProfileStore.loadProfiles())
+    private val _profiles = MutableStateFlow<List<AccountProfile>>(emptyList())
     val profiles: StateFlow<List<AccountProfile>> = _profiles.asStateFlow()
 
-    private val _activeProfile = MutableStateFlow<AccountProfile?>(accountProfileStore.activeProfile())
+    private val _activeProfile = MutableStateFlow<AccountProfile?>(null)
     val activeProfile: StateFlow<AccountProfile?> = _activeProfile.asStateFlow()
 
     private val _switchAccountEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -373,11 +374,24 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadChildren()
+        // Reading the encrypted account list touches disk, so load it off the main thread.
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                accountProfileStore.loadProfiles() to accountProfileStore.activeProfile()
+            }
+            _profiles.value = loaded.first
+            _activeProfile.value = loaded.second
+        }
     }
 
     fun refreshAccounts() {
-        _profiles.value = accountProfileStore.loadProfiles()
-        _activeProfile.value = accountProfileStore.activeProfile()
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                accountProfileStore.loadProfiles() to accountProfileStore.activeProfile()
+            }
+            _profiles.value = loaded.first
+            _activeProfile.value = loaded.second
+        }
     }
 
     fun removeAccount(id: String) {

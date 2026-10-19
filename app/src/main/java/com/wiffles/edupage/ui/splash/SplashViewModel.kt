@@ -12,10 +12,12 @@ import com.wiffles.edupage.data.SessionRepository
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 sealed interface SplashUiState {
@@ -48,7 +50,8 @@ class SplashViewModel @Inject constructor(
 
     private fun attemptAutoLogin() {
         viewModelScope.launch {
-            val saved = credentialStore.load()
+            // Decrypting saved credentials uses the Keystore, so keep it off the main thread.
+            val saved = withContext(Dispatchers.IO) { credentialStore.load() }
             if (saved == null) {
                 Log.i(TAG, "no saved credentials, navigating to login")
                 _uiState.value = SplashUiState.GoToLogin()
@@ -103,7 +106,7 @@ class SplashViewModel @Inject constructor(
             if (edupage.isLoggedIn) {
                 val newSessionId = edupage.session.cookieJar
                     .getSessionId("${saved.subdomain}.edupage.org")
-                credentialStore.updateSessionId(newSessionId)
+                withContext(Dispatchers.IO) { credentialStore.updateSessionId(newSessionId) }
                 refreshActiveProfile(newSessionId)
                 Log.i(TAG, "full re-login success for ${saved.username}@${saved.subdomain}")
                 enterApp()
@@ -128,9 +131,9 @@ class SplashViewModel @Inject constructor(
         dataWarmer.warmAsync(force = true)
     }
 
-    private fun refreshActiveProfile(sessionId: String?) {
-        val activeId = accountProfileStore.activeProfileId() ?: return
-        accountProfileStore.updateSessionId(activeId, sessionId ?: "")
+    private suspend fun refreshActiveProfile(sessionId: String?) {
+        val activeId = withContext(Dispatchers.IO) { accountProfileStore.activeProfileId() } ?: return
+        withContext(Dispatchers.IO) { accountProfileStore.updateSessionId(activeId, sessionId ?: "") }
     }
 }
 

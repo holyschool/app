@@ -17,12 +17,14 @@ import com.wiffles.edupage.ui.util.isNetworkError
 import com.wiffles.edupage.ui.util.loadErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -142,11 +144,13 @@ class GradesViewModel @Inject constructor(
         loadJob = viewModelScope.launch {
             // Fall back to the year recorded in the cache so grades still render offline after a
             // cold start, when the session's in-memory school year is not available yet.
-            val year = runCatching { edupage.getSchoolYear() }.getOrNull() ?: cache.cachedYear()
+            val year = runCatching { edupage.getSchoolYear() }.getOrNull()
+                ?: withContext(Dispatchers.IO) { cache.cachedYear() }
 
             if (year != null) {
-                val t1Cached = cache.load(Term.FIRST, year)
-                val t2Cached = cache.load(Term.SECOND, year)
+                val (t1Cached, t2Cached) = withContext(Dispatchers.IO) {
+                    cache.load(Term.FIRST, year) to cache.load(Term.SECOND, year)
+                }
 
                 val (cachedTerm, cachedRaw) = when {
                     t2Cached != null && t2Cached.isNotEmpty() -> Term.SECOND to t2Cached
@@ -234,10 +238,11 @@ class GradesViewModel @Inject constructor(
     private fun loadGrades(term: Term) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val year = runCatching { edupage.getSchoolYear() }.getOrNull() ?: cache.cachedYear()
+            val year = runCatching { edupage.getSchoolYear() }.getOrNull()
+                ?: withContext(Dispatchers.IO) { cache.cachedYear() }
 
             if (year != null) {
-                val cached = cache.load(term, year)
+                val cached = withContext(Dispatchers.IO) { cache.load(term, year) }
                 if (cached != null) {
                     Log.i(TAG, "cache hit: showing ${cached.size} grades for $term")
                     val seenIds = prefs.getSeenGradeIds(termKey(term))
