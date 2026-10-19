@@ -4,6 +4,7 @@ import android.util.Base64
 import com.wiffles.edupage.data.Flashcard
 import com.wiffles.edupage.data.QuizKind
 import com.wiffles.edupage.data.QuizQuestion
+import com.wiffles.edupage.data.QuizQuestionType
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -16,6 +17,25 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Result of asking a model for a quiz: the questions plus an optional detected subject. */
+data class GeneratedQuiz(
+    val questions: List<QuizQuestion>,
+    val subject: String? = null,
+)
+
+/** One free-text answer to be marked by the model. */
+data class OpenAnswerItem(
+    val question: String,
+    val modelAnswer: String,
+    val studentAnswer: String,
+)
+
+/** The model's verdict on a single open-answer question. */
+data class OpenGrade(
+    val correct: Boolean,
+    val feedback: String? = null,
+)
 
 /**
  * Unified client for the AI study features. Supports Google Gemini, OpenRouter,
@@ -398,11 +418,13 @@ class AiService @Inject constructor(
         languageHint: String? = null,
         kind: QuizKind = QuizKind.QUIZ,
         instructions: String? = null,
-    ): List<QuizQuestion> {
+        types: List<QuizQuestionType> = listOf(QuizQuestionType.MULTIPLE_CHOICE),
+    ): GeneratedQuiz {
+        val effectiveTypes = types.ifEmpty { listOf(QuizQuestionType.MULTIPLE_CHOICE) }
         val prompt = if (kind == QuizKind.GRAMMAR) {
             grammarExamPrompt(topic, count, difficulty, material, focus, languageHint, instructions)
         } else {
-            standardQuizPrompt(topic, count, difficulty, material, focus, languageHint)
+            standardQuizPrompt(topic, count, difficulty, material, focus, languageHint, effectiveTypes)
         }
         val systemPrompt = if (kind == QuizKind.GRAMMAR) {
             "You are a meticulous language teacher who writes accurate dictation and grammar exercises with clear explanations."
@@ -417,7 +439,23 @@ class AiService @Inject constructor(
             ),
             jsonMode = true,
         )
-        return parseQuestions(text, count)
+        val defaultType =
+            if (kind == QuizKind.GRAMMAR) QuizQuestionType.FILL_IN else QuizQuestionType.MULTIPLE_CHOICE
+        val parsed = parseGeneratedQuiz(text, count, defaultType)
+        // Grammar examinations are always gap-fill items, whatever the model labelled them.
+        return if (kind == QuizKind.GRAMMAR) {
+            parsed.copy(questions = parsed.questions.map { it.copy(type = QuizQuestionType.FILL_IN) })
+        } else {
+            parsed
+        }
+    }
+
+    /** Human-readable name of a question format, used inside the generation prompt. */
+    private fun typeLabel(type: QuizQuestionType): String = when (type) {
+        QuizQuestionType.MULTIPLE_CHOICE -> "multiple choice (ABCD)"
+        QuizQuestionType.TRUE_FALSE -> "true/false"
+        QuizQuestionType.FILL_IN -> "fill in from options"
+        QuizQuestionType.OPEN -> "open free-text answer"
     }
 
     private fun standardQuizPrompt(
@@ -427,8 +465,9 @@ class AiService @Inject constructor(
         material: String?,
         focus: String?,
         languageHint: String?,
+        types: List<QuizQuestionType>,
     ): String = buildString {
-        append("Create a multiple-choice quiz with exactly ")
+        append("Create a quiz with exactly ")
         append(count)
         append(" questions about: \"")
         append(topic.trim())
@@ -446,16 +485,29 @@ class AiService @Inject constructor(
             append("\n---\n")
         }
         append("Difficulty: $difficulty.\n")
+        if (types.size > 1) {
+            append("Mix these question types across the quiz (use each at least once): ")
+            append(types.joinToString(", ") { typeLabel(it) })
+            append(".\n")
+        } else {
+            append("Every question must be of type ")
+            append(typeLabel(types.first()))
+            append(".\n")
+        }
+        append("Supported question types and their exact JSON shape:\n")
+        append("- \"multiple_choice\": provide 4 options, exactly one correct; set \"correctIndex\" (0-based).\n")
+        append("- \"true_false\": options MUST be exactly [\"True\",\"False\"]; correctIndex is 0 for True and 1 for False.\n")
+        append("- \"fill_in\": one sentence containing a gap written as \"___\"; options are the candidate words for the gap; exactly one is correct; set \"correctIndex\".\n")
+        append("- \"open\": no options; put the model answer in \"answer\".\n")
         append("Rules:\n")
-        append("- Each question has exactly 4 options with exactly one correct answer.\n")
-        append("- correctIndex is the 0-based index of the correct option.\n")
         append("- Add a short, educational explanation for why the correct answer is right.\n")
         append("- Make questions varied and non-repetitive; test understanding, not trivia.\n")
         append("- ")
         append(languageRule(languageHint, "Write in the same language as the topic; if unclear, use English."))
         append("\n")
-        append("Return JSON only, with this shape: {\"questions\":[{\"question\":\"…\",")
-        append("\"options\":[\"…\"],\"correctIndex\":0,\"explanation\":\"…\"}]}")
+        append("Also decide which school subject this quiz is about and put a short label (e.g. \"Biology\", \"Math\", \"History\") in \"subject\".\n")
+        append("Return JSON only, with this shape: {\"subject\":\"…\",\"questions\":[{\"type\":\"multiple_choice\",")
+        append("\"question\":\"…\",\"options\":[\"…\"],\"correctIndex\":0,\"answer\":\"…\",\"explanation\":\"…\"}]}")
     }
 
     private fun grammarExamPrompt(
@@ -500,32 +552,136 @@ class AiService @Inject constructor(
         append("- ")
         append(languageRule(languageHint, "Write the sentences in Czech."))
         append("\n")
-        append("Return JSON only, with this shape: {\"questions\":[{\"question\":\"…\",")
+        append("Also decide which school subject this belongs to and put a short label (e.g. \"Czech\", \"Grammar\") in \"subject\".\n")
+        append("Return JSON only, with this shape: {\"subject\":\"…\",\"questions\":[{\"type\":\"fill_in\",\"question\":\"…\",")
         append("\"options\":[\"…\"],\"correctIndex\":0,\"explanation\":\"…\"}]}")
     }
 
-    private fun parseQuestions(text: String, expected: Int): List<QuizQuestion> {
+    /**
+     * Parses a quiz-generation reply. Public so the chat tool can reuse the same
+     * tolerant parser when the model emits a quiz block inside a conversation.
+     */
+    fun parseGeneratedQuiz(
+        text: String,
+        expected: Int,
+        defaultType: QuizQuestionType = QuizQuestionType.MULTIPLE_CHOICE,
+    ): GeneratedQuiz {
         val root = JsonParser.parseString(cleanJson(text)).asJsonObject
+        val subject = root.get("subject")?.asString?.trim()?.takeIf { it.isNotBlank() }
         val array = root.getAsJsonArray("questions")
             ?: throw RuntimeException("The model returned malformed data")
         val questions = array.mapNotNull { element ->
             runCatching {
                 val obj = element.asJsonObject
                 val q = obj.get("question")?.asString?.trim().orEmpty()
-                val options = obj.getAsJsonArray("options")?.mapNotNull { it.asString }.orEmpty()
-                val correct = obj.get("correctIndex")?.asInt ?: 0
+                if (q.isBlank()) return@runCatching null
+                val type = parseQuestionType(obj.get("type")?.asString, defaultType)
                 val explanation = obj.get("explanation")?.asString?.takeIf { it.isNotBlank() }
-                if (q.isBlank() || options.size < 2) return@runCatching null
-                QuizQuestion(
-                    question = q,
-                    options = options,
-                    correctIndex = correct.coerceIn(0, options.lastIndex),
-                    explanation = explanation,
-                )
+                when (type) {
+                    QuizQuestionType.OPEN -> {
+                        val answer = obj.get("answer")?.asString?.trim()?.takeIf { it.isNotBlank() }
+                            ?: return@runCatching null
+                        QuizQuestion(
+                            question = q,
+                            type = type,
+                            answer = answer,
+                            explanation = explanation,
+                        )
+                    }
+                    QuizQuestionType.TRUE_FALSE -> {
+                        val correct = obj.get("correctIndex")?.asInt ?: 0
+                        QuizQuestion(
+                            question = q,
+                            options = listOf("True", "False"),
+                            correctIndex = correct.coerceIn(0, 1),
+                            explanation = explanation,
+                            type = type,
+                        )
+                    }
+                    else -> {
+                        val options = obj.getAsJsonArray("options")?.mapNotNull { it.asString }.orEmpty()
+                        if (options.size < 2) return@runCatching null
+                        val correct = obj.get("correctIndex")?.asInt ?: 0
+                        QuizQuestion(
+                            question = q,
+                            options = options,
+                            correctIndex = correct.coerceIn(0, options.lastIndex),
+                            explanation = explanation,
+                            type = type,
+                        )
+                    }
+                }
             }.getOrNull()
         }
         if (questions.isEmpty()) throw RuntimeException("The model returned no usable questions")
-        return if (expected in 1..questions.size) questions.take(expected) else questions
+        val limited = if (expected in 1..questions.size) questions.take(expected) else questions
+        return GeneratedQuiz(questions = limited, subject = subject)
+    }
+
+    private fun parseQuestionType(raw: String?, fallback: QuizQuestionType): QuizQuestionType {
+        val normalized = raw?.trim()?.lowercase()?.replace('-', '_')?.replace(' ', '_')
+        return when (normalized) {
+            "multiple_choice", "multiplechoice", "mcq", "abcd", "choice" -> QuizQuestionType.MULTIPLE_CHOICE
+            "true_false", "truefalse", "boolean", "tf" -> QuizQuestionType.TRUE_FALSE
+            "fill_in", "fillin", "fill_in_the_blank", "fill_in_the_gaps", "cloze", "gap", "gap_fill" ->
+                QuizQuestionType.FILL_IN
+            "open", "open_answer", "free_text", "freetext", "short_answer", "text" -> QuizQuestionType.OPEN
+            else -> fallback
+        }
+    }
+
+    /**
+     * Marks free-text answers against their model answers. Returns one verdict per item, in the
+     * same order as [items]. The model is asked for strict JSON so the result is easy to trust.
+     */
+    suspend fun gradeOpenAnswers(
+        config: AiConfig,
+        topic: String,
+        items: List<OpenAnswerItem>,
+        languageHint: String? = null,
+    ): List<OpenGrade> {
+        if (items.isEmpty()) return emptyList()
+        val prompt = buildString {
+            append("You are marking a student's short free-text answers on the topic \"")
+            append(topic.trim())
+            append("\".\n")
+            append("For each numbered item, decide whether the student's answer is correct. ")
+            append("Accept answers that are equivalent in meaning to the model answer even when worded differently; ")
+            append("ignore small spelling or capitalisation differences. If the answer is only partly right or unclear, mark it incorrect and explain briefly.\n")
+            items.forEachIndexed { i, item ->
+                append(i + 1).append(". Question: ").append(item.question).append('\n')
+                append("   Model answer: ").append(item.modelAnswer).append('\n')
+                append("   Student answer: ").append(item.studentAnswer.ifBlank { "(blank)" }).append('\n')
+            }
+            append("Give short, encouraging feedback (max ~30 words) per item.\n")
+            append("Return JSON only in this exact order: {\"results\":[{\"correct\":true,\"feedback\":\"…\"}]}\n")
+            append(languageRule(languageHint, "Write feedback in the same language as the questions."))
+        }
+        val text = complete(
+            config,
+            listOf(
+                AiMessage("system", "You are a fair, concise teacher grading short answers."),
+                AiMessage("user", prompt),
+            ),
+            jsonMode = true,
+        )
+        val array = runCatching {
+            JsonParser.parseString(cleanJson(text)).asJsonObject.getAsJsonArray("results")
+        }.getOrNull()
+        return items.indices.map { i ->
+            val obj = if (i < (array?.size() ?: 0)) {
+                runCatching { array!!.get(i).asJsonObject }.getOrNull()
+            } else {
+                null
+            }
+            val correctElement = obj?.get("correct")
+            val correct = correctElement != null && correctElement.isJsonPrimitive &&
+                correctElement.asJsonPrimitive.asBoolean
+            OpenGrade(
+                correct = correct,
+                feedback = obj?.get("feedback")?.asString?.trim()?.takeIf { it.isNotBlank() },
+            )
+        }
     }
 
     // --------------------------------------------------------------- flashcards
@@ -609,13 +765,15 @@ class AiService @Inject constructor(
             append(" correct.\n\n")
             questions.forEachIndexed { index, q ->
                 val given = answers.getOrNull(index)
-                val correct = q.options.getOrNull(q.correctIndex) ?: ""
+                val correct = q.options.getOrNull(q.correctIndex) ?: q.answer.orEmpty()
                 append("Q").append(index + 1).append(": ").append(q.question).append("\n")
                 q.options.forEachIndexed { i, opt ->
                     append("  ").append(if (i == q.correctIndex) "* " else "- ").append(opt).append("\n")
                 }
                 append("  Correct answer: ").append(correct).append("\n")
-                append("  Student chose: ").append(given?.let { q.options.getOrNull(it) } ?: "no answer").append("\n\n")
+                append("  Student chose: ")
+                    .append(given?.let { q.options.getOrNull(it) } ?: "no answer")
+                    .append("\n\n")
             }
             append("Write a short, encouraging study review. For each question the student got wrong, ")
             append("explain why their answer was wrong and why the correct one is right, in 1–2 sentences. ")

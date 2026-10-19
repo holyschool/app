@@ -10,10 +10,13 @@ import com.wiffles.edupage.data.MaterialLoadState
 import com.wiffles.edupage.data.QuizAttempt
 import com.wiffles.edupage.data.QuizAttemptStore
 import com.wiffles.edupage.data.QuizKind
-import com.wiffles.edupage.data.QuizQuestion
+import com.wiffles.edupage.data.QuizQuestionType
+import com.wiffles.edupage.data.SessionAnswer
 import com.wiffles.edupage.data.StudyMaterial
 import com.wiffles.edupage.data.StudyMaterialLoader
 import com.wiffles.edupage.network.AiService
+import com.wiffles.edupage.network.OpenAnswerItem
+import com.wiffles.edupage.network.OpenGrade
 import com.wiffles.edupage.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import android.content.Context
@@ -73,6 +76,14 @@ class AiQuizViewModel @Inject constructor(
 
     fun attemptsFor(quizId: String): List<QuizAttempt> = attemptStore.forQuiz(quizId)
 
+    /** All sessions across the library, most recent first. */
+    fun allSessions(): List<QuizAttempt> = attemptStore.allSessions()
+
+    /** Distinct subject tags currently in the library. */
+    fun subjects(): List<String> = quizStore.subjects()
+
+    fun findQuiz(id: String): AiQuiz? = quizStore.quizzes.value.firstOrNull { it.id == id }
+
     fun homeworkMaterials(): List<StudyMaterial> = materialLoader.homework()
 
     /** Loads exam/test assignments from EduPage as study material. */
@@ -99,6 +110,8 @@ class AiQuizViewModel @Inject constructor(
         material: String? = null,
         kind: QuizKind = QuizKind.QUIZ,
         instructions: String? = null,
+        types: List<QuizQuestionType> = listOf(QuizQuestionType.MULTIPLE_CHOICE),
+        subjectTag: String? = null,
         onCreated: (AiQuiz) -> Unit,
     ) {
         if (topic.isBlank()) return
@@ -110,7 +123,7 @@ class AiQuizViewModel @Inject constructor(
         viewModelScope.launch {
             _generateState.value = GenerateState.Generating
             try {
-                val questions = aiService.generateQuiz(
+                val generated = aiService.generateQuiz(
                     config = config,
                     topic = topic.trim(),
                     count = count,
@@ -119,13 +132,15 @@ class AiQuizViewModel @Inject constructor(
                     languageHint = languageHint(),
                     kind = kind,
                     instructions = instructions?.takeIf { it.isNotBlank() },
+                    types = types,
                 )
                 val quiz = AiQuiz(
                     topic = topic.trim(),
                     difficulty = difficulty,
-                    questions = questions,
+                    questions = generated.questions,
                     kind = kind,
                     instructions = instructions?.takeIf { it.isNotBlank() },
+                    subjectTag = subjectTag?.takeIf { it.isNotBlank() } ?: generated.subject,
                 )
                 quizStore.add(quiz)
                 _generateState.value = GenerateState.Idle
@@ -148,10 +163,48 @@ class AiQuizViewModel @Inject constructor(
         attemptStore.remove(id)
     }
 
-    fun recordResult(id: String, score: Int, total: Int, wrongQuestions: List<String> = emptyList()) {
-        quizStore.recordResult(id, score, total)
-        attemptStore.record(id, score, total, wrongQuestions)
+    /** Renames the subject tag of a saved quiz (or clears it when blank). */
+    fun setSubject(id: String, subject: String?) {
+        quizStore.setSubject(id, subject)
     }
+
+    fun recordResult(
+        id: String,
+        score: Int,
+        total: Int,
+        wrongQuestions: List<String> = emptyList(),
+        answers: List<SessionAnswer> = emptyList(),
+        durationMs: Long = 0L,
+    ) {
+        val quiz = quizStore.quizzes.value.firstOrNull { it.id == id }
+        quizStore.recordResult(id, score, total)
+        attemptStore.record(
+            quizId = id,
+            score = score,
+            total = total,
+            wrongQuestions = wrongQuestions,
+            subjectTag = quiz?.subjectTag,
+            quizTopic = quiz?.topic,
+            answers = answers,
+            durationMs = durationMs,
+        )
+    }
+
+    /** Marks free-text answers with the configured AI provider. */
+    suspend fun gradeOpen(quiz: AiQuiz, items: List<OpenAnswerItem>): Result<List<OpenGrade>> {
+        val config = aiCredentialsStore.current()
+        if (config.apiKey.isBlank()) {
+            return Result.failure(IllegalStateException(context.getString(R.string.quiz_no_key)))
+        }
+        return runCatching {
+            aiService.gradeOpenAnswers(config, quiz.topic, items, languageHint())
+        }
+    }
+
+    /** Maps an exception to a friendly, localised message. */
+    fun errorMessage(e: Throwable): String =
+        if (e.isNetworkError()) context.getString(R.string.network_error)
+        else e.message ?: context.getString(R.string.cloud_error_loading)
 
     fun consumeRegenerateError() {
         _regenerateError.value = null
@@ -179,10 +232,11 @@ class AiQuizViewModel @Inject constructor(
         } else {
             null
         }
+        val types = quiz.questionTypes.ifEmpty { listOf(QuizQuestionType.MULTIPLE_CHOICE) }
         viewModelScope.launch {
             _regenerating.value = true
             try {
-                val questions = aiService.generateQuiz(
+                val generated = aiService.generateQuiz(
                     config = config,
                     topic = quiz.topic,
                     count = quiz.questions.size.coerceIn(5, 20),
@@ -191,20 +245,20 @@ class AiQuizViewModel @Inject constructor(
                     languageHint = languageHint(),
                     kind = quiz.kind ?: QuizKind.QUIZ,
                     instructions = quiz.instructions,
+                    types = types,
                 )
                 val newQuiz = AiQuiz(
                     topic = quiz.topic,
                     difficulty = quiz.difficulty,
-                    questions = questions,
+                    questions = generated.questions,
                     kind = quiz.kind ?: QuizKind.QUIZ,
                     instructions = quiz.instructions,
+                    subjectTag = quiz.subjectTag ?: generated.subject,
                 )
                 quizStore.add(newQuiz)
                 onCreated(newQuiz)
             } catch (e: Exception) {
-                _regenerateError.value =
-                    if (e.isNetworkError()) context.getString(R.string.network_error)
-                    else e.message ?: context.getString(R.string.cloud_error_loading)
+                _regenerateError.value = errorMessage(e)
             } finally {
                 _regenerating.value = false
             }
@@ -233,10 +287,7 @@ class AiQuizViewModel @Inject constructor(
                     ExplainState.Ready(text)
                 }
             } catch (e: Exception) {
-                _explainState.value = ExplainState.Error(
-                    if (e.isNetworkError()) context.getString(R.string.network_error)
-                    else e.message ?: context.getString(R.string.cloud_error_loading)
-                )
+                _explainState.value = ExplainState.Error(errorMessage(e))
             }
         }
     }

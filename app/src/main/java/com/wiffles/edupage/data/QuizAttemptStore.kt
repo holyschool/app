@@ -13,22 +13,43 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** A single completed attempt at an AI quiz. */
+/** One question's outcome within a finished session, kept so the history can be reviewed. */
+data class SessionAnswer(
+    val question: String,
+    val given: String,
+    val correctAnswer: String,
+    val correct: Boolean,
+    val feedback: String? = null,
+)
+
+/**
+ * A single completed study session (one run through a quiz). Kept per quiz so the score
+ * screen can draw a progress graph over time and the session history can be reviewed.
+ */
 data class QuizAttempt(
+    val id: String = UUID.randomUUID().toString(),
     val timestampMs: Long = System.currentTimeMillis(),
+    /** Subject the quiz belonged to when the session ran. */
+    val subjectTag: String? = null,
+    /** Copy of the quiz topic so the session list can show it without a quiz lookup. */
+    val quizTopic: String? = null,
     val score: Int,
     val total: Int,
     /** Texts of the questions answered incorrectly, used to find study weak spots. */
     val wrongQuestions: List<String> = emptyList(),
+    /** Detailed per-question outcomes; empty for sessions recorded before this existed. */
+    val answers: List<SessionAnswer> = emptyList(),
+    val durationMs: Long = 0L,
 ) {
     val fraction: Float get() = if (total > 0) score.toFloat() / total else 0f
 }
 
 /**
- * Keeps the full attempt history per quiz so the score screen can draw a progress graph
+ * Keeps the full session history per quiz so the score screen can draw a progress graph
  * over time. Stored on-device in plaintext JSON alongside the other study data.
  */
 @Singleton
@@ -46,7 +67,7 @@ class QuizAttemptStore @Inject constructor(
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val items = java.util.concurrent.ConcurrentHashMap<String, MutableList<QuizAttempt>>().apply {
-        loadFromDisk()?.forEach { (id, list) -> put(id, list.toMutableList()) }
+        loadFromDisk()?.forEach { (id, list) -> put(id, list.map { it.sanitized() }.toMutableList()) }
     }
 
     private val _all = MutableStateFlow(snapshot())
@@ -54,9 +75,32 @@ class QuizAttemptStore @Inject constructor(
 
     fun forQuiz(quizId: String): List<QuizAttempt> = items[quizId]?.toList().orEmpty()
 
-    fun record(quizId: String, score: Int, total: Int, wrongQuestions: List<String> = emptyList()) {
+    /** Every session across every quiz, most recent first. */
+    fun allSessions(): List<QuizAttempt> =
+        items.values.flatten().sortedByDescending { it.timestampMs }
+
+    fun record(
+        quizId: String,
+        score: Int,
+        total: Int,
+        wrongQuestions: List<String> = emptyList(),
+        subjectTag: String? = null,
+        quizTopic: String? = null,
+        answers: List<SessionAnswer> = emptyList(),
+        durationMs: Long = 0L,
+    ) {
         val list = items.getOrPut(quizId) { mutableListOf() }
-        list.add(QuizAttempt(score = score, total = total, wrongQuestions = wrongQuestions))
+        list.add(
+            QuizAttempt(
+                subjectTag = subjectTag?.takeIf { it.isNotBlank() },
+                quizTopic = quizTopic,
+                score = score,
+                total = total,
+                wrongQuestions = wrongQuestions,
+                answers = answers,
+                durationMs = durationMs,
+            ),
+        )
         while (list.size > MAX_PER_QUIZ) list.removeAt(0)
         publish()
     }
@@ -79,7 +123,7 @@ class QuizAttemptStore @Inject constructor(
         ioScope.launch {
             runCatching {
                 file.writeText(gson.toJson(snapshot))
-            }.onFailure { Log.e(TAG, "failed to persist quiz attempts", it) }
+            }.onFailure { Log.e(TAG, "failed to persist quiz sessions", it) }
         }
     }
 
@@ -88,7 +132,23 @@ class QuizAttemptStore @Inject constructor(
         val type = object : TypeToken<Map<String, List<QuizAttempt>>>() {}.type
         gson.fromJson<Map<String, List<QuizAttempt>>>(file.readText(), type)
     }.getOrElse {
-        Log.e(TAG, "failed to load quiz attempts", it)
+        Log.e(TAG, "failed to load quiz sessions", it)
         null
     }
+
+    /** Normalise sessions written before later fields existed (Gson can leave nulls). */
+    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+    private fun QuizAttempt.sanitized(): QuizAttempt = copy(
+        wrongQuestions = wrongQuestions ?: emptyList(),
+        answers = answers.orEmpty().map { it.sanitized() },
+        subjectTag = subjectTag?.takeIf { it.isNotBlank() },
+    )
+
+    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+    private fun SessionAnswer.sanitized(): SessionAnswer = copy(
+        question = question ?: "",
+        given = given ?: "",
+        correctAnswer = correctAnswer ?: "",
+        feedback = feedback?.takeIf { it.isNotBlank() },
+    )
 }

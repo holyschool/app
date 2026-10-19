@@ -521,6 +521,29 @@
     <string name="quiz_insights_wrong_count">%1$d×</string>
     <string name="quiz_insights_recent_title">Recent results</string>
 
+    <string name="quiz_formats">Question formats</string>
+    <string name="quiz_formats_mix">Questions will mix the selected formats.</string>
+    <string name="quiz_type_mc">ABCD</string>
+    <string name="quiz_type_true_false">True / false</string>
+    <string name="quiz_type_fill_in">Fill in</string>
+    <string name="quiz_type_open">Open answer</string>
+    <string name="quiz_true">True</string>
+    <string name="quiz_false">False</string>
+    <string name="quiz_open_answer_label">Your answer</string>
+    <string name="quiz_open_answer_hint">Type your answer here…</string>
+    <string name="quiz_open_check">Check answer</string>
+    <string name="quiz_open_grading">Grading…</string>
+    <string name="quiz_open_retry">Try again</string>
+    <string name="quiz_subject">Subject (optional)</string>
+    <string name="quiz_subject_hint">e.g. Biology</string>
+    <string name="quiz_subject_all">All</string>
+    <string name="quiz_subject_set">Set subject</string>
+    <string name="quiz_subject_set_title">Subject tag</string>
+    <string name="quiz_subject_empty">No quizzes with this subject yet.</string>
+    <string name="quiz_sessions_title">Study sessions</string>
+    <string name="quiz_sessions_empty">No sessions yet. Finish a quiz and it will show up here.</string>
+    <string name="quiz_sessions_count">%1$d sessions</string>
+
     <string name="flash_title">AI Flashcards</string>
     <string name="flash_new">New deck</string>
     <string name="flash_empty">No decks yet. Tap + to create one.</string>

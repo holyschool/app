@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.wiffles.edupage.ui.quiz
 
 import androidx.activity.compose.BackHandler
@@ -21,6 +23,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +36,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,13 +50,17 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Label
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -82,6 +90,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,20 +109,26 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.wiffles.edupage.R
 import com.wiffles.edupage.data.AiQuiz
 import com.wiffles.edupage.data.QuizQuestion
+import com.wiffles.edupage.data.QuizQuestionType
 import com.wiffles.edupage.data.MaterialLoadState
 import com.wiffles.edupage.data.QuizAttempt
 import com.wiffles.edupage.data.QuizKind
+import com.wiffles.edupage.data.SessionAnswer
 import com.wiffles.edupage.data.StudyMaterial
+import com.wiffles.edupage.network.OpenAnswerItem
+import com.wiffles.edupage.network.OpenGrade
 import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
 import com.wiffles.edupage.ui.core.sheets.AppBottomSheet
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.rememberAppHaptics
+import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiQuizScreen(
     onBack: () -> Unit,
+    initialQuizId: String? = null,
     viewModel: AiQuizViewModel = hiltViewModel(),
 ) {
     val quizzes by viewModel.quizzes.collectAsState()
@@ -124,10 +139,32 @@ fun AiQuizScreen(
     val regenerating by viewModel.regenerating.collectAsState()
     val regenerateError by viewModel.regenerateError.collectAsState()
     var showNewSheet by remember { mutableStateOf(false) }
+    var showSessions by remember { mutableStateOf(false) }
     var activeQuiz by remember { mutableStateOf<AiQuiz?>(null) }
+    var subjectFilter by remember { mutableStateOf<String?>(null) }
+    var subjectEditTarget by remember { mutableStateOf<AiQuiz?>(null) }
+    var pendingInitial by remember(initialQuizId) { mutableStateOf(initialQuizId) }
     val haptics = rememberAppHaptics()
     val snackbarHostState = remember { SnackbarHostState() }
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
+
+    val subjects = remember(quizzes) {
+        quizzes.mapNotNull { it.subjectTag?.takeIf { tag -> tag.isNotBlank() } }.distinct().sorted()
+    }
+    val visibleQuizzes = remember(quizzes, subjectFilter) {
+        if (subjectFilter == null) quizzes else quizzes.filter { it.subjectTag == subjectFilter }
+    }
+    val sessionsCount = remember(attemptsByQuiz) { attemptsByQuiz.values.sumOf { it.size } }
+
+    // Opens a specific quiz when the chat tool hands one over.
+    LaunchedEffect(quizzes, pendingInitial) {
+        val id = pendingInitial ?: return@LaunchedEffect
+        val quiz = quizzes.firstOrNull { it.id == id }
+        if (quiz != null) {
+            activeQuiz = quiz
+            pendingInitial = null
+        }
+    }
 
     LaunchedEffect(regenerateError) {
         regenerateError?.let {
@@ -160,6 +197,14 @@ fun AiQuizScreen(
                         }
                     },
                     actions = {
+                        if (sessionsCount > 0) {
+                            IconButton(onClick = {
+                                haptics.virtualKey()
+                                showSessions = true
+                            }) {
+                                Icon(Icons.Rounded.History, contentDescription = stringResource(R.string.quiz_sessions_title))
+                            }
+                        }
                         IconButton(onClick = {
                             haptics.virtualKey()
                             showNewSheet = true
@@ -181,28 +226,53 @@ fun AiQuizScreen(
                     showNewSheet = true
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(quizzes, key = { it.id }) { quiz ->
-                        QuizRow(
-                            quiz = quiz,
-                            attemptsForQuiz = attemptsByQuiz[quiz.id].orEmpty(),
-                            regenerating = regenerating,
-                            online = isOnline,
-                            onStart = { haptics.virtualKey(); activeQuiz = quiz },
-                            onRefresh = {
-                                haptics.virtualKey()
-                                viewModel.regenerate(quiz, focusWeak = false) { created -> activeQuiz = created }
-                            },
-                            onPracticeMistakes = {
-                                haptics.virtualKey()
-                                viewModel.regenerate(quiz, focusWeak = true) { created -> activeQuiz = created }
-                            },
-                            onDelete = { viewModel.delete(quiz.id) },
+                Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    if (subjects.isNotEmpty()) {
+                        SubjectFilterRow(
+                            subjects = subjects,
+                            selected = subjectFilter,
+                            onSelect = { haptics.virtualKey(); subjectFilter = it },
                         )
+                    }
+                    if (visibleQuizzes.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = stringResource(R.string.quiz_subject_empty),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(32.dp),
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            items(visibleQuizzes, key = { it.id }) { quiz ->
+                                QuizRow(
+                                    quiz = quiz,
+                                    attemptsForQuiz = attemptsByQuiz[quiz.id].orEmpty(),
+                                    regenerating = regenerating,
+                                    online = isOnline,
+                                    onStart = { haptics.virtualKey(); activeQuiz = quiz },
+                                    onRefresh = {
+                                        haptics.virtualKey()
+                                        viewModel.regenerate(quiz, focusWeak = false) { created -> activeQuiz = created }
+                                    },
+                                    onPracticeMistakes = {
+                                        haptics.virtualKey()
+                                        viewModel.regenerate(quiz, focusWeak = true) { created -> activeQuiz = created }
+                                    },
+                                    onSetSubject = {
+                                        haptics.virtualKey()
+                                        subjectEditTarget = quiz
+                                    },
+                                    onDelete = { viewModel.delete(quiz.id) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -214,7 +284,11 @@ fun AiQuizScreen(
                 attempts = attemptsByQuiz[quiz.id].orEmpty(),
                 explainState = explainState,
                 modifier = Modifier.fillMaxSize(),
-                onRecord = { score, total, wrong -> viewModel.recordResult(quiz.id, score, total, wrong) },
+                onRecord = { score, total, wrong, answers, durationMs ->
+                    viewModel.recordResult(quiz.id, score, total, wrong, answers, durationMs)
+                },
+                onGradeOpen = { items -> viewModel.gradeOpen(quiz, items) },
+                gradeError = { error -> viewModel.errorMessage(error) },
                 onExplain = { answers -> viewModel.explain(quiz, answers) },
                 onResetExplain = { viewModel.resetExplain() },
                 onPracticeMistakes = {
@@ -238,19 +312,201 @@ fun AiQuizScreen(
             error = (genState as? AiQuizViewModel.GenerateState.Error)?.message,
             homeworkProvider = { viewModel.homeworkMaterials() },
             examState = examState,
+            knownSubjects = subjects,
             onLoadExamMaterials = { viewModel.loadExamMaterials() },
             onDismiss = {
                 viewModel.consumeError()
                 showNewSheet = false
             },
-            onGenerate = { topic, count, difficulty, material, kind, instructions ->
-                viewModel.generate(topic, count, difficulty, material, kind, instructions) { created ->
+            onGenerate = { topic, count, difficulty, material, kind, instructions, types, subject ->
+                viewModel.generate(topic, count, difficulty, material, kind, instructions, types, subject) { created ->
                     showNewSheet = false
                     activeQuiz = created
                 }
             },
         )
     }
+
+    if (showSessions) {
+        SessionsSheet(
+            attemptsByQuiz = attemptsByQuiz,
+            quizzes = quizzes,
+            onDismiss = { showSessions = false },
+        )
+    }
+
+    subjectEditTarget?.let { quiz ->
+        SubjectEditDialog(
+            quiz = quiz,
+            knownSubjects = subjects,
+            onDismiss = { subjectEditTarget = null },
+            onConfirm = { value ->
+                viewModel.setSubject(quiz.id, value)
+                subjectEditTarget = null
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SubjectFilterRow(
+    subjects: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            FilterChip(
+                selected = selected == null,
+                onClick = { onSelect(null) },
+                label = { Text(stringResource(R.string.quiz_subject_all)) },
+            )
+        }
+        items(subjects, key = { it }) { subject ->
+            FilterChip(
+                selected = selected == subject,
+                onClick = { onSelect(subject) },
+                label = { Text(subject) },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SessionsSheet(
+    attemptsByQuiz: Map<String, List<QuizAttempt>>,
+    quizzes: List<AiQuiz>,
+    onDismiss: () -> Unit,
+) {
+    val topics = remember(quizzes) { quizzes.associate { it.id to it.topic } }
+    val sessions = remember(attemptsByQuiz) {
+        attemptsByQuiz.values.flatten().sortedByDescending { it.timestampMs }
+    }
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.quiz_sessions_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            if (sessions.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.quiz_sessions_empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                RoundedCardContainer {
+                    sessions.forEach { session ->
+                        SessionRow(
+                            topic = session.quizTopic ?: topics[session.id].orEmpty(),
+                            session = session,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionRow(topic: String, session: QuizAttempt) {
+    val dateText = remember(session.timestampMs) {
+        java.time.Instant.ofEpochMilli(session.timestampMs)
+            .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+            .format(DateTimeFormatter.ofPattern("d MMM yyyy"))
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Text(
+            text = topic.ifBlank { stringResource(R.string.quiz_title) },
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.quiz_result_score, session.score, session.total),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            session.subjectTag?.takeIf { it.isNotBlank() }?.let { tag ->
+                Text(
+                    text = tag,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = dateText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubjectEditDialog(
+    quiz: AiQuiz,
+    knownSubjects: List<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit,
+) {
+    var value by remember(quiz.id) { mutableStateOf(quiz.subjectTag.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.quiz_subject_set_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text(stringResource(R.string.quiz_subject)) },
+                    placeholder = { Text(stringResource(R.string.quiz_subject_hint)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (knownSubjects.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        knownSubjects.forEach { subject ->
+                            FilterChip(
+                                selected = value.trim() == subject,
+                                onClick = { value = subject },
+                                label = { Text(subject) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(value.trim().takeIf { it.isNotBlank() }) }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.quiz_cancel)) }
+        },
+    )
 }
 
 @Composable
@@ -289,6 +545,7 @@ private fun QuizRow(
     onStart: () -> Unit,
     onRefresh: () -> Unit,
     onPracticeMistakes: () -> Unit,
+    onSetSubject: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -315,16 +572,40 @@ private fun QuizRow(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                 )
-                if (quiz.isGrammar) {
-                    Text(
-                        text = stringResource(R.string.quiz_kind_grammar),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (quiz.isGrammar) {
+                        Text(
+                            text = stringResource(R.string.quiz_kind_grammar),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                    quiz.subjectTag?.takeIf { it.isNotBlank() }?.let { tag ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.Label,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                text = tag,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
                 Text(
-                    text = stringResource(R.string.quiz_questions_count, quiz.questions.size),
+                    text = quizQuestionSummary(quiz),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -363,6 +644,11 @@ private fun QuizRow(
                         )
                     }
                     DropdownMenuItem(
+                        text = { Text(stringResource(R.string.quiz_subject_set)) },
+                        leadingIcon = { Icon(Icons.Rounded.Label, contentDescription = null) },
+                        onClick = { menuOpen = false; onSetSubject() },
+                    )
+                    DropdownMenuItem(
                         text = {
                             Text(
                                 text = stringResource(R.string.quiz_delete),
@@ -384,6 +670,26 @@ private fun QuizRow(
     }
 }
 
+/** "7 questions · ABCD, True/false, Open" style summary of a quiz's formats. */
+@Composable
+private fun quizQuestionSummary(quiz: AiQuiz): String {
+    val count = stringResource(R.string.quiz_questions_count, quiz.questions.size)
+    val types = quiz.questionTypes
+    if (quiz.isGrammar || types.isEmpty()) return count
+    val labels = buildList {
+        types.forEach { add(stringResource(questionTypeLabel(it))) }
+    }
+    return "$count · " + labels.joinToString(", ")
+}
+
+/** String resource for a question format's short name. */
+private fun questionTypeLabel(type: QuizQuestionType): Int = when (type) {
+    QuizQuestionType.MULTIPLE_CHOICE -> R.string.quiz_type_mc
+    QuizQuestionType.TRUE_FALSE -> R.string.quiz_type_true_false
+    QuizQuestionType.FILL_IN -> R.string.quiz_type_fill_in
+    QuizQuestionType.OPEN -> R.string.quiz_type_open
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewQuizSheet(
@@ -392,15 +698,20 @@ private fun NewQuizSheet(
     error: String?,
     homeworkProvider: () -> List<StudyMaterial>,
     examState: MaterialLoadState,
+    knownSubjects: List<String>,
     onLoadExamMaterials: () -> Unit,
     onDismiss: () -> Unit,
-    onGenerate: (String, Int, String, String?, QuizKind, String?) -> Unit,
+    onGenerate: (String, Int, String, String?, QuizKind, String?, List<QuizQuestionType>, String?) -> Unit,
 ) {
     var quizKind by remember { mutableStateOf(QuizKind.QUIZ) }
     var topic by remember { mutableStateOf("") }
     var count by remember { mutableIntStateOf(10) }
     var difficulty by remember { mutableStateOf("medium") }
     var instructions by remember { mutableStateOf("") }
+    var subject by remember { mutableStateOf("") }
+    var selectedTypes by remember {
+        mutableStateOf(setOf(QuizQuestionType.MULTIPLE_CHOICE))
+    }
     var material by remember { mutableStateOf<String?>(null) }
     var materialLabel by remember { mutableStateOf<String?>(null) }
     var showPicker by remember { mutableStateOf(false) }
@@ -408,6 +719,15 @@ private fun NewQuizSheet(
     var homeworkMaterials by remember { mutableStateOf(emptyList<StudyMaterial>()) }
     var menuExpanded by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
+
+    fun toggleType(type: QuizQuestionType) {
+        haptics.virtualKey()
+        selectedTypes = if (type in selectedTypes) {
+            if (selectedTypes.size == 1) selectedTypes else selectedTypes - type
+        } else {
+            selectedTypes + type
+        }
+    }
 
     val pickerItems: List<StudyMaterial> = when (pickerSource) {
         QuizSource.HOMEWORK -> homeworkMaterials
@@ -563,6 +883,59 @@ private fun NewQuizSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            if (!isGrammar) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.quiz_formats),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        QuizQuestionType.entries.forEach { type ->
+                            FilterChip(
+                                selected = type in selectedTypes,
+                                onClick = { toggleType(type) },
+                                label = { Text(stringResource(questionTypeLabel(type))) },
+                            )
+                        }
+                    }
+                    if (selectedTypes.size > 1) {
+                        Text(
+                            text = stringResource(R.string.quiz_formats_mix),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = subject,
+                    onValueChange = { subject = it },
+                    label = { Text(stringResource(R.string.quiz_subject)) },
+                    placeholder = { Text(stringResource(R.string.quiz_subject_hint)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (knownSubjects.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        knownSubjects.forEach { known ->
+                            FilterChip(
+                                selected = subject.trim() == known,
+                                onClick = { haptics.virtualKey(); subject = known },
+                                label = { Text(known) },
+                            )
+                        }
+                    }
+                }
+            }
             if (materialLabel != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -702,9 +1075,20 @@ private fun NewQuizSheet(
             Button(
                 onClick = {
                     haptics.virtualKey()
-                    onGenerate(topic, count, difficulty, material, quizKind, instructions)
+                    val types =
+                        if (isGrammar) listOf(QuizQuestionType.FILL_IN) else selectedTypes.toList()
+                    onGenerate(
+                        topic,
+                        count,
+                        difficulty,
+                        material,
+                        quizKind,
+                        instructions,
+                        types,
+                        subject.trim().takeIf { it.isNotBlank() },
+                    )
                 },
-                enabled = topic.isNotBlank() && !generating && online,
+                enabled = topic.isNotBlank() && !generating && online && selectedTypes.isNotEmpty(),
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth().height(54.dp),
             ) {
@@ -732,6 +1116,41 @@ private enum class Difficulty(val key: String, val labelRes: Int) {
     HARD("hard", R.string.quiz_difficulty_hard),
 }
 
+/** State of the student's answer to a single question during a run. */
+private data class QuizResponse(
+    val selectedIndex: Int? = null,
+    val text: String = "",
+    val correct: Boolean? = null,
+    val feedback: String? = null,
+    val error: String? = null,
+    val pending: Boolean = false,
+) {
+    val answered: Boolean get() = correct != null
+    val canAdvance: Boolean get() = answered || error != null
+}
+
+/** The option's display text for a question, localising true/false. */
+@Composable
+private fun optionText(question: QuizQuestion, optionIndex: Int): String {
+    if (question.type == QuizQuestionType.TRUE_FALSE) {
+        return stringResource(if (optionIndex == 0) R.string.quiz_true else R.string.quiz_false)
+    }
+    return question.options.getOrNull(optionIndex).orEmpty()
+}
+
+/** The canonical correct answer text for a question. */
+private fun questionCorrectText(question: QuizQuestion): String = when (question.type) {
+    QuizQuestionType.OPEN -> question.answer.orEmpty()
+    else -> question.options.getOrNull(question.correctIndex).orEmpty()
+}
+
+/** The student's answer text for a response. */
+private fun responseGivenText(question: QuizQuestion, response: QuizResponse): String = when {
+    question.type == QuizQuestionType.OPEN -> response.text
+    response.selectedIndex != null -> question.options.getOrNull(response.selectedIndex).orEmpty()
+    else -> ""
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QuizRunner(
@@ -739,7 +1158,9 @@ private fun QuizRunner(
     attempts: List<QuizAttempt>,
     explainState: AiQuizViewModel.ExplainState,
     modifier: Modifier = Modifier,
-    onRecord: (Int, Int, List<String>) -> Unit,
+    onRecord: (Int, Int, List<String>, List<SessionAnswer>, Long) -> Unit,
+    onGradeOpen: suspend (List<OpenAnswerItem>) -> Result<List<OpenGrade>>,
+    gradeError: (Throwable) -> String,
     onExplain: (List<Int?>) -> Unit,
     onResetExplain: () -> Unit,
     onPracticeMistakes: () -> Unit,
@@ -747,18 +1168,21 @@ private fun QuizRunner(
     onExit: () -> Unit,
 ) {
     var index by remember(quiz.id) { mutableIntStateOf(0) }
-    var selected by remember(quiz.id) { mutableStateOf<Int?>(null) }
-    var score by remember(quiz.id) { mutableIntStateOf(0) }
     var finished by remember(quiz.id) { mutableStateOf(false) }
     var finishedAtMs by remember(quiz.id) { mutableLongStateOf(0L) }
+    val startedAtMs = remember(quiz.id) { System.currentTimeMillis() }
     // Bumping the nonce reshuffles the options and starts a fresh attempt.
     var shuffleNonce by remember(quiz.id) { mutableIntStateOf(0) }
     // Answer options are shuffled each session so the correct position is never predictable.
     val questions = remember(quiz.id, shuffleNonce) { quiz.questions.shuffledOptions() }
-    val answers = remember(quiz.id, shuffleNonce) {
-        mutableStateListOf<Int?>().apply { repeat(questions.size) { add(null) } }
+    val responses = remember(quiz.id, shuffleNonce) {
+        mutableStateListOf<QuizResponse>().apply { repeat(questions.size) { add(QuizResponse()) } }
     }
     val haptics = rememberAppHaptics()
+    val scope = rememberCoroutineScope()
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
+
+    val score = responses.count { it.correct == true }
 
     if (questions.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
@@ -767,21 +1191,69 @@ private fun QuizRunner(
         return
     }
 
+    fun checkOpen(target: Int) {
+        val question = questions[target]
+        val answer = responses[target].text
+        responses[target] = responses[target].copy(pending = true, error = null)
+        scope.launch {
+            val result = onGradeOpen(
+                listOf(OpenAnswerItem(question.question, question.answer.orEmpty(), answer)),
+            )
+            responses[target] = result.fold(
+                onSuccess = { grades ->
+                    val grade = grades.firstOrNull()
+                    responses[target].copy(
+                        pending = false,
+                        correct = grade?.correct ?: false,
+                        feedback = grade?.feedback,
+                    )
+                },
+                onFailure = { e -> responses[target].copy(pending = false, error = gradeError(e)) },
+            )
+        }
+    }
+
+    fun finish() {
+        val wrong = questions.indices
+            .filter { responses[it].correct != true }
+            .map { questions[it].question }
+        val sessionAnswers = questions.mapIndexed { i, q ->
+            val r = responses[i]
+            SessionAnswer(
+                question = q.question,
+                given = responseGivenText(q, r),
+                correctAnswer = questionCorrectText(q),
+                correct = r.correct == true,
+                feedback = r.feedback,
+            )
+        }
+        onRecord(
+            score,
+            questions.size,
+            wrong,
+            sessionAnswers,
+            System.currentTimeMillis() - startedAtMs,
+        )
+        finishedAtMs = System.currentTimeMillis()
+        finished = true
+    }
+
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface) {
         if (finished) {
             ResultScreen(
                 quiz = quiz,
                 questions = questions,
                 score = score,
-                answers = answers.toList(),
+                responses = responses.toList(),
                 attempts = attempts,
                 finishedAtMs = finishedAtMs,
                 explainState = explainState,
-                onExplain = { onExplain(answers.toList()) },
+                onExplain = { onExplain(responses.map { it.selectedIndex }) },
                 onRetry = {
                     onResetExplain()
                     shuffleNonce++
-                    index = 0; selected = null; score = 0; finished = false
+                    index = 0
+                    finished = false
                 },
                 onPracticeMistakes = onPracticeMistakes,
                 onRefreshQuestions = onRefreshQuestions,
@@ -790,7 +1262,8 @@ private fun QuizRunner(
             return@Surface
         }
 
-        val answered = selected != null
+        val currentResponse = responses.getOrNull(index) ?: QuizResponse()
+        val answered = currentResponse.canAdvance
         val progress by animateFloatAsState(
             targetValue = (index + if (answered) 1 else 0).toFloat() / questions.size,
             animationSpec = tween(450),
@@ -845,6 +1318,7 @@ private fun QuizRunner(
                 label = "quizQuestion",
             ) { targetIndex ->
                 val question = questions[targetIndex]
+                val response = responses.getOrNull(targetIndex) ?: QuizResponse()
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -853,6 +1327,14 @@ private fun QuizRunner(
                         .padding(top = 20.dp, bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    if (question.type == QuizQuestionType.OPEN) {
+                        Text(
+                            text = stringResource(R.string.quiz_type_open),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Text(
                         text = question.question,
                         style = MaterialTheme.typography.titleLarge,
@@ -861,25 +1343,47 @@ private fun QuizRunner(
                         modifier = Modifier.animateContentSize(),
                     )
                     Spacer(Modifier.height(4.dp))
-                    question.options.forEachIndexed { optionIndex, option ->
-                        OptionRow(
-                            text = option,
-                            state = optionState(optionIndex, selected, question.correctIndex),
-                            enabled = !answered,
-                            onClick = {
-                                haptics.virtualKey()
-                                selected = optionIndex
-                                answers[targetIndex] = optionIndex
-                                if (optionIndex == question.correctIndex) score++
+
+                    if (question.type == QuizQuestionType.OPEN) {
+                        OpenAnswerInput(
+                            value = response.text,
+                            enabled = !response.answered && !response.pending,
+                            onValueChange = { text ->
+                                responses[targetIndex] = responses[targetIndex].copy(text = text)
                             },
                         )
+                    } else {
+                        question.options.forEachIndexed { optionIndex, _ ->
+                            OptionRow(
+                                text = optionText(question, optionIndex),
+                                state = optionState(optionIndex, response.selectedIndex, question.correctIndex),
+                                enabled = !response.answered,
+                                onClick = {
+                                    haptics.virtualKey()
+                                    responses[targetIndex] = response.copy(
+                                        selectedIndex = optionIndex,
+                                        correct = optionIndex == question.correctIndex,
+                                        error = null,
+                                    )
+                                },
+                            )
+                        }
                     }
+
                     AnimatedVisibility(
-                        visible = answered,
+                        visible = response.canAdvance,
                         enter = expandVertically(tween(300)) + fadeIn(tween(250)),
                         exit = shrinkVertically(tween(200)) + fadeOut(tween(150)),
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (question.type == QuizQuestionType.OPEN) {
+                                OpenFeedbackCard(
+                                    response = response,
+                                    question = question,
+                                    canRetry = isOnline && !response.pending,
+                                    onRetry = { checkOpen(targetIndex) },
+                                )
+                            }
                             question.explanation?.takeIf { it.isNotBlank() }?.let { explanation ->
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -904,17 +1408,7 @@ private fun QuizRunner(
                             Button(
                                 onClick = {
                                     haptics.virtualKey()
-                                    if (index == questions.lastIndex) {
-                                        val wrong = questions.filterIndexed { i, q ->
-                                            answers.getOrNull(i) != q.correctIndex
-                                        }.map { it.question }
-                                        onRecord(score, questions.size, wrong)
-                                        finishedAtMs = System.currentTimeMillis()
-                                        finished = true
-                                    } else {
-                                        index++
-                                        selected = null
-                                    }
+                                    if (index == questions.lastIndex) finish() else index++
                                 },
                                 shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier.fillMaxWidth().height(54.dp),
@@ -930,7 +1424,137 @@ private fun QuizRunner(
                             }
                         }
                     }
+
+                    if (question.type == QuizQuestionType.OPEN &&
+                        !response.answered &&
+                        response.error == null
+                    ) {
+                        Button(
+                            onClick = { haptics.virtualKey(); checkOpen(targetIndex) },
+                            enabled = response.text.isNotBlank() && !response.pending && isOnline,
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                        ) {
+                            if (response.pending) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(stringResource(R.string.quiz_open_grading))
+                            } else {
+                                Icon(
+                                    Icons.Rounded.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.quiz_open_check), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (!isOnline) {
+                            Text(
+                                text = stringResource(R.string.ai_offline_hint),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(24.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpenAnswerInput(
+    value: String,
+    enabled: Boolean,
+    onValueChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        label = { Text(stringResource(R.string.quiz_open_answer_label)) },
+        placeholder = { Text(stringResource(R.string.quiz_open_answer_hint)) },
+        minLines = 2,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun OpenFeedbackCard(
+    response: QuizResponse,
+    question: QuizQuestion,
+    canRetry: Boolean,
+    onRetry: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (response.error != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = response.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                TextButton(onClick = onRetry, enabled = canRetry) {
+                    Text(stringResource(R.string.quiz_open_retry))
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val correct = response.correct == true
+                    Icon(
+                        imageVector = if (correct) Icons.Rounded.CheckCircle else Icons.Rounded.Cancel,
+                        contentDescription = null,
+                        tint = if (correct) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = stringResource(
+                            if (correct) R.string.quiz_correct else R.string.quiz_incorrect,
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (correct) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (response.correct != true && !question.answer.isNullOrBlank()) {
+                    Text(
+                        text = stringResource(R.string.quiz_review_correct_answer) + ": " + question.answer,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                response.feedback?.takeIf { it.isNotBlank() }?.let { feedback ->
+                    Text(
+                        text = feedback,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -948,6 +1572,9 @@ private fun optionState(optionIndex: Int, selected: Int?, correctIndex: Int): Op
 
 /** Returns the questions with their answer options shuffled and correctIndex remapped. */
 private fun List<QuizQuestion>.shuffledOptions(): List<QuizQuestion> = map { question ->
+    if (question.type == QuizQuestionType.OPEN || question.type == QuizQuestionType.TRUE_FALSE) {
+        return@map question
+    }
     if (question.options.size < 2) return@map question
     val shuffled = question.options.withIndex().shuffled()
     val newCorrect = shuffled.indexOfFirst { it.index == question.correctIndex }
@@ -1028,7 +1655,7 @@ private fun ResultScreen(
     quiz: AiQuiz,
     questions: List<QuizQuestion>,
     score: Int,
-    answers: List<Int?>,
+    responses: List<QuizResponse>,
     attempts: List<QuizAttempt>,
     finishedAtMs: Long,
     explainState: AiQuizViewModel.ExplainState,
@@ -1041,7 +1668,7 @@ private fun ResultScreen(
     val haptics = rememberAppHaptics()
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val total = questions.size
-    val wrongCount = questions.indices.count { answers.getOrNull(it) != questions[it].correctIndex }
+    val wrongCount = responses.count { it.correct != true }
     val fraction = if (total > 0) score.toFloat() / total else 0f
     val progress by animateFloatAsState(
         targetValue = fraction,
@@ -1142,7 +1769,7 @@ private fun ResultScreen(
 
             ProgressGraphCard(attempts = attempts)
 
-            ReviewCard(questions = questions, answers = answers)
+            ReviewCard(questions = questions, responses = responses)
 
             ExplainCard(
                 state = explainState,
@@ -1319,12 +1946,23 @@ private fun ProgressLineChart(attempts: List<QuizAttempt>, modifier: Modifier = 
 }
 
 @Composable
-private fun ReviewCard(questions: List<QuizQuestion>, answers: List<Int?>) {
+private fun ReviewCard(questions: List<QuizQuestion>, responses: List<QuizResponse>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionHeader(text = stringResource(R.string.quiz_review_title))
         questions.forEachIndexed { index, question ->
-            val given = answers.getOrNull(index)
-            val isCorrect = given == question.correctIndex
+            val response = responses.getOrNull(index) ?: QuizResponse()
+            val isCorrect = response.correct == true
+            val givenText = when {
+                question.type == QuizQuestionType.OPEN ->
+                    response.text.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.quiz_review_no_answer)
+                response.selectedIndex != null -> optionText(question, response.selectedIndex)
+                else -> stringResource(R.string.quiz_review_no_answer)
+            }
+            val correctText = when (question.type) {
+                QuizQuestionType.OPEN -> question.answer.orEmpty()
+                else -> optionText(question, question.correctIndex)
+            }
             Surface(
                 color = MaterialTheme.colorScheme.surfaceBright,
                 shape = RoundedCornerShape(16.dp),
@@ -1352,20 +1990,24 @@ private fun ReviewCard(questions: List<QuizQuestion>, answers: List<Int?>) {
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    val givenText = given?.let { question.options.getOrNull(it) }
-                        ?: stringResource(R.string.quiz_review_no_answer)
                     Text(
                         text = stringResource(R.string.quiz_review_your_answer) + ": " + givenText,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isCorrect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     )
-                    if (!isCorrect) {
+                    if (!isCorrect && correctText.isNotBlank()) {
                         Text(
-                            text = stringResource(R.string.quiz_review_correct_answer) + ": " +
-                                (question.options.getOrNull(question.correctIndex) ?: ""),
+                            text = stringResource(R.string.quiz_review_correct_answer) + ": " + correctText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    response.feedback?.takeIf { it.isNotBlank() }?.let { feedback ->
+                        Text(
+                            text = feedback,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     question.explanation?.takeIf { it.isNotBlank() }?.let { explanation ->

@@ -18,12 +18,37 @@ import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The answer format of a single quiz question. */
+enum class QuizQuestionType {
+    /** Classic ABCD multiple choice: several options, exactly one correct. */
+    MULTIPLE_CHOICE,
+
+    /** A statement the student marks true or false. */
+    TRUE_FALSE,
+
+    /** A sentence with a gap and a set of candidate words to drop in. */
+    FILL_IN,
+
+    /** Free-text answer, marked by the AI against a model answer. */
+    OPEN,
+    ;
+
+    val isLocal: Boolean get() = this != OPEN
+}
+
 data class QuizQuestion(
     val question: String,
-    val options: List<String>,
-    val correctIndex: Int,
+    val options: List<String> = emptyList(),
+    val correctIndex: Int = 0,
     val explanation: String? = null,
-)
+    /** Defaults to [QuizQuestionType.MULTIPLE_CHOICE] for quizzes saved before types existed. */
+    val type: QuizQuestionType = QuizQuestionType.MULTIPLE_CHOICE,
+    /** Model answer for [QuizQuestionType.OPEN] questions; null for the closed formats. */
+    val answer: String? = null,
+) {
+    /** True when the answer can be checked on-device without an AI call. */
+    val gradeableLocally: Boolean get() = type.isLocal
+}
 
 /** Distinguishes a general quiz from a fill-in-the-blank grammar exam (diktát). */
 enum class QuizKind { QUIZ, GRAMMAR }
@@ -40,8 +65,15 @@ data class AiQuiz(
     val kind: QuizKind? = QuizKind.QUIZ,
     /** Free-form instructions for a grammar exam (e.g. "only i/y" or "mix in ě/je"). */
     val instructions: String? = null,
+    /** Subject the quiz belongs to (e.g. "Biology"); used to group the library. */
+    val subjectTag: String? = null,
 ) {
     val isGrammar: Boolean get() = kind == QuizKind.GRAMMAR
+    val hasOpenQuestions: Boolean get() = questions.any { it.type == QuizQuestionType.OPEN }
+
+    /** Distinct question formats present, in a stable display order. */
+    val questionTypes: List<QuizQuestionType>
+        get() = QuizQuestionType.entries.filter { type -> questions.any { it.type == type } }
 }
 
 @Singleton
@@ -58,13 +90,19 @@ class AiQuizStore @Inject constructor(
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val items = CopyOnWriteArrayList<AiQuiz>().apply {
-        loadFromDisk()?.let { addAll(it) }
+        loadFromDisk()?.let { addAll(it.map { quiz -> quiz.sanitized() }) }
     }
 
     private val _quizzes = MutableStateFlow(all())
     val quizzes: StateFlow<List<AiQuiz>> = _quizzes.asStateFlow()
 
     fun all(): List<AiQuiz> = items.sortedByDescending { it.createdAtMs }
+
+    /** Distinct, non-blank subject tags across the saved quizzes, alphabetically. */
+    fun subjects(): List<String> =
+        items.mapNotNull { it.subjectTag?.takeIf { tag -> tag.isNotBlank() } }
+            .distinct()
+            .sorted()
 
     fun add(quiz: AiQuiz) {
         items.add(0, quiz)
@@ -73,6 +111,14 @@ class AiQuizStore @Inject constructor(
 
     fun remove(id: String) {
         items.removeIf { it.id == id }
+        publish()
+    }
+
+    /** Updates the subject tag of a quiz (blank clears it). */
+    fun setSubject(id: String, subject: String?) {
+        val idx = items.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        items[idx] = items[idx].copy(subjectTag = subject?.trim()?.takeIf { it.isNotBlank() })
         publish()
     }
 
@@ -111,4 +157,25 @@ class AiQuizStore @Inject constructor(
         Log.e(TAG, "failed to load quizzes", it)
         null
     }
+
+    /**
+     * Gson bypasses constructors, so quizzes saved before question types existed can hold
+     * nulls for Kotlin non-null properties (e.g. [QuizQuestion.type]). Normalise them.
+     */
+    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+    private fun AiQuiz.sanitized(): AiQuiz = copy(
+        topic = topic ?: "",
+        questions = questions.orEmpty().map { it.sanitized() },
+        kind = kind ?: QuizKind.QUIZ,
+        subjectTag = subjectTag?.takeIf { it.isNotBlank() },
+    )
+
+    @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+    private fun QuizQuestion.sanitized(): QuizQuestion = copy(
+        question = question ?: "",
+        options = options ?: emptyList(),
+        type = type ?: QuizQuestionType.MULTIPLE_CHOICE,
+        answer = answer?.takeIf { it.isNotBlank() },
+        explanation = explanation?.takeIf { it.isNotBlank() },
+    )
 }
