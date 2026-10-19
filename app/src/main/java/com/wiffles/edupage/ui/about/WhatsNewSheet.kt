@@ -80,6 +80,11 @@ fun WhatsNewHost(
                     description = stringResource(R.string.whats_new_offline_desc),
                 )
                 WhatsNewRow(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = stringResource(R.string.whats_new_quiz),
+                    description = stringResource(R.string.whats_new_quiz_desc),
+                )
+                WhatsNewRow(
                     icon = Icons.Rounded.Forum,
                     title = stringResource(R.string.whats_new_messages),
                     description = stringResource(R.string.whats_new_messages_desc),
@@ -88,11 +93,6 @@ fun WhatsNewHost(
                     icon = Icons.Rounded.Cloud,
                     title = stringResource(R.string.whats_new_cloud),
                     description = stringResource(R.string.whats_new_cloud_desc),
-                )
-                WhatsNewRow(
-                    icon = Icons.Rounded.AutoAwesome,
-                    title = stringResource(R.string.whats_new_claude),
-                    description = stringResource(R.string.whats_new_claude_desc),
                 )
             }
             Button(

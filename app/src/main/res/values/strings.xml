@@ -859,12 +859,12 @@
     <string name="whats_new_title">What\'s new</string>
     <string name="whats_new_dismiss">Let me in</string>
     <string name="whats_new_retrigger_desc">Show the highlights again</string>
-    <string name="whats_new_fast_start">Fast start</string>
-    <string name="whats_new_fast_start_desc">Turn it on in Experimental settings to open the app instantly and refresh in the background.</string>
-    <string name="whats_new_offline">Works offline</string>
-    <string name="whats_new_offline_desc">Timetable, grades, messages and meals are cached, and the app tells you when something hasn\'t been downloaded yet.</string>
-    <string name="whats_new_messages">Rich messages</string>
-    <string name="whats_new_messages_desc">Messages render Markdown, make links tappable, and show inline image previews.</string>
+    <string name="whats_new_fast_start">Faster start</string>
+    <string name="whats_new_fast_start_desc">Opens instantly and refreshes in the background, and heavy work no longer stutters the loading animation.</string>
+    <string name="whats_new_offline">Cleaner offline</string>
+    <string name="whats_new_offline_desc">Timetable, grades, messages and meals stay cached, and skeleton placeholders replace the old “failed to load” flashes.</string>
+    <string name="whats_new_messages">AI chat, upgraded</string>
+    <string name="whats_new_messages_desc">Subject-tagged conversations with replies that stream and type out, plus a one-tap “start quiz” the assistant can build for you.</string>
     <string name="whats_new_claude">Anthropic Claude support</string>
     <string name="whats_new_claude_desc">Use your Claude API key for quizzes, flashcards and the study chat.</string>
     <string name="whats_new_grammar">Grammar exams (Diktát)</string>
@@ -872,7 +872,7 @@
     <string name="whats_new_week">Timetable week view</string>
     <string name="whats_new_week_desc">See the whole week at a glance — it now fits on one screen without scrolling.</string>
     <string name="whats_new_quiz">Smarter AI quizzes</string>
-    <string name="whats_new_quiz_desc">Regenerate questions, practise your mistakes and review weak spots.</string>
+    <string name="whats_new_quiz_desc">Pick your question formats — ABCD, true/false, gap-fill or open answers — tag quizzes by subject and review every session.</string>
     <string name="whats_new_cloud">Cloud files</string>
     <string name="whats_new_cloud_desc">Cloud files get image previews and a new gallery view, plus uploads and shareable links.</string>
     <string name="whats_new_polish">Fresh About &amp; messages</string>
