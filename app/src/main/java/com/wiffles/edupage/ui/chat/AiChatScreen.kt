@@ -95,6 +95,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -166,9 +167,33 @@ fun AiChatScreen(
         }
     }
 
-    LaunchedEffect(messages.size, thinking) {
-        val target = messages.size + if (thinking) 1 else 0
-        if (target > 0) listState.animateScrollToItem(target - 1)
+    // The active reply grows token by token while streaming; watch its length so we can scroll
+    // along and give a soft, throttled tick as the text appears.
+    val lastMessage = messages.lastOrNull()
+    val streamedLength = if (thinking && lastMessage?.role == "assistant") {
+        lastMessage.content.length
+    } else {
+        0
+    }
+
+    LaunchedEffect(messages.size, thinking, streamedLength) {
+        if (streamedLength > 0) {
+            // Keep the growing answer pinned to the bottom while it streams.
+            runCatching { listState.scrollToItem(messages.size, Int.MAX_VALUE) }
+        } else {
+            val target = messages.size + if (thinking) 1 else 0
+            if (target > 0) listState.animateScrollToItem(target - 1)
+        }
+    }
+
+    var lastStreamTick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(streamedLength) {
+        if (streamedLength <= 0) return@LaunchedEffect
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastStreamTick >= 45L) {
+            lastStreamTick = now
+            haptics.uiTick()
+        }
     }
 
     fun send(text: String = input) {
@@ -300,7 +325,7 @@ fun AiChatScreen(
                                 onOpenQuiz = onOpenQuiz,
                             )
                         }
-                        if (thinking) {
+                        if (thinking && streamedLength == 0) {
                             item(key = "thinking") { ThinkingBubble() }
                         }
                         item(key = "disclaimer") {

@@ -253,10 +253,12 @@ class AiChatViewModel @Inject constructor(
         viewModelScope.launch {
             _thinking.value = true
             val history = chatStore.messagesFor(sessionId)
-                .filter { !it.error }
+                .filter { !it.error && it.content.isNotBlank() }
                 .takeLast(20)
                 .map { AiMessage(it.role, messageContentForModel(it)) }
             val payload = listOf(AiMessage("system", systemPrompt())) + history
+            // Id of an in-progress streamed reply, so a failure can clear the empty bubble.
+            var streamingId: String? = null
             try {
                 // Photos and PDFs are sent inline to a Gemini vision model when configured;
                 // text files are folded into the prompt by [messageContentForModel].
@@ -268,18 +270,46 @@ class AiChatViewModel @Inject constructor(
                 val reply = if (binaries.isNotEmpty()) {
                     aiService.completeWithAttachments(config, payload, binaries, config.visionModel)
                 } else {
-                    aiService.complete(config, payload, jsonMode = false)
+                    // Print the answer as it arrives; fall back to a single request when the
+                    // provider (e.g. some custom endpoints) refuses to stream.
+                    val id = java.util.UUID.randomUUID().toString()
+                    streamingId = id
+                    chatStore.add(ChatMessage(id = id, role = "assistant", content = "", sessionId = sessionId))
+                    val builder = StringBuilder()
+                    try {
+                        aiService.completeStream(config, payload) { delta ->
+                            builder.append(delta)
+                            chatStore.updateTransient(id) { it.copy(content = builder.toString()) }
+                        }
+                    } catch (streamError: Exception) {
+                        if (builder.isEmpty()) {
+                            aiService.complete(config, payload, jsonMode = false)
+                        } else {
+                            throw streamError
+                        }
+                    }
                 }
                 val (content, quizIds) = extractQuizBlocks(reply.trim())
-                chatStore.add(
-                    ChatMessage(
-                        role = "assistant",
-                        content = content,
-                        sessionId = sessionId,
-                        quizIds = quizIds,
-                    ),
-                )
+                val id = streamingId
+                if (id != null) {
+                    chatStore.update(id) { it.copy(content = content, quizIds = quizIds) }
+                } else {
+                    chatStore.add(
+                        ChatMessage(
+                            role = "assistant",
+                            content = content,
+                            sessionId = sessionId,
+                            quizIds = quizIds,
+                        ),
+                    )
+                }
             } catch (e: Exception) {
+                // Drop an empty streamed bubble so a failure never leaves a blank message behind.
+                streamingId?.let { id ->
+                    if (chatStore.all().firstOrNull { it.id == id }?.content.isNullOrBlank()) {
+                        chatStore.remove(id)
+                    }
+                }
                 val message = if (e.isNetworkError()) context.getString(R.string.network_error)
                 else e.message ?: context.getString(R.string.cloud_error_loading)
                 chatStore.add(

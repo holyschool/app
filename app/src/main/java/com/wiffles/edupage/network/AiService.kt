@@ -146,14 +146,7 @@ class AiService @Inject constructor(
             addProperty("model", config.effectiveModel)
             addProperty("max_tokens", ANTHROPIC_MAX_TOKENS)
             if (system.isNotBlank()) addProperty("system", system)
-            add("messages", JsonArray().apply {
-                messages.filter { it.role != "system" }.forEach { msg ->
-                    add(JsonObject().apply {
-                        addProperty("role", msg.role)
-                        addProperty("content", msg.content)
-                    })
-                }
-            })
+            add("messages", anthropicMessagesJson(messages))
         }
         val raw = execute(
             Request.Builder()
@@ -181,6 +174,19 @@ class AiService @Inject constructor(
     }
 
     private fun geminiComplete(config: AiConfig, messages: List<AiMessage>, jsonMode: Boolean): String {
+        val raw = execute(
+            Request.Builder()
+                .url("${config.effectiveBaseUrl}/models/${config.effectiveModel}:generateContent")
+                .addHeader("x-goog-api-key", config.apiKey)
+                .post(gson.toJson(geminiBody(messages, jsonMode)).toRequestBody(JSON))
+                .build()
+        )
+        return geminiTextFromJson(raw)
+            ?: throw RuntimeException("The model returned an empty answer")
+    }
+
+    /** Request body shared by the buffered and streaming Gemini endpoints. */
+    private fun geminiBody(messages: List<AiMessage>, jsonMode: Boolean): JsonObject {
         val system = messages.filter { it.role == "system" }.joinToString("\n") { it.content }
         val contents = JsonArray().apply {
             messages.filter { it.role != "system" }.forEach { msg ->
@@ -192,7 +198,7 @@ class AiService @Inject constructor(
                 })
             }
         }
-        val body = JsonObject().apply {
+        return JsonObject().apply {
             if (system.isNotBlank()) {
                 add("systemInstruction", JsonObject().apply {
                     add("parts", JsonArray().apply {
@@ -207,44 +213,46 @@ class AiService @Inject constructor(
                 })
             }
         }
-        val raw = execute(
-            Request.Builder()
-                .url("${config.effectiveBaseUrl}/models/${config.effectiveModel}:generateContent")
-                .addHeader("x-goog-api-key", config.apiKey)
-                .post(gson.toJson(body).toRequestBody(JSON))
-                .build()
-        )
-        val json = JsonParser.parseString(raw).asJsonObject
-        val candidates = json.getAsJsonArray("candidates")
-            ?: throw RuntimeException("The model returned no answer")
+    }
+
+    /** Pulls the concatenated text parts out of one GenerateContent response. */
+    private fun geminiTextFromJson(raw: String): String? {
+        val candidates = runCatching {
+            JsonParser.parseString(raw).asJsonObject.getAsJsonArray("candidates")
+        }.getOrNull() ?: return null
         val parts = candidates.firstOrNull()
             ?.asJsonObject?.getAsJsonObject("content")
             ?.getAsJsonArray("parts")
-            ?: throw RuntimeException("The model returned no answer")
-        val text = parts.mapNotNull { part ->
+            ?: return null
+        return parts.mapNotNull { part ->
             runCatching { part.asJsonObject.get("text")?.asString }.getOrNull()
-        }.joinToString("")
-        if (text.isBlank()) throw RuntimeException("The model returned an empty answer")
-        return text
+        }.joinToString("").takeIf { it.isNotEmpty() }
     }
 
     private fun openAiComplete(config: AiConfig, messages: List<AiMessage>, jsonMode: Boolean): String {
         val body = JsonObject().apply {
             addProperty("model", config.effectiveModel)
-            add("messages", JsonArray().apply {
-                messages.forEach { msg ->
-                    add(JsonObject().apply {
-                        addProperty("role", msg.role)
-                        addProperty("content", msg.content)
-                    })
-                }
-            })
+            add("messages", openAiMessagesJson(messages))
             // Only OpenAI and OpenRouter reliably support the strict JSON flag.
             if (jsonMode && config.provider != AiProvider.CUSTOM) {
                 add("response_format", JsonObject().apply { addProperty("type", "json_object") })
             }
         }
-        val request = Request.Builder()
+        val request = openAiRequest(config, body)
+        val raw = execute(request)
+        val json = JsonParser.parseString(raw).asJsonObject
+        val choices = json.getAsJsonArray("choices")
+            ?: throw RuntimeException("The model returned no answer")
+        val message = choices.firstOrNull()?.asJsonObject?.getAsJsonObject("message")
+        val text = message?.get("content")?.asString
+            ?: throw RuntimeException("The model returned an empty answer")
+        if (text.isBlank()) throw RuntimeException("The model returned an empty answer")
+        return text
+    }
+
+    /** Shared OpenAI-compatible request with the provider's auth and attribution headers. */
+    private fun openAiRequest(config: AiConfig, body: JsonObject): Request =
+        Request.Builder()
             .url("${config.effectiveBaseUrl}/chat/completions")
             .header("Authorization", "Bearer ${config.apiKey}")
             .apply {
@@ -256,15 +264,124 @@ class AiService @Inject constructor(
             .post(gson.toJson(body).toRequestBody(JSON))
             .build()
 
-        val raw = execute(request)
-        val json = JsonParser.parseString(raw).asJsonObject
-        val choices = json.getAsJsonArray("choices")
-            ?: throw RuntimeException("The model returned no answer")
-        val message = choices.firstOrNull()?.asJsonObject?.getAsJsonObject("message")
-        val text = message?.get("content")?.asString
-            ?: throw RuntimeException("The model returned an empty answer")
-        if (text.isBlank()) throw RuntimeException("The model returned an empty answer")
-        return text
+    private fun openAiMessagesJson(messages: List<AiMessage>): JsonArray = JsonArray().apply {
+        messages.forEach { msg ->
+            add(JsonObject().apply {
+                addProperty("role", msg.role)
+                addProperty("content", msg.content)
+            })
+        }
+    }
+
+    private fun anthropicMessagesJson(messages: List<AiMessage>): JsonArray = JsonArray().apply {
+        messages.filter { it.role != "system" }.forEach { msg ->
+            add(JsonObject().apply {
+                addProperty("role", msg.role)
+                addProperty("content", msg.content)
+            })
+        }
+    }
+
+    // --------------------------------------------------------------- streaming
+
+    /**
+     * Streams a chat completion, calling [onDelta] for each text chunk as it arrives and
+     * returning the full reply. Every supported provider speaks server-sent events, so the
+     * chat can be printed word by word instead of waiting for the whole answer.
+     */
+    suspend fun completeStream(
+        config: AiConfig,
+        messages: List<AiMessage>,
+        onDelta: (String) -> Unit,
+    ): String = withContext(Dispatchers.IO) {
+        when {
+            config.provider.isGemini -> geminiStream(config, messages, onDelta)
+            config.provider.isAnthropic -> anthropicStream(config, messages, onDelta)
+            else -> openAiStream(config, messages, onDelta)
+        }
+    }
+
+    private fun openAiStream(config: AiConfig, messages: List<AiMessage>, onDelta: (String) -> Unit): String {
+        val body = JsonObject().apply {
+            addProperty("model", config.effectiveModel)
+            addProperty("stream", true)
+            add("messages", openAiMessagesJson(messages))
+        }
+        return collectSse(openAiRequest(config, body), onDelta) { payload ->
+            runCatching {
+                JsonParser.parseString(payload).asJsonObject
+                    .getAsJsonArray("choices")?.firstOrNull()
+                    ?.asJsonObject?.getAsJsonObject("delta")
+                    ?.get("content")?.takeIf { it.isJsonPrimitive }?.asString
+            }.getOrNull()
+        }
+    }
+
+    private fun anthropicStream(config: AiConfig, messages: List<AiMessage>, onDelta: (String) -> Unit): String {
+        val system = messages.filter { it.role == "system" }.joinToString("\n") { it.content }
+        val body = JsonObject().apply {
+            addProperty("model", config.effectiveModel)
+            addProperty("max_tokens", ANTHROPIC_MAX_TOKENS)
+            addProperty("stream", true)
+            if (system.isNotBlank()) addProperty("system", system)
+            add("messages", anthropicMessagesJson(messages))
+        }
+        val request = Request.Builder()
+            .url("${config.effectiveBaseUrl}/messages")
+            .addHeader("x-api-key", config.apiKey)
+            .addHeader("anthropic-version", ANTHROPIC_VERSION)
+            .post(gson.toJson(body).toRequestBody(JSON))
+            .build()
+        return collectSse(request, onDelta) { payload ->
+            runCatching {
+                val obj = JsonParser.parseString(payload).asJsonObject
+                if (obj.get("type")?.asString == "content_block_delta") {
+                    obj.getAsJsonObject("delta")?.get("text")?.asString
+                } else {
+                    null
+                }
+            }.getOrNull()
+        }
+    }
+
+    private fun geminiStream(config: AiConfig, messages: List<AiMessage>, onDelta: (String) -> Unit): String {
+        val request = Request.Builder()
+            .url("${config.effectiveBaseUrl}/models/${config.effectiveModel}:streamGenerateContent?alt=sse")
+            .addHeader("x-goog-api-key", config.apiKey)
+            .post(gson.toJson(geminiBody(messages, jsonMode = false)).toRequestBody(JSON))
+            .build()
+        return collectSse(request, onDelta) { payload -> geminiTextFromJson(payload) }
+    }
+
+    /** Reads an SSE response, extracting each event's text via [extract] and feeding [onDelta]. */
+    private fun collectSse(
+        request: Request,
+        onDelta: (String) -> Unit,
+        extract: (String) -> String?,
+    ): String {
+        val full = StringBuilder()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val text = response.body?.string().orEmpty()
+                throw RuntimeException(describeError(response.code, text))
+            }
+            val source = response.body?.source()
+                ?: throw RuntimeException("The model returned no answer")
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                if (line.isBlank() || !line.startsWith("data:")) continue
+                val payload = line.substring(5).trim()
+                if (payload.isEmpty()) continue
+                if (payload == "[DONE]") break
+                val delta = runCatching { extract(payload) }.getOrNull()
+                if (!delta.isNullOrEmpty()) {
+                    full.append(delta)
+                    onDelta(delta)
+                }
+            }
+        }
+        if (full.isEmpty()) throw RuntimeException("The model returned an empty answer")
+        return full.toString()
     }
 
     // --------------------------------------------------------------- vision (Gemini)
