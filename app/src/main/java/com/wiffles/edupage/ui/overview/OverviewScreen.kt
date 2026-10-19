@@ -217,6 +217,7 @@ fun OverviewScreen(
             if (isInitialLoading) {
                 OverviewSkeleton(
                     bottomPadding = bottomPadding,
+                    redesign = timetableRedesign,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -440,7 +441,7 @@ private fun TimetableCard(
 
     OverviewCard {
         when (state) {
-            is TimetableOverviewState.Loading -> TimetableCardLoading()
+            is TimetableOverviewState.Loading -> TimetableCardLoading(redesign)
             is TimetableOverviewState.Error   -> TimetableCardError(
                 text = stringResource(R.string.overview_error_timetable),
                 onRetry = onRetry,
@@ -464,15 +465,21 @@ private fun TimetableCard(
 }
 
 @Composable
-private fun TimetableCardLoading() {
+private fun TimetableCardLoading(redesign: Boolean = false) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         CardSectionHeader(
             title = stringResource(R.string.overview_today_schedule),
             icon  = Icons.Default.DateRange,
         )
         Spacer(Modifier.height(2.dp))
-        CurrentLessonBannerSkeleton()
-        repeat(3) { CompactLessonRowSkeleton() }
+        if (redesign) {
+            // Match the experimental compact period grid so the card doesn't visibly jump
+            // when the real lessons arrive.
+            TimetableGridSkeleton()
+        } else {
+            CurrentLessonBannerSkeleton()
+            repeat(3) { CompactLessonRowSkeleton() }
+        }
     }
 }
 

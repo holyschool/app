@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
+import com.edupage.api.exceptions.NotLoggedInException
 import com.edupage.api.model.Meal
 import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.grades.EduGrade
@@ -192,48 +193,37 @@ class OverviewViewModel @Inject constructor(
 
         val cached = timetableCache.loadWithStale(today)
         val cachedLessons = cached?.first.orEmpty()
-        if (cachedLessons.isNotEmpty()) {
-            val lastEnd = cachedLessons.mapNotNull { it.endTime }.maxOrNull()
-            val todayDone = lastEnd != null && LocalTime.now() > lastEnd
-            if (!todayDone) {
-                _timetableState.value = TimetableOverviewState.Success(
-                    date = today,
-                    lessons = cachedLessons,
-                    isNextDay = false,
-                )
-                if (!forceRefresh && cached?.second == false) return
-            }
+        val cachedLastEnd = cachedLessons.mapNotNull { it.endTime }.maxOrNull()
+        val cachedTodayDone = cachedLastEnd != null && LocalTime.now() > cachedLastEnd
+
+        if (cachedLessons.isNotEmpty() && !cachedTodayDone) {
+            _timetableState.value = TimetableOverviewState.Success(
+                date = today,
+                lessons = cachedLessons,
+                isNextDay = false,
+            )
+            if (!forceRefresh && cached?.second == false) return
         } else if (!silent && _timetableState.value !is TimetableOverviewState.Success) {
             _timetableState.value = TimetableOverviewState.Loading
         }
 
         if (!isOnline()) {
-            if (_timetableState.value !is TimetableOverviewState.Success) {
-                if (cachedLessons.isNotEmpty()) {
-                    _timetableState.value = TimetableOverviewState.Success(
-                        date = today,
-                        lessons = cachedLessons,
-                        isNextDay = false,
-                    )
-                } else {
-                    // Today isn't cached; the next school day may be.
-                    val nextDay = nextSchoolDay(today)
-                    val nextCached = timetableCache.loadWithStale(nextDay)?.first.orEmpty()
-                    _timetableState.value = if (nextCached.isNotEmpty()) {
-                        TimetableOverviewState.Success(
-                            date = nextDay,
-                            lessons = nextCached,
-                            isNextDay = true,
-                        )
-                    } else {
-                        TimetableOverviewState.OfflineNoCache
-                    }
-                }
+            if (!emitCachedTimetable(today)) {
+                _timetableState.value = TimetableOverviewState.OfflineNoCache
             }
             return
         }
 
         if (!forceRefresh && _timetableState.value is TimetableOverviewState.Success) {
+            return
+        }
+
+        // On a fast start the session is restored in the background after the app is already on
+        // screen. Keep the skeleton rather than flashing an error; the splash screen pings us to
+        // reload as soon as the session is ready.
+        if (!edupage.isLoggedIn) {
+            Log.i(TAG, "timetable load deferred: session not ready yet")
+            emitCachedTimetable(today)
             return
         }
 
@@ -266,10 +256,13 @@ class OverviewViewModel @Inject constructor(
                 )
             }
             Log.i(TAG, "timetable loaded: ${(_timetableState.value as? TimetableOverviewState.Success)?.lessons?.size} lessons")
+        } catch (e: NotLoggedInException) {
+            // Session dropped mid-load; wait for the background restore instead of an error.
+            Log.i(TAG, "timetable load deferred: ${e.message}")
+            emitCachedTimetable(today)
         } catch (e: Exception) {
             Log.e(TAG, "timetable load failed: ${e.message}", e)
-            val current = _timetableState.value
-            if (current !is TimetableOverviewState.Success) {
+            if (!emitCachedTimetable(today)) {
                 _timetableState.value = if (isOnline()) {
                     TimetableOverviewState.Error
                 } else {
@@ -277,6 +270,37 @@ class OverviewViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Shows whatever timetable we still have cached (today, then the next school day) so a network
+     * or session failure never blanks the card. Returns true when something was shown.
+     */
+    private fun emitCachedTimetable(today: LocalDate): Boolean {
+        if (_timetableState.value is TimetableOverviewState.Success) return true
+
+        val todayCached = timetableCache.loadWithStale(today)?.first.orEmpty()
+        if (todayCached.isNotEmpty()) {
+            _timetableState.value = TimetableOverviewState.Success(
+                date = today,
+                lessons = todayCached,
+                isNextDay = false,
+            )
+            return true
+        }
+
+        val nextDay = nextSchoolDay(today)
+        val nextCached = timetableCache.loadWithStale(nextDay)?.first.orEmpty()
+        if (nextCached.isNotEmpty()) {
+            _timetableState.value = TimetableOverviewState.Success(
+                date = nextDay,
+                lessons = nextCached,
+                isNextDay = true,
+            )
+            return true
+        }
+
+        return false
     }
 
     private suspend fun loadGrades(forceRefresh: Boolean, silent: Boolean = false) {
@@ -301,6 +325,13 @@ class OverviewViewModel @Inject constructor(
             if (_gradesState.value !is GradesOverviewState.Success) {
                 _gradesState.value = GradesOverviewState.OfflineNoCache
             }
+            return
+        }
+
+        // Wait for the background session restore on a fast start instead of surfacing a flash
+        // of "unavailable"; the splash screen refreshes us once the session is ready.
+        if (!edupage.isLoggedIn) {
+            Log.i(TAG, "grades load deferred: session not ready yet")
             return
         }
 
@@ -348,6 +379,12 @@ class OverviewViewModel @Inject constructor(
             if (_messagesState.value !is MessagesOverviewState.Success) {
                 _messagesState.value = MessagesOverviewState.OfflineNoCache
             }
+            return
+        }
+
+        // Same as the timetable: keep the skeleton until the fast-start session restore lands.
+        if (!edupage.isLoggedIn) {
+            Log.i(TAG, "messages load deferred: session not ready yet")
             return
         }
 
@@ -420,6 +457,12 @@ class OverviewViewModel @Inject constructor(
             if (_mealsState.value !is MealsOverviewState.Success) {
                 _mealsState.value = MealsOverviewState.OfflineNoCache
             }
+            return
+        }
+
+        // Same fast-start race as the other cards: keep the skeleton until the session restore lands.
+        if (!edupage.isLoggedIn) {
+            Log.i(TAG, "meals load deferred: session not ready yet")
             return
         }
 

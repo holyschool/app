@@ -26,6 +26,7 @@ import com.wiffles.edupage.ui.util.ShimmerBox
 @Composable
 internal fun OverviewSkeleton(
     bottomPadding: PaddingValues,
+    redesign: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -39,7 +40,7 @@ internal fun OverviewSkeleton(
             ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        TimetableCardSkeleton()
+        TimetableCardSkeleton(redesign)
         SkeletonCard { GradesBodySkeleton() }
         SkeletonCard { MessagesBodySkeleton() }
         QuickActionsSkeleton()
@@ -47,7 +48,7 @@ internal fun OverviewSkeleton(
 }
 
 @Composable
-private fun TimetableCardSkeleton() {
+private fun TimetableCardSkeleton(redesign: Boolean) {
     SkeletonCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
@@ -58,8 +59,12 @@ private fun TimetableCardSkeleton() {
                 ShimmerBox(modifier = Modifier.fillMaxWidth(0.45f), height = 16.dp)
             }
             Spacer(Modifier.height(2.dp))
-            CurrentLessonBannerSkeleton()
-            repeat(3) { CompactLessonRowSkeleton() }
+            if (redesign) {
+                TimetableGridSkeleton()
+            } else {
+                CurrentLessonBannerSkeleton()
+                repeat(3) { CompactLessonRowSkeleton() }
+            }
         }
     }
 }
@@ -92,6 +97,24 @@ internal fun CompactLessonRowSkeleton() {
             ShimmerBox(modifier = Modifier.fillMaxWidth(0.35f), height = 11.dp)
         }
         ShimmerBox(modifier = Modifier.size(width = 32.dp, height = 14.dp), cornerRadius = 4.dp)
+    }
+}
+
+/** Shimmer rows shaped like the experimental compact period grid, used while it loads. */
+@Composable
+internal fun TimetableGridSkeleton(periods: Int = 6) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        repeat(periods) {
+            ShimmerBox(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(72.dp),
+                cornerRadius = 12.dp,
+            )
+        }
     }
 }
 

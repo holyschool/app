@@ -157,6 +157,9 @@ fun MorphingLoadingIndicator(
 ) {
     val morphProgress  = remember { Animatable(0f) }
     val globalRotation = remember { Animatable(0f) }
+    // Warm the (fairly expensive) Morph construction during composition rather than on the first
+    // draw, where it would otherwise stall the very first frame of the indicator.
+    val morphList      = remember { Morphs }
     var currentMorph   by remember { mutableIntStateOf(0) }
     var rotationTarget by remember { mutableIntStateOf(90) }
 
@@ -191,7 +194,6 @@ fun MorphingLoadingIndicator(
         modifier = modifier.drawWithCache {
             val path        = Path()
             val matrix      = Matrix()
-            val morphList   = Morphs
             val sz          = Size(size.width, size.height)
             val scale       = min(size.width, size.height) * 0.82f
 
