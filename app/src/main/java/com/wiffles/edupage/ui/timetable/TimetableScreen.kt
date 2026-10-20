@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -78,6 +81,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.edupage.api.model.Classroom
+import com.edupage.api.model.EduEvent
 import com.edupage.api.model.Subject
 import com.edupage.api.model.people.EduTeacher
 import com.edupage.api.model.timetable.Lesson
@@ -86,6 +90,10 @@ import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.BreakVisibility
 import com.wiffles.edupage.data.CancelledLessonStyle
 import com.wiffles.edupage.data.LessonGrouping
+import com.wiffles.edupage.ui.overview.EventHighlightCard
+import com.wiffles.edupage.ui.overview.EventWeekChip
+import com.wiffles.edupage.ui.overview.EventsSectionHeader
+import com.wiffles.edupage.ui.overview.covers
 
 import com.wiffles.edupage.ui.theme.Edupage2Theme
 import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
@@ -113,7 +121,15 @@ fun TimetableScreen(
     val weekMode by viewModel.weekMode.collectAsState()
     val weekLessons by viewModel.weekLessons.collectAsState()
     val weekRefreshing by viewModel.weekRefreshing.collectAsState()
+    val events by viewModel.events.collectAsState()
     val haptics = rememberAppHaptics()
+
+    // Events for the day being shown, so a trip or holiday heads the lesson list.
+    val dayEvents = remember(events, selectedDate) { events.filter { it.covers(selectedDate) } }
+    val weekDates = remember(selectedDate, showWeekends) { weekDatesFor(selectedDate, showWeekends) }
+    val weekEvents = remember(events, weekDates) {
+        weekDates.flatMap { date -> events.filter { it.covers(date) }.map { date to it } }
+    }
 
     LaunchedEffect(weekMode) { onWeekModeChanged(weekMode) }
 
@@ -252,18 +268,24 @@ fun TimetableScreen(
                         is TimetableUiState.Success -> {
                             if (weekMode) {
                                 WeekTimetableView(
-                                    weekDates = weekDatesFor(selectedDate, showWeekends),
+                                    weekDates = weekDates,
                                     lessonsByDate = weekLessons,
                                     selectedDate = selectedDate,
                                     currentTime = currentTime,
                                     cancelledLessonStyle = cancelledLessonStyle,
                                     compact = compactTimetable,
+                                    events = weekEvents,
                                     onSelectDay = { viewModel.selectDay(it) },
+                                    onOpenDay = { date ->
+                                        haptics.virtualKey()
+                                        viewModel.setDate(date)
+                                        viewModel.setWeekMode(false)
+                                    },
                                     onPreviousWeek = { haptics.virtualKey(); viewModel.shiftWeek(-1) },
                                     onNextWeek = { haptics.virtualKey(); viewModel.shiftWeek(1) },
                                     bottomPadding = bottomPadding,
                                 )
-                            } else if (state.lessons.isEmpty()) {
+                            } else if (state.lessons.isEmpty() && dayEvents.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -292,6 +314,10 @@ fun TimetableScreen(
                                     currentTime = currentTime,
                                 )
                                 val listState = rememberLazyListState()
+                                // The events block (and the "no lessons" note) sit before the lessons,
+                                // so the auto-scroll index has to skip them.
+                                val leadingItems = (if (dayEvents.isNotEmpty()) 1 else 0) +
+                                    (if (state.lessons.isEmpty()) 1 else 0)
 
                                 LaunchedEffect(state.lessons, selectedDate, displayGroups) {
                                     if (selectedDate != LocalDate.now()) return@LaunchedEffect
@@ -325,7 +351,7 @@ fun TimetableScreen(
                                             }
                                             acc += group.size
                                         }
-                                        listState.animateScrollToItem(targetItem)
+                                        listState.animateScrollToItem(targetItem + leadingItems)
                                     }
                                 }
                                 LazyColumn(
@@ -344,6 +370,24 @@ fun TimetableScreen(
                                     ),
                                     verticalArrangement = Arrangement.spacedBy(if (compactTimetable) 8.dp else 14.dp)
                                 ) {
+                                    if (dayEvents.isNotEmpty()) {
+                                        item(key = "day-events") {
+                                            DayEventsSection(events = dayEvents)
+                                        }
+                                    }
+                                    if (state.lessons.isEmpty()) {
+                                        item(key = "no-lessons") {
+                                            Text(
+                                                text = stringResource(R.string.timetable_no_lessons),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 24.dp),
+                                                textAlign = TextAlign.Center,
+                                            )
+                                        }
+                                    }
                                     itemsIndexed(
                                         displayGroups,
                                         key = { _, group -> timetableGroupKey(group) },
@@ -402,6 +446,27 @@ fun TimetableScreen(
             }
         }
     }
+}
+
+@Composable
+private fun DayEventsSection(events: List<EduEvent>, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        EventsSectionHeader(stringResource(R.string.timetable_events_today))
+        events.forEach { event -> EventHighlightCard(event) }
+    }
+}
+
+/** Short weekday + day label for the week-mode event chips. */
+@Composable
+private fun weekChipDayLabel(date: LocalDate): String {
+    val today = LocalDate.now()
+    if (date == today) return stringResource(R.string.event_today)
+    if (date == today.plusDays(1)) return stringResource(R.string.event_tomorrow)
+    val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+    return "$weekday ${date.dayOfMonth}"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1215,7 +1280,9 @@ private fun WeekTimetableView(
     currentTime: LocalTime,
     cancelledLessonStyle: CancelledLessonStyle,
     compact: Boolean,
+    events: List<Pair<LocalDate, EduEvent>>,
     onSelectDay: (LocalDate) -> Unit,
+    onOpenDay: (LocalDate) -> Unit,
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     bottomPadding: PaddingValues,
@@ -1258,6 +1325,29 @@ private fun WeekTimetableView(
         }
 
         val maxLessons = weekDates.maxOfOrNull { lessonsByDate[it].orEmpty().size } ?: 0
+
+        // The week's events ride along as chips; tapping one opens that day.
+        if (events.isNotEmpty()) {
+            EventsSectionHeader(
+                title = stringResource(R.string.timetable_events_week),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp),
+            )
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp, bottom = 4.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(events, key = { (date, event) -> "$date-${event.id}" }) { (date, event) ->
+                    EventWeekChip(
+                        event = event,
+                        dayLabel = weekChipDayLabel(date),
+                        onClick = { onOpenDay(date) },
+                    )
+                }
+            }
+        }
 
         BoxWithConstraints(
             modifier = Modifier

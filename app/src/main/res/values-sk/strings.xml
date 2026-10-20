@@ -37,6 +37,8 @@
     <string name="timetable_today">Dnes</string>
     <string name="timetable_retry">Znovu</string>
     <string name="timetable_no_lessons">Žiadne predmety na dnes</string>
+    <string name="timetable_events_today">Akcie dnes</string>
+    <string name="timetable_events_week">Akcie tento týždeň</string>
     <string name="timetable_previous_week">Predchádzajúci týždeň</string>
     <string name="timetable_next_week">Nasledujúci týždeň</string>
     <string name="timetable_unknown_subject">Neznámy predmet</string>
@@ -190,6 +192,16 @@
     <string name="overview_lessons_more">+%d ďalších hodín</string>
     <string name="overview_error_timetable">Rozvrh sa nepodarilo načítať</string>
     <string name="overview_retry">Skúsiť znova</string>
+    <string name="overview_events">Akcie</string>
+    <string name="overview_events_none">Žiadne najbližšie akcie.</string>
+    <string name="overview_events_more">+%1$d ďalších</string>
+    <string name="overview_error_events">Akcie sa nepodarilo načítať</string>
+    <string name="event_all_day">Celý deň</string>
+    <string name="event_period_single">%1$. hodina</string>
+    <string name="event_period_range">%1$.–%2$. hodina</string>
+    <string name="event_today">Dnes</string>
+    <string name="event_tomorrow">Zajtra</string>
+    <string name="event_cancels_lessons">Vyučovanie odpadá</string>
     <string name="network_error">Žiadne pripojenie na internet. Skontrolujte pripojenie a skúste to znova.</string>
     <string name="offline_no_cache">Toto ešte nie je uložené pre offline použitie. Pripojte sa raz na internet a stiahnite to.</string>
     <string name="offline_no_cache_short">Ešte nie je uložené pre offline</string>

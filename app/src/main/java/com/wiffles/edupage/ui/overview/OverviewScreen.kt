@@ -37,11 +37,16 @@ import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BeachAccess
+import androidx.compose.material.icons.rounded.DirectionsBus
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.MailOutline
@@ -49,7 +54,9 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SportsSoccer
 import androidx.compose.material.icons.rounded.Style
+import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,6 +96,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -98,6 +106,8 @@ import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.edupage.api.model.Meal
+import com.edupage.api.model.EduEvent
+import com.edupage.api.model.EduEventKind
 import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.grades.EduGrade
 import com.edupage.api.model.timetable.Lesson
@@ -145,6 +155,7 @@ fun OverviewScreen(
     val gradesState    by viewModel.gradesState.collectAsState()
     val messagesState  by viewModel.messagesState.collectAsState()
     val mealsState     by viewModel.mealsState.collectAsState()
+    val eventsState    by viewModel.eventsState.collectAsState()
     val homeworkItems  by viewModel.homeworkItems.collectAsState()
     val isRefreshing   by viewModel.isRefreshing.collectAsState()
     val currentTime    by viewModel.currentTime.collectAsState()
@@ -161,6 +172,7 @@ fun OverviewScreen(
     val isInitialLoading = timetableState is TimetableOverviewState.Loading &&
         gradesState is GradesOverviewState.Loading &&
         messagesState is MessagesOverviewState.Loading &&
+        eventsState is EventsOverviewState.Loading &&
         (!mealsEnabled || mealsState is MealsOverviewState.Loading)
 
     Scaffold(
@@ -254,6 +266,7 @@ fun OverviewScreen(
 
                     TimetableCard(
                         state = timetableState,
+                        eventsState = eventsState,
                         currentTime = currentTime,
                         onGoToTimetable = onGoToTimetable,
                         haptics = haptics,
@@ -279,6 +292,11 @@ fun OverviewScreen(
                         state = messagesState,
                         onGoToMessages = onGoToMessages,
                         haptics = haptics,
+                        onRetry = viewModel::refresh,
+                    )
+
+                    EventsCard(
+                        state = eventsState,
                         onRetry = viewModel::refresh,
                     )
 
@@ -430,6 +448,7 @@ private fun CookieBadge(
 @Composable
 private fun TimetableCard(
     state: TimetableOverviewState,
+    eventsState: EventsOverviewState,
     currentTime: LocalTime,
     onGoToTimetable: (() -> Unit)?,
     haptics: com.wiffles.edupage.ui.util.AppHaptics,
@@ -452,6 +471,8 @@ private fun TimetableCard(
             )
             is TimetableOverviewState.Success -> TimetableCardContent(
                 state        = state,
+                dayEvents    = (eventsState as? EventsOverviewState.Success)
+                    ?.on(state.date).orEmpty(),
                 currentTime  = currentTime,
                 expanded     = expanded,
                 onToggle     = { haptics.virtualKey(); expanded = !expanded },
@@ -524,6 +545,7 @@ private fun ErrorMessageBanner(text: String) {
 @Composable
 private fun TimetableCardContent(
     state: TimetableOverviewState.Success,
+    dayEvents: List<EduEvent>,
     currentTime: LocalTime,
     expanded: Boolean,
     onToggle: () -> Unit,
@@ -579,6 +601,12 @@ private fun TimetableCardContent(
         }
 
         Spacer(Modifier.height(10.dp))
+
+        // A trip or school event explains an empty or shortened day, so surface it in the card.
+        dayEvents.forEach { event ->
+            DayEventBanner(event)
+            Spacer(Modifier.height(8.dp))
+        }
 
         if (lessons.isEmpty()) {
             Text(
@@ -1784,6 +1812,61 @@ private fun QuickActionsCard(
 
 private const val TIMETABLE_COLLAPSED_COUNT = 4
 private const val GRADES_COLLAPSED_COUNT    = 3
+private const val EVENTS_VISIBLE_COUNT      = 4
+
+/**
+ * School events ("akcie") — trips, excursions, holidays, parents' evenings — listed next to the
+ * timetable, where they actually matter. They come from the cached window the data warmer keeps,
+ * so they show instantly and offline.
+ */
+@Composable
+private fun EventsCard(
+    state: EventsOverviewState,
+    onRetry: () -> Unit,
+) {
+    OverviewCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CardSectionHeader(
+                title = stringResource(R.string.overview_events),
+                icon  = Icons.Default.Event,
+            )
+            when (state) {
+                is EventsOverviewState.Loading -> {
+                    repeat(2) { CompactLessonRowSkeleton() }
+                }
+                is EventsOverviewState.Unavailable -> {
+                    ErrorMessageBanner(text = stringResource(R.string.overview_error_events))
+                    RetryButton(onRetry = onRetry)
+                }
+                is EventsOverviewState.OfflineNoCache -> {
+                    ErrorMessageBanner(text = stringResource(R.string.offline_no_cache_short))
+                    RetryButton(onRetry = onRetry)
+                }
+                is EventsOverviewState.Success -> {
+                    val shown = state.upcoming.take(EVENTS_VISIBLE_COUNT)
+                    if (shown.isEmpty()) {
+                        Text(
+                            text  = stringResource(R.string.overview_events_none),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        shown.forEach { EventRow(it) }
+                        val hidden = state.upcoming.size - shown.size
+                        if (hidden > 0) {
+                            Text(
+                                text  = stringResource(R.string.overview_events_more, hidden),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun OverviewCard(content: @Composable () -> Unit) {
