@@ -747,6 +747,11 @@
     <string name="chat_copied">Skopírované do schránky</string>
     <string name="chat_share">Zdieľať</string>
     <string name="chat_share_title">Zdieľať správu</string>
+    <string name="chat_share_files">Zdieľať súbor</string>
+    <string name="chat_share_files_title">Zdieľať súbor</string>
+    <string name="chat_tool_searching">Hľadám na webe…</string>
+    <string name="chat_tool_images">Hľadám obrázky…</string>
+    <string name="chat_tool_writing">Vytváram súbor…</string>
     <string name="chat_sessions_title">Relácie chatu</string>
     <string name="chat_sessions_empty">Zatiaľ žiadne uložené relácie.</string>
     <string name="chat_session_new">Nová relácia</string>

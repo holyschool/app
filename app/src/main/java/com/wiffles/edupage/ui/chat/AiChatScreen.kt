@@ -70,6 +70,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Quiz
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -140,6 +141,7 @@ fun AiChatScreen(
     val thinking by viewModel.thinking.collectAsState()
     val pendingAttachments by viewModel.attachments.collectAsState()
     val attachError by viewModel.attachError.collectAsState()
+    val toolStatus by viewModel.toolStatus.collectAsState()
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     var input by remember { mutableStateOf("") }
     var showSessions by remember { mutableStateOf(false) }
@@ -336,10 +338,19 @@ fun AiChatScreen(
                                 onOpenAttachment = { openChatAttachment(context, it) },
                                 onCopy = { copyToClipboard(context, it) },
                                 onShare = { shareMessage(context, it) },
+                                onShareAttachments = { shareAttachments(context, it) },
                                 onOpenQuiz = onOpenQuiz,
                             )
                         }
-                        if (thinking && streamedLength == 0) {
+                        val statusRes = toolStatus
+                        if (statusRes != null) {
+                            item(key = "tool-status") {
+                                StatusBubble(
+                                    label = stringResource(statusRes),
+                                    icon = Icons.Rounded.Search,
+                                )
+                            }
+                        } else if (thinking && streamedLength == 0) {
                             item(key = "thinking") { ThinkingBubble() }
                         }
                         item(key = "disclaimer") {
@@ -469,6 +480,7 @@ private fun MessageBubble(
     onOpenAttachment: (ChatAttachment) -> Unit,
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
+    onShareAttachments: (List<ChatAttachment>) -> Unit,
     onOpenQuiz: (String) -> Unit,
     streaming: Boolean = false,
 ) {
@@ -571,6 +583,13 @@ private fun MessageBubble(
                     leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) },
                     onClick = { menuOpen = false; onShare(message.content) },
                 )
+                if (message.attachments.isNotEmpty()) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_share_files)) },
+                        leadingIcon = { Icon(Icons.Rounded.AttachFile, contentDescription = null) },
+                        onClick = { menuOpen = false; onShareAttachments(message.attachments) },
+                    )
+                }
             }
         }
     }
@@ -725,6 +744,12 @@ private fun decodeThumbnail(path: String, target: Int): ImageBitmap? {
 
 @Composable
 private fun ThinkingBubble() {
+    StatusBubble(label = stringResource(R.string.chat_thinking), icon = Icons.Rounded.Psychology)
+}
+
+/** "Thinking", "Searching the web…", "Writing your file…" — a spinner plus a short label. */
+@Composable
+private fun StatusBubble(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
@@ -733,7 +758,7 @@ private fun ThinkingBubble() {
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    Icons.Rounded.Psychology,
+                    icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(18.dp),
@@ -752,7 +777,7 @@ private fun ThinkingBubble() {
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 Text(
-                    text = stringResource(R.string.chat_thinking),
+                    text = label,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1019,6 +1044,27 @@ private fun shareMessage(context: Context, text: String) {
     }
     context.startActivity(
         Intent.createChooser(intent, context.getString(R.string.chat_share_title)),
+    )
+}
+
+/** Hands one or more generated files to any app the student picks. */
+private fun shareAttachments(context: Context, attachments: List<ChatAttachment>) {
+    val files = attachments.mapNotNull { attachment ->
+        val file = java.io.File(attachment.localPath)
+        if (!file.exists()) null
+        else FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
+    if (files.isEmpty()) {
+        Toast.makeText(context, R.string.attachment_download_failed, Toast.LENGTH_SHORT).show()
+        return
+    }
+    val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        type = attachments.firstOrNull()?.mimeType?.takeIf { it.isNotBlank() } ?: "*/*"
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(files))
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(
+        Intent.createChooser(intent, context.getString(R.string.chat_share_files_title)),
     )
 }
 
