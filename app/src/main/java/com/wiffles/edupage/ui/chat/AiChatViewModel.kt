@@ -475,8 +475,8 @@ class AiChatViewModel @Inject constructor(
 
         is ToolCall.ImageSearch -> {
             val hits = aiTools.imageSearch(call.query, call.count)
-            val images = hits.mapNotNull { hit -> saveImage(hit) }
-            ToolResult(formatImageResults(call.query, hits, images), images)
+            val saved = hits.mapNotNull { hit -> saveImage(hit)?.let { hit to it } }
+            ToolResult(formatImageResults(call.query, saved), saved.map { it.second })
         }
 
         is ToolCall.Document -> ToolResult("The file was created.")
@@ -498,13 +498,12 @@ class AiChatViewModel @Inject constructor(
 
     private fun formatImageResults(
         query: String,
-        hits: List<AiTools.ImageHit>,
-        saved: List<ChatAttachment>,
+        saved: List<Pair<AiTools.ImageHit, ChatAttachment>>,
     ): String {
         if (saved.isEmpty()) {
             return "image_search(\"$query\") found nothing that could be shown."
         }
-        val list = hits.take(saved.size).mapIndexed { index, hit -> "${index + 1}. ${hit.title}" }
+        val list = saved.mapIndexed { index, (hit, _) -> "${index + 1}. ${hit.title}" }
             .joinToString("\n")
         return "image_search(\"$query\") — ${saved.size} picture(s) are now displayed in the " +
             "chat, in this order:\n$list\n\n" +
