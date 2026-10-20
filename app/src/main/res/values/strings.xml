@@ -349,7 +349,7 @@
     <string name="settings_experimental_appearance_desc">Custom accent color, font size and more options.</string>
     <string name="settings_experimental_startup">Startup</string>
     <string name="settings_fast_start">Fast start</string>
-    <string name="settings_fast_start_desc">Open instantly from cached data and refresh in the background. The app also keeps working when you are offline.</string>
+    <string name="settings_fast_start_desc">Skip the loading screen and open straight into the app from cached data, then refresh in the background. The app also keeps working when you are offline.</string>
     <string name="settings_experimental_overview">Overview</string>
     <string name="settings_overview_timetable_redesign">Overview timetable redesign</string>
     <string name="settings_overview_timetable_redesign_desc">Show the whole day as a compact period grid, similar to the default EduPage timetable.</string>
@@ -860,7 +860,7 @@
     <string name="whats_new_dismiss">Let me in</string>
     <string name="whats_new_retrigger_desc">Show the highlights again</string>
     <string name="whats_new_fast_start">Faster start</string>
-    <string name="whats_new_fast_start_desc">Opens instantly and refreshes in the background, and heavy work no longer stutters the loading animation.</string>
+    <string name="whats_new_fast_start_desc">Skips the loading screen entirely and opens straight from cached data, then refreshes in the background.</string>
     <string name="whats_new_offline">Cleaner offline</string>
     <string name="whats_new_offline_desc">Timetable, grades, messages and meals stay cached, and skeleton placeholders replace the old “failed to load” flashes.</string>
     <string name="whats_new_messages">AI chat, upgraded</string>

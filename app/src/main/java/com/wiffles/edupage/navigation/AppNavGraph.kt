@@ -15,9 +15,17 @@ import com.wiffles.edupage.ui.splash.SplashScreen
 @Composable
 fun AppNavGraph(navController: NavHostController, appPreferences: AppPreferences) {
     val onboardingCompleted = appPreferences.onboardingCompleted
+    // Fast start skips the loading screen entirely: open straight on the main UI (drawn from
+    // cached data) and restore the session behind it. The splash is still the entry point
+    // before onboarding is finished, and when switching accounts.
+    val startDestination = if (appPreferences.fastStart && onboardingCompleted) {
+        Screen.Main.route
+    } else {
+        Screen.Splash.route
+    }
     NavHost(
         navController = navController,
-        startDestination = Screen.Splash.route
+        startDestination = startDestination
     ) {
         composable(Screen.Splash.route) {
             SplashScreen(

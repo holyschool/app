@@ -55,6 +55,9 @@ class MainActivity : FragmentActivity() {
 
     private var navController: NavHostController? = null
 
+    /** Set when the session is found to be invalid before the nav graph is ready. */
+    private var pendingLoginRoute = false
+
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val lockViewModel: LockViewModel by viewModels()
 
@@ -79,18 +82,20 @@ class MainActivity : FragmentActivity() {
 
         enableEdgeToEdge()
 
+        // A fast start has no loading screen to run the auto-login in, so validate the session
+        // and refill the caches behind the cached UI that is already on screen.
+        if (appPreferences.fastStart && appPreferences.onboardingCompleted) {
+            sessionRepository.ensureValidSessionAsync()
+            dataWarmer.warmAsync(force = true)
+        }
+
         lifecycleScope.launch {
             settingsViewModel.recreateActivity.collect { recreate() }
         }
 
         lifecycleScope.launch {
             sessionRepository.authInvalid.collect {
-                if (navController?.currentDestination?.route == Screen.Main.route) {
-                    Log.i(TAG, "session invalid, routing to login")
-                    navController?.navigate(Screen.Login.route()) {
-                        popUpTo(Screen.Main.route) { inclusive = true }
-                    }
-                }
+                requestLoginRoute()
             }
         }
 
@@ -233,6 +238,18 @@ class MainActivity : FragmentActivity() {
                 } else {
                     val navController = rememberNavController()
                     this.navController = navController
+                    // On a fast start the session is checked while this first frame is being
+                    // composed, so an invalid session discovered before the graph was ready is
+                    // replayed here.
+                    androidx.compose.runtime.LaunchedEffect(navController) {
+                        if (pendingLoginRoute) {
+                            pendingLoginRoute = false
+                            Log.i(TAG, "session invalid, routing to login")
+                            navController.navigate(Screen.Login.route()) {
+                                popUpTo(Screen.Main.route) { inclusive = true }
+                            }
+                        }
+                    }
                     val showWhatsNew by WhatsNewCenter.visible.collectAsState()
                     AppNavGraph(navController = navController, appPreferences = appPreferences)
                     WhatsNewHost(
@@ -245,6 +262,27 @@ class MainActivity : FragmentActivity() {
                     )
                 }
                 }
+            }
+        }
+    }
+
+    /**
+     * Sends the user to the login screen when the session check finds no usable session. If the
+     * nav graph is not ready yet — which can happen on a fast start, where the check runs while
+     * the first frame is still being composed — the request is remembered and replayed once the
+     * graph is up.
+     */
+    private fun requestLoginRoute() {
+        val controller = navController
+        val route = controller?.currentDestination?.route
+        if (controller == null || route == null) {
+            pendingLoginRoute = true
+            return
+        }
+        if (route == Screen.Main.route) {
+            Log.i(TAG, "session invalid, routing to login")
+            controller.navigate(Screen.Login.route()) {
+                popUpTo(Screen.Main.route) { inclusive = true }
             }
         }
     }
