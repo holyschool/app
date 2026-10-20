@@ -605,6 +605,11 @@
     <string name="chat_copied">Copied to clipboard</string>
     <string name="chat_share">Share</string>
     <string name="chat_share_title">Share message</string>
+    <string name="chat_share_files">Share file</string>
+    <string name="chat_share_files_title">Share file</string>
+    <string name="chat_tool_searching">Searching the web…</string>
+    <string name="chat_tool_images">Finding pictures…</string>
+    <string name="chat_tool_writing">Writing your file…</string>
     <string name="chat_sessions_title">Chat sessions</string>
     <string name="chat_sessions_empty">No saved sessions yet.</string>
     <string name="chat_session_new">New session</string>

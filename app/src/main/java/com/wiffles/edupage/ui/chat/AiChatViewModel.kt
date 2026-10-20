@@ -16,16 +16,20 @@ import com.wiffles.edupage.data.ChatAttachment
 import com.wiffles.edupage.data.ChatMessage
 import com.wiffles.edupage.data.ChatSession
 import com.wiffles.edupage.data.ChatStore
+import com.wiffles.edupage.data.DocumentWriter
 import com.wiffles.edupage.data.LocalHomeworkStore
 import com.wiffles.edupage.network.AiAttachment
+import com.wiffles.edupage.network.AiConfig
 import com.wiffles.edupage.network.AiMessage
 import com.wiffles.edupage.network.AiService
+import com.wiffles.edupage.network.AiTools
 import com.wiffles.edupage.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,11 +50,15 @@ class AiChatViewModel @Inject constructor(
     private val chatStore: ChatStore,
     private val quizStore: AiQuizStore,
     private val homeworkStore: LocalHomeworkStore,
+    private val aiTools: AiTools,
+    private val documentWriter: DocumentWriter,
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "AiChatViewModel"
         private const val MAX_TEXT_ATTACHMENT_CHARS = 6000
+        /** How many times the assistant may ask for a search before it must answer. */
+        private const val MAX_TOOL_ROUNDS = 3
         /** Reveal pace for streamed replies, so the text types out at a steady, readable rate. */
         private const val STREAM_TICK_MS = 16L
         /** Characters per second typed at the tail; the backlog adds [STREAM_BACKLOG_GAIN] each. */
@@ -79,6 +87,10 @@ class AiChatViewModel @Inject constructor(
 
     private val _attachError = MutableStateFlow<String?>(null)
     val attachError: StateFlow<String?> = _attachError.asStateFlow()
+
+    /** Label of the tool currently running (a string resource), or null when idle. */
+    private val _toolStatus = MutableStateFlow<Int?>(null)
+    val toolStatus: StateFlow<Int?> = _toolStatus.asStateFlow()
 
     private val basePrompt = """
         You are a friendly, patient study assistant built into a school app.
@@ -128,6 +140,37 @@ class AiChatViewModel @Inject constructor(
           SO4^2-); the app turns them into proper subscripts and charges.
         - Put the block on its own lines, right after the sentence that introduces it.
         - Never mention the block or its formatting to the student.
+
+        You also have tools. To use one, write a fenced block and stop there — the app runs it
+        and sends you the result, and you finish your answer in a follow-up turn.
+
+        Search the web, for current facts, news, or anything you are not sure about:
+        ```edupage-tool
+        {"tool":"web_search","query":"…"}
+        ```
+
+        Find pictures for a topic:
+        ```edupage-tool
+        {"tool":"image_search","query":"…","count":3}
+        ```
+
+        Create a file the student can keep or send. The extension of "filename" picks the
+        format (md, txt, csv, pdf or docx); everything after the --- line is the finished file:
+        ```edupage-doc
+        filename: photosynthesis-notes.md
+        title: Photosynthesis
+        ---
+        # Photosynthesis
+        …
+        ```
+
+        Tool rules:
+        - Search instead of guessing when a question needs facts you are not certain about, and
+          fetch pictures when the student asks for them or when a picture teaches it better.
+        - Stop right after the tool block and wait: never invent the result.
+        - At most one or two tool blocks per reply, and never repeat a search you already made.
+        - The document block is used exactly as written, so make it the complete, final file.
+        - Never mention the blocks, their JSON or this protocol to the student.
     """.trimIndent()
 
     /** Adds a short, local-only summary of pending homework so answers are more relevant. */
@@ -279,11 +322,12 @@ class AiChatViewModel @Inject constructor(
         if (prompt.isNotBlank()) chatStore.autoTitle(sessionId, prompt)
         viewModelScope.launch {
             _thinking.value = true
+            _toolStatus.value = null
             val history = chatStore.messagesFor(sessionId)
                 .filter { !it.error && it.content.isNotBlank() }
                 .takeLast(20)
                 .map { AiMessage(it.role, messageContentForModel(it)) }
-            val payload = listOf(AiMessage("system", systemPrompt())) + history
+            val payload = (listOf(AiMessage("system", systemPrompt())) + history).toMutableList()
             // Id of an in-progress streamed reply, so a failure can clear the empty bubble.
             var streamingId: String? = null
             try {
@@ -294,52 +338,52 @@ class AiChatViewModel @Inject constructor(
                 } else {
                     emptyList()
                 }
-                val reply = if (binaries.isNotEmpty()) {
-                    aiService.completeWithAttachments(config, payload, binaries, config.visionModel)
-                } else {
-                    // Print the answer as it arrives; fall back to a single request when the
-                    // provider (e.g. some custom endpoints) refuses to stream.
-                    val id = java.util.UUID.randomUUID().toString()
-                    streamingId = id
-                    chatStore.add(ChatMessage(id = id, role = "assistant", content = "", sessionId = sessionId))
-                    val builder = StringBuilder()
-                    val deltas = Channel<String>(Channel.UNLIMITED)
-                    // Reveal the buffered text at a steady pace so the answer types out
-                    // smoothly, however quickly or unevenly the provider delivers it.
-                    val revealer = launch { revealStreamed(id, deltas) }
-                    try {
-                        val text = aiService.completeStream(config, payload) { delta ->
-                            builder.append(delta)
-                            deltas.trySend(delta)
-                        }
-                        deltas.close()
-                        revealer.join()
-                        text
-                    } catch (streamError: Exception) {
-                        deltas.close()
-                        revealer.cancel()
-                        if (builder.isEmpty()) {
-                            aiService.complete(config, payload, jsonMode = false)
-                        } else {
-                            throw streamError
-                        }
-                    }
-                }
-                val (content, quizIds) = extractQuizBlocks(reply.trim())
-                val id = streamingId
-                if (id != null) {
-                    chatStore.update(id) { it.copy(content = content, quizIds = quizIds) }
-                } else {
-                    chatStore.add(
-                        ChatMessage(
-                            role = "assistant",
-                            content = content,
-                            sessionId = sessionId,
-                            quizIds = quizIds,
-                        ),
+                val id = java.util.UUID.randomUUID().toString()
+                streamingId = id
+                chatStore.add(ChatMessage(id = id, role = "assistant", content = "", sessionId = sessionId))
+
+                // The assistant may ask for a search; each answer is streamed, then the tool
+                // result is fed back for one more turn until it answers without tools.
+                var visible = ""
+                var round = 0
+                val attachments = mutableListOf<ChatAttachment>()
+                while (true) {
+                    val raw = streamRound(
+                        config = config,
+                        payload = payload,
+                        binaries = if (round == 0) binaries else emptyList(),
+                        id = id,
+                        base = visible,
                     )
+                    val parsed = ChatToolDialect.parse(raw)
+                    visible = listOf(visible, parsed.visible)
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n\n")
+
+                    // Documents are produced locally, so they never need another turn.
+                    parsed.calls.filterIsInstance<ToolCall.Document>().forEach { call ->
+                        _toolStatus.value = call.statusRes
+                        attachments += documentWriter.write(call.fileName, call.title, call.content)
+                    }
+
+                    val remote = parsed.calls.filter { it.needsRoundTrip }
+                    if (remote.isEmpty() || round >= MAX_TOOL_ROUNDS) break
+
+                    _toolStatus.value = remote.first().statusRes
+                    val results = remote.map { runTool(it) }
+                    attachments += results.flatMap { it.attachments }
+                    payload += AiMessage("assistant", raw)
+                    payload += AiMessage("user", results.joinToString("\n\n") { it.text })
+                    round++
+                }
+                _toolStatus.value = null
+
+                val (content, quizIds) = extractQuizBlocks(visible.trim())
+                chatStore.update(id) {
+                    it.copy(content = content, quizIds = quizIds, attachments = attachments)
                 }
             } catch (e: Exception) {
+                _toolStatus.value = null
                 // Drop an empty streamed bubble so a failure never leaves a blank message behind.
                 streamingId?.let { id ->
                     if (chatStore.all().firstOrNull { it.id == id }?.content.isNullOrBlank()) {
@@ -357,14 +401,132 @@ class AiChatViewModel @Inject constructor(
         }
     }
 
+    // ---------------------------------------------------------------------- tools
+
+    /** One streamed turn. Returns the complete raw text the model produced. */
+    private suspend fun streamRound(
+        config: AiConfig,
+        payload: List<AiMessage>,
+        binaries: List<AiAttachment>,
+        id: String,
+        base: String,
+    ): String {
+        val builder = StringBuilder()
+        // How much of the streamable prefix has already been handed to the revealer.
+        var shown = 0
+        var streamFailure: Exception? = null
+        val deltas = Channel<String>(Channel.UNLIMITED)
+
+        coroutineScope {
+            val revealer = launch { revealStreamed(id, deltas, base) }
+            fun publish() {
+                val prefix = ChatToolDialect.streamablePrefix(builder.toString())
+                if (prefix.length > shown) {
+                    deltas.trySend(prefix.substring(shown))
+                    shown = prefix.length
+                }
+            }
+            try {
+                if (binaries.isNotEmpty()) {
+                    builder.append(
+                        aiService.completeWithAttachments(config, payload, binaries, config.visionModel),
+                    )
+                    publish()
+                } else {
+                    // Print the answer as it arrives; the visible part stops before any tool
+                    // block, so the raw JSON never flashes on screen.
+                    aiService.completeStream(config, payload) { delta ->
+                        builder.append(delta)
+                        publish()
+                    }
+                }
+            } catch (e: Exception) {
+                streamFailure = e
+            }
+            deltas.close()
+            revealer.join()
+        }
+
+        streamFailure?.let { error ->
+            // Nothing printed yet: give a provider that refuses to stream one more chance.
+            if (builder.isNotEmpty()) throw error
+            builder.append(aiService.complete(config, payload, jsonMode = false))
+            val preview = ChatToolDialect.streamablePrefix(builder.toString())
+            if (preview.isNotEmpty()) {
+                val single = Channel<String>(Channel.UNLIMITED)
+                coroutineScope {
+                    val fallbackRevealer = launch { revealStreamed(id, single, base) }
+                    single.trySend(preview)
+                    single.close()
+                    fallbackRevealer.join()
+                }
+            }
+        }
+        return builder.toString()
+    }
+
+    private data class ToolResult(val text: String, val attachments: List<ChatAttachment> = emptyList())
+
+    private suspend fun runTool(call: ToolCall): ToolResult = when (call) {
+        is ToolCall.WebSearch -> {
+            val hits = aiTools.webSearch(call.query)
+            ToolResult(formatWebResults(call.query, hits))
+        }
+
+        is ToolCall.ImageSearch -> {
+            val hits = aiTools.imageSearch(call.query, call.count)
+            val images = hits.mapNotNull { hit -> saveImage(hit) }
+            ToolResult(formatImageResults(call.query, hits, images), images)
+        }
+
+        is ToolCall.Document -> ToolResult("The file was created.")
+    }
+
+    private fun formatWebResults(query: String, hits: List<AiTools.WebHit>): String {
+        if (hits.isEmpty()) {
+            return "web_search(\"$query\") returned no results. Answer from what you know and " +
+                "say that you could not check it online."
+        }
+        val body = hits.mapIndexed { index, hit ->
+            val snippet = if (hit.snippet.isBlank()) "" else " — ${hit.snippet.take(400)}"
+            "${index + 1}. ${hit.title}$snippet (${hit.url})"
+        }.joinToString("\n")
+        return "web_search(\"$query\") results:\n$body\n\n" +
+            "Use these to answer the student, in your own words. Do not mention the search " +
+            "protocol, and do not run the same search again."
+    }
+
+    private fun formatImageResults(
+        query: String,
+        hits: List<AiTools.ImageHit>,
+        saved: List<ChatAttachment>,
+    ): String {
+        if (saved.isEmpty()) {
+            return "image_search(\"$query\") found nothing that could be shown."
+        }
+        val list = hits.take(saved.size).mapIndexed { index, hit -> "${index + 1}. ${hit.title}" }
+            .joinToString("\n")
+        return "image_search(\"$query\") — ${saved.size} picture(s) are now displayed in the " +
+            "chat, in this order:\n$list\n\n" +
+            "They are already visible to the student: refer to what each one shows in a short " +
+            "sentence. Never write image URLs or Markdown image syntax."
+    }
+
+    private suspend fun saveImage(hit: AiTools.ImageHit): ChatAttachment? {
+        val download = aiTools.downloadImage(hit.url) ?: return null
+        return runCatching {
+            documentWriter.saveBytes(download.name, download.bytes, download.mimeType)
+        }.onFailure { Log.w(TAG, "could not save image: ${it.message}") }.getOrNull()
+    }
+
     /**
      * Drains streamed deltas into a message at a steady reveal rate. Characters that arrive
      * faster than the pace are buffered, and the pace speeds up with the backlog so a long
      * answer still finishes promptly; the tail always types out at the base pace.
      */
-    private suspend fun revealStreamed(id: String, deltas: ReceiveChannel<String>) {
+    private suspend fun revealStreamed(id: String, deltas: ReceiveChannel<String>, base: String = "") {
         val pending = StringBuilder()
-        val revealed = StringBuilder()
+        val revealed = StringBuilder(base)
         // Fractional carry so a slow stream can reveal less than one character per frame.
         var carry = 0f
         try {
