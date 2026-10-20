@@ -24,6 +24,9 @@ import com.wiffles.edupage.ui.util.isNetworkError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +51,9 @@ class AiChatViewModel @Inject constructor(
     companion object {
         private const val TAG = "AiChatViewModel"
         private const val MAX_TEXT_ATTACHMENT_CHARS = 6000
+        /** Reveal pace for streamed replies, so the text types out at a steady, readable rate. */
+        private const val STREAM_TICK_MS = 24L
+        private const val STREAM_CHARS_PER_TICK = 2
         /** Fenced block the assistant emits to hand a quiz to the app. */
         private val QUIZ_BLOCK = Regex("```edupage-quiz[^\\n]*\\n?([\\s\\S]*?)```")
     }
@@ -294,12 +300,21 @@ class AiChatViewModel @Inject constructor(
                     streamingId = id
                     chatStore.add(ChatMessage(id = id, role = "assistant", content = "", sessionId = sessionId))
                     val builder = StringBuilder()
+                    val deltas = Channel<String>(Channel.UNLIMITED)
+                    // Reveal the buffered text at a steady pace so the answer types out
+                    // smoothly, however quickly or unevenly the provider delivers it.
+                    val revealer = launch { revealStreamed(id, deltas) }
                     try {
-                        aiService.completeStream(config, payload) { delta ->
+                        val text = aiService.completeStream(config, payload) { delta ->
                             builder.append(delta)
-                            chatStore.updateTransient(id) { it.copy(content = builder.toString()) }
+                            deltas.trySend(delta)
                         }
+                        deltas.close()
+                        revealer.join()
+                        text
                     } catch (streamError: Exception) {
+                        deltas.close()
+                        revealer.cancel()
                         if (builder.isEmpty()) {
                             aiService.complete(config, payload, jsonMode = false)
                         } else {
@@ -336,6 +351,37 @@ class AiChatViewModel @Inject constructor(
             } finally {
                 _thinking.value = false
             }
+        }
+    }
+
+    /**
+     * Drains streamed deltas into a message at a steady reveal rate. Characters that arrive
+     * faster than the pace are buffered, and the pace speeds up with the backlog so a long
+     * answer still finishes promptly; the tail always types out at the base pace.
+     */
+    private suspend fun revealStreamed(id: String, deltas: ReceiveChannel<String>) {
+        val pending = StringBuilder()
+        val revealed = StringBuilder()
+        try {
+            while (true) {
+                while (true) {
+                    val delta = deltas.tryReceive().getOrNull() ?: break
+                    pending.append(delta)
+                }
+                if (pending.isEmpty()) {
+                    if (deltas.isClosedForReceive) break
+                    pending.append(deltas.receiveCatching().getOrNull() ?: break)
+                    continue
+                }
+                val take = minOf(pending.length, STREAM_CHARS_PER_TICK + pending.length / 24)
+                revealed.append(pending, 0, take)
+                pending.delete(0, take)
+                chatStore.updateTransient(id) { it.copy(content = revealed.toString()) }
+                delay(STREAM_TICK_MS)
+            }
+        } finally {
+            // Keep whatever was already typed if the reveal is cancelled mid-answer.
+            chatStore.flush()
         }
     }
 
