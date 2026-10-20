@@ -18,7 +18,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,6 +82,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -1773,65 +1776,16 @@ private fun ResultScreen(
             ExplainCard(
                 state = explainState,
                 online = isOnline,
+                wrongCount = wrongCount,
                 onExplain = { haptics.virtualKey(); onExplain() },
+                onPracticeMistakes = { haptics.virtualKey(); onPracticeMistakes() },
+                onRefreshQuestions = { haptics.virtualKey(); onRefreshQuestions() },
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (wrongCount > 0) {
-                    OutlinedButton(
-                        onClick = { haptics.virtualKey(); onPracticeMistakes() },
-                        enabled = isOnline,
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp),
-                        modifier = Modifier.weight(1f).height(54.dp),
-                    ) {
-                        Icon(Icons.Rounded.School, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.quiz_regenerate_weak),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                    }
-                }
-                OutlinedButton(
-                    onClick = { haptics.virtualKey(); onRefreshQuestions() },
-                    enabled = isOnline,
-                    shape = RoundedCornerShape(20.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp),
-                    modifier = Modifier.weight(1f).height(54.dp),
-                ) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.quiz_regenerate_refresh),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { haptics.virtualKey(); onRetry() },
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.weight(1f).height(54.dp),
-                ) {
-                    Text(stringResource(R.string.quiz_retry), fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = { haptics.virtualKey(); onDone() },
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.weight(1f).height(54.dp),
-                ) {
-                    Text(stringResource(R.string.quiz_back), fontWeight = FontWeight.Bold)
-                }
-            }
+            ResultActions(
+                onRetry = { haptics.virtualKey(); onRetry() },
+                onDone = { haptics.virtualKey(); onDone() },
+            )
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -2026,8 +1980,12 @@ private fun ReviewCard(questions: List<QuizQuestion>, responses: List<QuizRespon
 private fun ExplainCard(
     state: AiQuizViewModel.ExplainState,
     online: Boolean,
+    wrongCount: Int,
     onExplain: () -> Unit,
+    onPracticeMistakes: () -> Unit,
+    onRefreshQuestions: () -> Unit,
 ) {
+    val haptics = rememberAppHaptics()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(
@@ -2104,6 +2062,85 @@ private fun ExplainCard(
                         Text(stringResource(R.string.quiz_explain_action), fontWeight = FontWeight.Bold)
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (wrongCount > 0) {
+                        OutlinedButton(
+                            onClick = onPracticeMistakes,
+                            enabled = online,
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier.weight(1f).height(50.dp),
+                        ) {
+                            Icon(Icons.Rounded.School, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.quiz_regenerate_weak),
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = onRefreshQuestions,
+                        enabled = online,
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        modifier = Modifier.weight(1f).height(50.dp),
+                    ) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.quiz_regenerate_refresh),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Two equal actions joined into one pill: "try again" outlined, "back" filled. */
+@Composable
+private fun ResultActions(onRetry: () -> Unit, onDone: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceBright,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth().height(54.dp),
+    ) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(onClick = onRetry),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.quiz_retry),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable(onClick = onDone),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.quiz_back),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
             }
         }
     }
