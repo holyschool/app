@@ -332,6 +332,7 @@ fun AiChatScreen(
                         items(messages, key = { it.id }) { message ->
                             MessageBubble(
                                 message = message,
+                                streaming = thinking && message.id == lastMessage?.id,
                                 onOpenAttachment = { openChatAttachment(context, it) },
                                 onCopy = { copyToClipboard(context, it) },
                                 onShare = { shareMessage(context, it) },
@@ -469,6 +470,7 @@ private fun MessageBubble(
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
     onOpenQuiz: (String) -> Unit,
+    streaming: Boolean = false,
 ) {
     val isUser = message.role == "user"
     var menuOpen by remember { mutableStateOf(false) }
@@ -524,6 +526,7 @@ private fun MessageBubble(
                                 text = message.content,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 mathColor = MaterialTheme.colorScheme.onSurface,
+                                fadeTail = streaming,
                             )
                         } else {
                             Text(
