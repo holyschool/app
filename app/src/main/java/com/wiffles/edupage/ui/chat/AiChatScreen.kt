@@ -187,6 +187,7 @@ fun AiChatScreen(
     }
 
     var lastStreamTick by remember { mutableLongStateOf(0L) }
+    var lastTypeTick by remember { mutableLongStateOf(0L) }
     LaunchedEffect(streamedLength) {
         if (streamedLength <= 0) return@LaunchedEffect
         val now = android.os.SystemClock.uptimeMillis()
@@ -290,7 +291,19 @@ fun AiChatScreen(
                     }
                     ChatComposer(
                         value = input,
-                        onValueChange = { input = it },
+                        onValueChange = { next ->
+                            // Soft tick as the student types, throttled so a paste or fast
+                            // key-repeat doesn't buzz continuously.
+                            val typing = next.length > input.length
+                            input = next
+                            if (typing) {
+                                val now = android.os.SystemClock.uptimeMillis()
+                                if (now - lastTypeTick >= 28L) {
+                                    lastTypeTick = now
+                                    haptics.uiTick()
+                                }
+                            }
+                        },
                         onSend = { send() },
                         onAttachFile = { picker.launch("*/*") },
                         onAttachPhoto = { picker.launch("image/*") },
