@@ -52,8 +52,11 @@ class AiChatViewModel @Inject constructor(
         private const val TAG = "AiChatViewModel"
         private const val MAX_TEXT_ATTACHMENT_CHARS = 6000
         /** Reveal pace for streamed replies, so the text types out at a steady, readable rate. */
-        private const val STREAM_TICK_MS = 24L
-        private const val STREAM_CHARS_PER_TICK = 2
+        private const val STREAM_TICK_MS = 16L
+        /** Characters per second typed at the tail; the backlog adds [STREAM_BACKLOG_GAIN] each. */
+        private const val STREAM_BASE_CPS = 70f
+        private const val STREAM_BACKLOG_GAIN = 5f
+        private const val STREAM_MAX_CPS = 900f
         /** Fenced block the assistant emits to hand a quiz to the app. */
         private val QUIZ_BLOCK = Regex("```edupage-quiz[^\\n]*\\n?([\\s\\S]*?)```")
     }
@@ -362,6 +365,8 @@ class AiChatViewModel @Inject constructor(
     private suspend fun revealStreamed(id: String, deltas: ReceiveChannel<String>) {
         val pending = StringBuilder()
         val revealed = StringBuilder()
+        // Fractional carry so a slow stream can reveal less than one character per frame.
+        var carry = 0f
         try {
             while (true) {
                 while (true) {
@@ -373,10 +378,20 @@ class AiChatViewModel @Inject constructor(
                     pending.append(deltas.receiveCatching().getOrNull() ?: break)
                     continue
                 }
-                val take = minOf(pending.length, STREAM_CHARS_PER_TICK + pending.length / 24)
-                revealed.append(pending, 0, take)
-                pending.delete(0, take)
-                chatStore.updateTransient(id) { it.copy(content = revealed.toString()) }
+                // Accelerate smoothly with the backlog so a long answer still finishes promptly,
+                // while the tail always types at the gentle base pace.
+                val cps = (STREAM_BASE_CPS + pending.length * STREAM_BACKLOG_GAIN)
+                    .coerceAtMost(STREAM_MAX_CPS)
+                carry += cps * (STREAM_TICK_MS / 1000f)
+                val reveal = carry.toInt()
+                if (reveal > 0) {
+                    val take = minOf(reveal, pending.length)
+                    revealed.append(pending, 0, take)
+                    pending.delete(0, take)
+                    // Keep the fractional remainder, but never let it snowball into a burst.
+                    carry = (carry - take).coerceAtMost(2f)
+                    chatStore.updateTransient(id) { it.copy(content = revealed.toString()) }
+                }
                 delay(STREAM_TICK_MS)
             }
         } finally {

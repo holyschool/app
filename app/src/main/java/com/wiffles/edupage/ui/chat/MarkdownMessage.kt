@@ -50,17 +50,21 @@ fun MarkdownMessage(
     color: Color = MaterialTheme.colorScheme.onSurface,
     mathColor: Color = color,
     preserveLineBreaks: Boolean = false,
+    fadeTail: Boolean = false,
 ) {
     val blocks = remember(text, preserveLineBreaks) {
         MarkdownParser(text, preserveLineBreaks).parse()
     }
+    val lastIndex = blocks.lastIndex
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        blocks.forEach { block -> MarkdownBlockView(block, color, mathColor) }
+        blocks.forEachIndexed { index, block ->
+            MarkdownBlockView(block, color, mathColor, tailFade = fadeTail && index == lastIndex)
+        }
     }
 }
 
 @Composable
-private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
+private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color, tailFade: Boolean = false) {
     when (block) {
         is MdBlock.Heading -> {
             val style = when (block.level) {
@@ -73,6 +77,7 @@ private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
                 style = style.copy(fontWeight = FontWeight.Bold, color = color),
                 baseColor = color,
                 mathColor = mathColor,
+                tailFade = tailFade,
             )
         }
 
@@ -81,6 +86,7 @@ private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
             style = MaterialTheme.typography.bodyMedium.copy(color = color),
             baseColor = color,
             mathColor = mathColor,
+            tailFade = tailFade,
         )
 
         is MdBlock.Quote -> Row(modifier = Modifier.fillMaxWidth()) {
@@ -99,11 +105,12 @@ private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
                 ),
                 baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 mathColor = mathColor,
+                tailFade = tailFade,
             )
         }
 
         is MdBlock.Bullet -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            block.items.forEach { item ->
+            block.items.forEachIndexed { itemIndex, item ->
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = "\u2022",
@@ -117,6 +124,7 @@ private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
                         baseColor = color,
                         mathColor = mathColor,
                         modifier = Modifier.weight(1f),
+                        tailFade = tailFade && itemIndex == block.items.lastIndex,
                     )
                 }
             }
@@ -137,6 +145,7 @@ private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
                         baseColor = color,
                         mathColor = mathColor,
                         modifier = Modifier.weight(1f),
+                        tailFade = tailFade && index == block.items.lastIndex,
                     )
                 }
             }
@@ -194,10 +203,13 @@ private fun InlineText(
     baseColor: Color,
     mathColor: Color,
     modifier: Modifier = Modifier,
+    tailFade: Boolean = false,
 ) {
     val hasMath = spans.any { it is MdSpan.Math }
     if (!hasMath) {
-        val annotated = remember(spans, style, baseColor) { buildAnnotated(spans, baseColor) }
+        val annotated = remember(spans, style, baseColor, tailFade) {
+            buildAnnotated(spans, baseColor, tailFade)
+        }
         Text(text = annotated, style = style, modifier = modifier)
         return
     }
@@ -234,20 +246,51 @@ private fun InlineMath(latex: String, color: Color) {
     )
 }
 
-private fun buildAnnotated(spans: List<MdSpan>, baseColor: Color): AnnotatedString =
-    buildAnnotatedString {
+/** How many trailing characters fade in as they stream, so new text settles instead of popping. */
+private const val TAIL_FADE_CHARS = 16
+
+/**
+ * Builds the styled string. When [fadeTail] is on, the last [TAIL_FADE_CHARS] characters get a
+ * soft alpha ramp (newest is faintest) so a streaming reply flows in rather than snapping.
+ */
+private fun buildAnnotated(
+    spans: List<MdSpan>,
+    baseColor: Color,
+    fadeTail: Boolean = false,
+): AnnotatedString {
+    val total = spans.sumOf { (it as? MdSpan.Text)?.text?.length ?: 0 }
+    return buildAnnotatedString {
+        var index = 0
         spans.forEach { span ->
             if (span !is MdSpan.Text) return@forEach
             val link = span.link
-            if (link != null) {
-                withLink(LinkAnnotation.Url(link)) {
-                    withStyle(spanStyle(span, baseColor, link = true)) { append(span.text) }
+            val start = index
+            index += span.text.length
+            val style = spanStyle(span, baseColor, link = link != null)
+            val emit: AnnotatedString.Builder.(String, SpanStyle) -> Unit = { chunk, chunkStyle ->
+                if (link != null) {
+                    withLink(LinkAnnotation.Url(link)) {
+                        withStyle(chunkStyle) { append(chunk) }
+                    }
+                } else {
+                    withStyle(chunkStyle) { append(chunk) }
                 }
+            }
+            if (!fadeTail || span.text.isEmpty()) {
+                emit(span.text, style)
             } else {
-                withStyle(spanStyle(span, baseColor, link = false)) { append(span.text) }
+                val tailStart = (span.text.length - TAIL_FADE_CHARS).coerceAtLeast(0)
+                if (tailStart > 0) emit(span.text.substring(0, tailStart), style)
+                for (i in tailStart until span.text.length) {
+                    val distanceFromEnd = total - (start + i) - 1
+                    val progress = (1f - distanceFromEnd.toFloat() / TAIL_FADE_CHARS).coerceIn(0f, 1f)
+                    val alpha = 0.25f + 0.75f * progress
+                    emit(span.text[i].toString(), style.copy(color = style.color.copy(alpha = alpha)))
+                }
             }
         }
     }
+}
 
 private fun spanStyle(span: MdSpan.Text, baseColor: Color, link: Boolean): SpanStyle {
     var style = SpanStyle(
