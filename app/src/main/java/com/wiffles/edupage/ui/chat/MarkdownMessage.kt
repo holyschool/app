@@ -3,6 +3,7 @@
 package com.wiffles.edupage.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
@@ -156,6 +158,8 @@ private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
             )
         }
 
+        is MdBlock.Chem -> ChemBlock(lines = block.lines, color = color)
+
         is MdBlock.Divider -> HorizontalDivider(
             modifier = Modifier.padding(vertical = 4.dp),
             color = MaterialTheme.colorScheme.outlineVariant,
@@ -165,9 +169,12 @@ private fun MarkdownBlockView(block: MdBlock, color: Color, mathColor: Color) {
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {
+            // Long formulas scroll sideways instead of spilling out of the bubble.
             MathFormula(
                 latex = block.latex,
-                modifier = Modifier.padding(vertical = 4.dp),
+                modifier = Modifier
+                    .padding(vertical = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
                 fontSize = 19.sp,
                 color = mathColor,
             )
@@ -205,7 +212,7 @@ private fun InlineText(
         tokens.forEach { token ->
             when (token) {
                 is MdSpan.Math -> Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-                    MathFormula(latex = token.latex, fontSize = 16.sp, color = mathColor)
+                    InlineMath(latex = token.latex, color = mathColor)
                 }
                 is MdSpan.Text -> Text(
                     text = remember(token) { buildAnnotated(listOf(token), baseColor) },
@@ -214,6 +221,17 @@ private fun InlineText(
             }
         }
     }
+}
+
+/** One inline formula. Short ones stay inline; a long one scrolls instead of overflowing. */
+@Composable
+private fun InlineMath(latex: String, color: Color) {
+    MathFormula(
+        latex = latex,
+        fontSize = 15.sp,
+        color = color,
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+    )
 }
 
 private fun buildAnnotated(spans: List<MdSpan>, baseColor: Color): AnnotatedString =
@@ -304,6 +322,22 @@ private sealed interface MdBlock {
     data class Quote(val spans: List<MdSpan>) : MdBlock
     data object Divider : MdBlock
     data class MathBlock(val latex: String) : MdBlock
+    data class Chem(val lines: List<String>) : MdBlock
+}
+
+/**
+ * True when the contents of a `$...$` span look like a formula. Prose that a model happened
+ * to wrap in maths delimiters (`$oxid uhličitý$`) is rendered as text instead, so it wraps
+ * normally rather than spilling out of the bubble.
+ */
+private val MATH_SIGNAL = Regex("""[\\^_=+\-*/{}()\[\]<>|0-9]""")
+
+private fun looksLikeMath(latex: String): Boolean {
+    val trimmed = latex.trim()
+    if (trimmed.isEmpty()) return false
+    if (MATH_SIGNAL.containsMatchIn(trimmed)) return true
+    val words = trimmed.split(Regex("\\s+")).size
+    return if (words == 1) trimmed.length <= 16 else words == 2 && trimmed.length <= 10
 }
 
 private class MarkdownParser(
@@ -324,6 +358,7 @@ private class MarkdownParser(
                 line.isBlank() -> idx++
 
                 line.startsWith("```") -> {
+                    val info = line.trim().removePrefix("```").trim().lowercase()
                     val builder = StringBuilder()
                     idx++
                     while (idx < lines.size && !lines[idx].trimStart().startsWith("```")) {
@@ -331,7 +366,15 @@ private class MarkdownParser(
                         idx++
                     }
                     idx++ // closing fence
-                    blocks.add(MdBlock.Code(builder.toString().trimEnd()))
+                    val body = builder.toString().trimEnd()
+                    when {
+                        info.startsWith("edupage-chem") || info.startsWith("chem") -> blocks.add(
+                            MdBlock.Chem(
+                                body.split("\n").map { it.trim() }.filter { it.isNotEmpty() },
+                            ),
+                        )
+                        else -> blocks.add(MdBlock.Code(body))
+                    }
                 }
 
                 line.trim() == "$$" -> {
@@ -342,13 +385,22 @@ private class MarkdownParser(
                         idx++
                     }
                     idx++
-                    blocks.add(MdBlock.MathBlock(builder.toString().trim()))
+                    val latex = builder.toString().trim()
+                    if (looksLikeMath(latex)) {
+                        blocks.add(MdBlock.MathBlock(latex))
+                    } else if (latex.isNotEmpty()) {
+                        blocks.add(MdBlock.Paragraph(parseInline(latex)))
+                    }
                 }
 
                 line.trimStart().startsWith("$$") && line.trimEnd().endsWith("$$") &&
                     line.trim().length > 4 -> {
                     val latex = line.trim().removePrefix("$$").removeSuffix("$$").trim()
-                    blocks.add(MdBlock.MathBlock(latex))
+                    if (looksLikeMath(latex)) {
+                        blocks.add(MdBlock.MathBlock(latex))
+                    } else if (latex.isNotEmpty()) {
+                        blocks.add(MdBlock.Paragraph(parseInline(latex)))
+                    }
                     idx++
                 }
 
@@ -453,7 +505,14 @@ private class MarkdownParser(
                     val end = text.indexOf('$', i + 1)
                     if (end > i + 1) {
                         flush()
-                        spans.add(MdSpan.Math(text.substring(i + 1, end)))
+                        val inner = text.substring(i + 1, end)
+                        // Models sometimes wrap plain prose in $...$; render that as text so
+                        // it wraps instead of being laid out as an over-wide formula.
+                        if (looksLikeMath(inner)) {
+                            spans.add(MdSpan.Math(inner))
+                        } else {
+                            spans.add(MdSpan.Text(inner, italic = true))
+                        }
                         i = end + 1
                     } else { sb.append(c); i++ }
                 }

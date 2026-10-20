@@ -101,6 +101,24 @@ class AiChatViewModel @Inject constructor(
         - Always set "subject" to a short subject label (e.g. "Biology") and "topic".
         - Put the block last, and only ever emit one block per reply.
         - Never mention the block, its JSON or its formatting to the student.
+
+        For chemistry, a simple formula (H2O, CO2, NaCl) can stay as plain text, but whenever
+        you write a reaction or a structural formula, put it in a fenced block so the app can
+        typeset it properly. Write one item per line — a reaction with "->" between the sides
+        and "+" between species, or a structure with the groups joined by "-", "=" or "≡":
+
+        ```edupage-chem
+        2 H2 + O2 -> 2 H2O
+        CaCO3 -> CaO + CO2
+        CH3-CH2-CH2-CH3
+        CH3-CH=CH-CH2-OH
+        ```
+
+        Chem block rules:
+        - Keep formulas in plain ASCII with digits right after each element (H2O, Ca(OH)2,
+          SO4^2-); the app turns them into proper subscripts and charges.
+        - Put the block on its own lines, right after the sentence that introduces it.
+        - Never mention the block or its formatting to the student.
     """.trimIndent()
 
     /** Adds a short, local-only summary of pending homework so answers are more relevant. */
