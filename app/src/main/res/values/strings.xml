@@ -37,6 +37,8 @@
     <string name="timetable_today">Today</string>
     <string name="timetable_retry">Retry</string>
     <string name="timetable_no_lessons">No lessons today</string>
+    <string name="timetable_events_today">Events today</string>
+    <string name="timetable_events_week">Events this week</string>
     <string name="timetable_previous_week">Previous week</string>
     <string name="timetable_next_week">Next week</string>
     <string name="timetable_unknown_subject">Unknown subject</string>
@@ -206,6 +208,16 @@
     <string name="overview_lessons_more">+%d more lessons</string>
     <string name="overview_error_timetable">Couldn\'t load timetable</string>
     <string name="overview_retry">Retry</string>
+    <string name="overview_events">Events</string>
+    <string name="overview_events_none">No upcoming events.</string>
+    <string name="overview_events_more">+%1$d more</string>
+    <string name="overview_error_events">Couldn\'t load events</string>
+    <string name="event_all_day">All day</string>
+    <string name="event_period_single">Period %1$d</string>
+    <string name="event_period_range">Periods %1$d–%2$d</string>
+    <string name="event_today">Today</string>
+    <string name="event_tomorrow">Tomorrow</string>
+    <string name="event_cancels_lessons">Lessons cancelled</string>
     <string name="network_error">No internet connection. Check your connection and try again.</string>
     <string name="offline_no_cache">This isn\'t saved for offline use yet. Go online once to download it.</string>
     <string name="offline_no_cache_short">Not saved for offline yet</string>

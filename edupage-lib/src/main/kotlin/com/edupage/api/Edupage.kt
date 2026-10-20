@@ -3,6 +3,7 @@ package com.edupage.api
 import com.edupage.api.model.Classroom
 import com.edupage.api.model.EduClass
 import com.edupage.api.model.EduCloudFile
+import com.edupage.api.model.EduEvent
 import com.edupage.api.model.Meals
 import com.edupage.api.model.RingingTime
 import com.edupage.api.model.Subject
@@ -142,6 +143,17 @@ class Edupage(timeoutSeconds: Long = 15L) {
 
     suspend fun getNotificationHistory(dateFrom: LocalDate): List<TimelineEvent> =
         Timeline(session).getNotificationsHistory(dateFrom)
+
+    /**
+     * School events ("akcie") — field trips, excursions, cultural events, holidays and
+     * parents' evenings — that fall between [dateFrom] and [dateTo] (inclusive).
+     */
+    suspend fun getEvents(dateFrom: LocalDate, dateTo: LocalDate): List<EduEvent> =
+        com.edupage.api.modules.Events(session).getEvents(dateFrom, dateTo)
+
+    /** Events from today over the next [days] days. */
+    suspend fun getUpcomingEvents(days: Int = 60): List<EduEvent> =
+        getEvents(LocalDate.now().minusDays(1), LocalDate.now().plusDays(days.toLong()))
 
     suspend fun getAssignments(dateFrom: LocalDate): List<com.edupage.api.model.grades.Assignment> =
         Timeline(session).getAssignments(dateFrom)

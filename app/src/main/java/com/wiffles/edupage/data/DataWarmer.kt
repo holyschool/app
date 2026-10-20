@@ -35,6 +35,7 @@ class DataWarmer @Inject constructor(
     private val gradesCache: GradesCache,
     private val timelineCache: TimelineCache,
     private val mealsCache: MealsCache,
+    private val eventsCache: EventsCache,
     private val homeworkStore: LocalHomeworkStore,
 ) {
     companion object {
@@ -48,6 +49,8 @@ class DataWarmer @Inject constructor(
         private const val MEALS_DAYS_FORWARD = 6L
 
         private const val HISTORY_MONTHS = 2L
+        private const val EVENTS_DAYS_BACK = 30L
+        private const val EVENTS_DAYS_FORWARD = 120L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -74,6 +77,7 @@ class DataWarmer @Inject constructor(
                 warmTimetable()
                 warmGrades()
                 warmMessages()
+                warmEvents()
                 warmMeals()
                 prefs.lastDataWarmMs = System.currentTimeMillis()
                 runCatching { WidgetUpdater.refreshAll(context) }
@@ -150,6 +154,29 @@ class DataWarmer @Inject constructor(
             homeworkStore.importFromMessages(merged)
         }
         Log.i(TAG, "warmed ${merged.size} messages (${recent.size} recent, ${history.size} history)")
+    }
+
+    /**
+     * School events ("akcie") such as trips and excursions. Kept for a wider window than the
+     * rest because they are scheduled months ahead and are the main reason to open the app
+     * before the school day starts.
+     */
+    private suspend fun warmEvents() {
+        val today = LocalDate.now()
+        val events = try {
+            edupage.getEvents(
+                today.minusDays(EVENTS_DAYS_BACK),
+                today.plusDays(EVENTS_DAYS_FORWARD),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "events warm failed: ${e.message}")
+            return
+        }
+        val hadCache = eventsCache.load()?.first?.isNotEmpty() == true
+        if (events.isNotEmpty() || !hadCache) {
+            eventsCache.save(events)
+        }
+        Log.i(TAG, "warmed ${events.size} events")
     }
 
     private suspend fun warmMeals() {

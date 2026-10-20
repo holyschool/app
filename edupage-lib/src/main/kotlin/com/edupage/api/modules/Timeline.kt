@@ -101,22 +101,7 @@ internal class Timeline(private val session: EdupageSession) {
 
     private suspend fun fetchTimeline(dateFrom: LocalDate, filterTab: String? = null): List<TimelineEvent> {
         return withContext(Dispatchers.IO) {
-            var url = "https://${session.subdomain}.edupage.org/timeline/" +
-                    "?module=todo&akcia=getData"
-            if (filterTab != null) url += "&filterTab=$filterTab"
-
-            val formBody = FormBody.Builder()
-                .add("datefrom", dateFrom.format(dateFmt))
-                .build()
-            val request = Request.Builder().url(url).post(formBody).build()
-            val response = session.httpClient.newCall(request).execute()
-            val responseStr = response.body?.string() ?: return@withContext emptyList()
-
-            if (responseStr.isBlank()) return@withContext emptyList()
-
-            val parsed = JsonParser.parseString(responseStr)
-            if (!parsed.isJsonObject) return@withContext emptyList()
-            val root = parsed.asJsonObject
+            val root = fetchTimelineRoot(dateFrom, filterTab) ?: return@withContext emptyList()
             val items = root.getAsJsonArray("timelineItems")
                 ?: return@withContext emptyList()
 
@@ -132,6 +117,32 @@ internal class Timeline(private val session: EdupageSession) {
             }
             parseItems(items, props)
         }
+    }
+
+    /**
+     * Raw `/timeline/` payload for [dateFrom], or null when the request fails or returns
+     * nothing usable. Shared with the events parser, which needs the `data` payloads that
+     * [parseItems] throws away.
+     */
+    internal suspend fun fetchTimelineRoot(
+        dateFrom: LocalDate,
+        filterTab: String? = null,
+    ): JsonObject? = withContext(Dispatchers.IO) {
+        var url = "https://${session.subdomain}.edupage.org/timeline/" +
+                "?module=todo&akcia=getData"
+        if (filterTab != null) url += "&filterTab=$filterTab"
+
+        val formBody = FormBody.Builder()
+            .add("datefrom", dateFrom.format(dateFmt))
+            .build()
+        val request = Request.Builder().url(url).post(formBody).build()
+        val response = session.httpClient.newCall(request).execute()
+        val responseStr = response.body?.string() ?: return@withContext null
+        if (responseStr.isBlank()) return@withContext null
+
+        val parsed = JsonParser.parseString(responseStr)
+        if (!parsed.isJsonObject) return@withContext null
+        parsed.asJsonObject
     }
 
     private fun com.google.gson.JsonObject.str(key: String): String? {

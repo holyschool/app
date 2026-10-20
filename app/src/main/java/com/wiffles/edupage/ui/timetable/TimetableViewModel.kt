@@ -5,14 +5,17 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
+import com.edupage.api.model.EduEvent
 import com.edupage.api.model.timetable.Lesson
 import com.wiffles.edupage.R
 import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.BreakVisibility
 import com.wiffles.edupage.data.CancelledLessonStyle
+import com.wiffles.edupage.data.EventsCache
 import com.wiffles.edupage.data.LessonGrouping
 import com.wiffles.edupage.data.CredentialStore
 import com.wiffles.edupage.data.TimetableCache
+import com.wiffles.edupage.ui.overview.showOnBoards
 import com.wiffles.edupage.ui.util.isNetworkError
 import com.wiffles.edupage.ui.util.loadErrorMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,10 +48,14 @@ class TimetableViewModel @Inject constructor(
     private val credentialStore: CredentialStore,
     private val appPreferences: AppPreferences,
     private val timetableCache: TimetableCache,
+    private val eventsCache: EventsCache,
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "TimetableViewModel"
+        /** Trips are announced far ahead, so the timetable keeps a wide event window. */
+        private const val EVENTS_DAYS_BACK = 30L
+        private const val EVENTS_DAYS_FORWARD = 120L
     }
 
     private val _uiState = MutableStateFlow<TimetableUiState>(TimetableUiState.Loading)
@@ -87,11 +94,16 @@ class TimetableViewModel @Inject constructor(
     private val _weekRefreshing = MutableStateFlow(false)
     val weekRefreshing: StateFlow<Boolean> = _weekRefreshing.asStateFlow()
 
+    /** School events ("akcie") shown next to the lessons; empty until the first load lands. */
+    private val _events = MutableStateFlow<List<EduEvent>>(emptyList())
+    val events: StateFlow<List<EduEvent>> = _events.asStateFlow()
+
     init {
         // Cache + network access, so keep it off the main thread.
         viewModelScope.launch(Dispatchers.IO) {
             val resolvedInitialDate = determineInitialDate()
             _selectedDate.value = resolvedInitialDate
+            loadEvents()
             loadTimetable(resolvedInitialDate)
             if (_weekMode.value) loadWeek(resolvedInitialDate)
 
@@ -177,6 +189,7 @@ class TimetableViewModel @Inject constructor(
     fun refresh() {
         Log.i(TAG, "refresh: reloading timetable for ${_selectedDate.value}")
         if (_weekMode.value) loadWeek(_selectedDate.value, force = true) else loadTimetable(_selectedDate.value)
+        viewModelScope.launch(Dispatchers.IO) { loadEvents(force = true) }
         _breakVisibility.value = appPreferences.breakVisibility
         _cancelledLessonStyle.value = appPreferences.cancelledLessonStyle
         _lessonGrouping.value = appPreferences.lessonGrouping
@@ -236,6 +249,36 @@ class TimetableViewModel @Inject constructor(
                 }
             }
             _weekRefreshing.value = false
+        }
+    }
+
+    /**
+     * Events for the timetable's day banners and week strip. Cached copy first so trips show
+     * instantly (and offline), then a quiet network refresh.
+     */
+    private suspend fun loadEvents(force: Boolean = false) {
+        val today = LocalDate.now()
+        val cached = eventsCache.load()
+        val cachedEvents = cached?.first.orEmpty()
+        if (cachedEvents.isNotEmpty()) {
+            _events.value = cachedEvents.filter(::showOnBoards)
+            if (!force && cached?.second == false) return
+        }
+
+        if (!com.wiffles.edupage.ui.util.ConnectivityObserver.isOnline.value) return
+        if (!edupage.isLoggedIn) return
+
+        try {
+            val events = edupage.getEvents(
+                today.minusDays(EVENTS_DAYS_BACK),
+                today.plusDays(EVENTS_DAYS_FORWARD),
+            )
+            if (events.isNotEmpty() || cached == null) eventsCache.save(events)
+            val usable = events.ifEmpty { cachedEvents }
+            if (usable.isNotEmpty()) _events.value = usable.filter(::showOnBoards)
+            Log.i(TAG, "loaded ${events.size} events for the timetable")
+        } catch (e: Exception) {
+            Log.w(TAG, "event load failed: ${e.message}")
         }
     }
 

@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
 import com.edupage.api.exceptions.NotLoggedInException
 import com.edupage.api.model.Meal
+import com.edupage.api.model.EduEvent
+import com.edupage.api.model.EduEventKind
 import com.edupage.api.model.TimelineEvent
 import com.edupage.api.model.grades.EduGrade
 import com.edupage.api.model.grades.Term
@@ -74,6 +76,22 @@ sealed interface MealsOverviewState {
     data class Success(val meals: List<Meal>) : MealsOverviewState
 }
 
+sealed interface EventsOverviewState {
+    object Loading : EventsOverviewState
+    object Unavailable : EventsOverviewState
+    object OfflineNoCache : EventsOverviewState
+
+    data class Success(
+        /** Not-yet-over events, soonest first; tests/exams stay out (they live in assignments). */
+        val upcoming: List<EduEvent>,
+        /** Every known event, used to badge the day the timetable card is showing. */
+        val all: List<EduEvent>,
+    ) : EventsOverviewState {
+        /** Events covering [date], including multi-day ones already under way. */
+        fun on(date: LocalDate): List<EduEvent> = all.filter { it.covers(date) }
+    }
+}
+
 private val HIDDEN_TYPES = setOf(
     "h_timetable", "h_dailyplan", "h_clearplany", "h_pripravy",
     "h_clearcache", "h_cleardbi", "h_clearisicdata",
@@ -90,11 +108,15 @@ class OverviewViewModel @Inject constructor(
     private val homeworkStore: LocalHomeworkStore,
     private val sessionRepository: SessionRepository,
     private val mealsCache: com.wiffles.edupage.data.MealsCache,
+    private val eventsCache: com.wiffles.edupage.data.EventsCache,
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "OverviewViewModel"
         private var hasRefreshedThisSession = false
+
+        private const val EVENTS_BACK_DAYS = 30L
+        private const val EVENTS_FORWARD_DAYS = 120L
     }
 
     private val _timetableState = MutableStateFlow<TimetableOverviewState>(TimetableOverviewState.Loading)
@@ -108,6 +130,9 @@ class OverviewViewModel @Inject constructor(
 
     private val _mealsState = MutableStateFlow<MealsOverviewState>(MealsOverviewState.Loading)
     val mealsState: StateFlow<MealsOverviewState> = _mealsState.asStateFlow()
+
+    private val _eventsState = MutableStateFlow<EventsOverviewState>(EventsOverviewState.Loading)
+    val eventsState: StateFlow<EventsOverviewState> = _eventsState.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -173,10 +198,12 @@ class OverviewViewModel @Inject constructor(
             val timetableDeferred = async { loadTimetable(forceRefresh, silent) }
             val gradesDeferred    = async { loadGrades(forceRefresh, silent) }
             val messagesDeferred  = async { loadMessages(forceRefresh, silent) }
+            val eventsDeferred    = async { loadEvents(forceRefresh, silent) }
             val mealsDeferred     = if (prefs.mealsEnabled) async { loadMeals(forceRefresh, silent) } else null
             timetableDeferred.await()
             gradesDeferred.await()
             messagesDeferred.await()
+            eventsDeferred.await()
             if (mealsDeferred != null) {
                 mealsDeferred.await()
             } else {
@@ -486,6 +513,71 @@ class OverviewViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * School events ("akcie"). Loaded from [eventsCache] first so trips show instantly and
+     * offline, then refreshed from the network. The window reaches far ahead because trips are
+     * usually announced months in advance.
+     */
+    private suspend fun loadEvents(forceRefresh: Boolean, silent: Boolean = false) {
+        val today = LocalDate.now()
+        val cached = eventsCache.load()
+        val cachedEvents = cached?.first.orEmpty()
+
+        if (cachedEvents.isNotEmpty()) {
+            _eventsState.value = eventsStateOf(cachedEvents, today)
+            if (!forceRefresh && cached?.second == false) return
+        } else if (!silent && _eventsState.value !is EventsOverviewState.Success) {
+            _eventsState.value = EventsOverviewState.Loading
+        }
+
+        if (!isOnline()) {
+            if (_eventsState.value !is EventsOverviewState.Success) {
+                _eventsState.value = EventsOverviewState.OfflineNoCache
+            }
+            return
+        }
+
+        // Same fast-start race as the other cards: keep the skeleton until the session restore lands.
+        if (!edupage.isLoggedIn) {
+            Log.i(TAG, "events load deferred: session not ready yet")
+            return
+        }
+
+        try {
+            val events = edupage.getEvents(
+                today.minusDays(EVENTS_BACK_DAYS),
+                today.plusDays(EVENTS_FORWARD_DAYS),
+            )
+            if (events.isNotEmpty() || cached == null) {
+                eventsCache.save(events)
+            }
+            val usable = events.ifEmpty { cachedEvents }
+            if (usable.isNotEmpty()) {
+                _eventsState.value = eventsStateOf(usable, today)
+            } else if (_eventsState.value !is EventsOverviewState.Success) {
+                _eventsState.value = EventsOverviewState.Unavailable
+            }
+            Log.i(TAG, "events loaded: ${events.size}")
+        } catch (e: Exception) {
+            Log.e(TAG, "events load failed: ${e.message}", e)
+            if (_eventsState.value !is EventsOverviewState.Success) {
+                _eventsState.value = if (isOnline()) {
+                    EventsOverviewState.Unavailable
+                } else {
+                    EventsOverviewState.OfflineNoCache
+                }
+            }
+        }
+    }
+
+    private fun eventsStateOf(events: List<EduEvent>, today: LocalDate): EventsOverviewState.Success {
+        val relevant = events.filter(::showOnBoards)
+        val upcoming = relevant
+            .filter { !(it.endDate ?: it.date).isBefore(today) }
+            .sortedWith(compareBy({ it.date }, { it.startTime ?: "" }, { it.name }))
+        return EventsOverviewState.Success(upcoming = upcoming, all = relevant)
     }
 
     private fun nextSchoolDay(from: LocalDate): LocalDate {

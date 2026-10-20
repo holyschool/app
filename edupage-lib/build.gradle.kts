@@ -19,4 +19,5 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.jsoup)
     implementation(libs.kotlinx.coroutines.core)
+    testImplementation(libs.junit)
 }
