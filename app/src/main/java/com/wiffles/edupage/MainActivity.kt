@@ -42,6 +42,7 @@ import com.wiffles.edupage.ui.lock.LockViewModel
 import com.wiffles.edupage.ui.settings.SettingsViewModel
 import com.wiffles.edupage.ui.theme.Edupage2Theme
 import com.wiffles.edupage.util.LocaleHelper
+import com.wiffles.edupage.util.StartupTrace
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -75,6 +76,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartupTrace.mark("activity.onCreate")
         installSplashScreen()
 
         super.onCreate(savedInstanceState)
@@ -119,7 +121,9 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        StartupTrace.mark("before setContent")
         setContent {
+            StartupTrace.mark("compose start")
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 // SettingsViewModel is only needed for a rare recreate request. Wait for the
                 // first frame before building it (and its graph) on the startup path.
@@ -266,6 +270,32 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+        StartupTrace.mark("onCreate done")
+    }
+
+    override fun onStart() {
+        StartupTrace.mark("onStart")
+        super.onStart()
+    }
+
+    override fun onResume() {
+        StartupTrace.mark("onResume")
+        super.onResume()
+    }
+
+    override fun onPostResume() {
+        StartupTrace.mark("onPostResume")
+        super.onPostResume()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        StartupTrace.mark("window focus=$hasFocus")
+        super.onWindowFocusChanged(hasFocus)
+    }
+
+    override fun onAttachedToWindow() {
+        StartupTrace.mark("attached to window")
+        super.onAttachedToWindow()
     }
 
     /**

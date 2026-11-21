@@ -14,6 +14,7 @@ import com.wiffles.edupage.notification.GradeMessageCheckWorker
 import com.wiffles.edupage.network.UpdateCenter
 import com.wiffles.edupage.ui.widgets.WidgetUpdater
 import com.wiffles.edupage.util.LocaleHelper
+import com.wiffles.edupage.util.StartupTrace
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.HiltAndroidApp
@@ -40,13 +41,16 @@ class EdupageApp : Application(), Configuration.Provider {
     }
 
     override fun onCreate() {
+        StartupTrace.mark("app.onCreate")
         super.onCreate()
         installNetworkExceptionHandler()
         ConnectivityObserver.init(this)
 
         // Everything below is not needed for the first frame, so it is deferred off the main
         // thread. This keeps Application.onCreate cheap and lets the splash screen appear sooner.
+        StartupTrace.mark("app.onCreate done")
         applicationScope.launch {
+            StartupTrace.mark("background work start")
             // The first getSharedPreferences() call parses an XML file; do it here so the
             // activity's first composition never has to.
             appPreferences.preload()
