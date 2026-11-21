@@ -58,6 +58,17 @@ internal fun showOnBoards(event: EduEvent): Boolean =
 internal fun EduEvent.covers(date: LocalDate): Boolean =
     !this.date.isAfter(date) && !(endDate ?: this.date).isBefore(date)
 
+/**
+ * True when the event's lesson span includes [period]. Used by the timetable to put a trip
+ * on the periods it actually takes, instead of the "Event" placeholders EduPage leaves there.
+ */
+internal fun EduEvent.coversPeriod(period: Int?): Boolean {
+    val first = this.period ?: return false
+    if (period == null) return false
+    val length = (periods ?: 1).coerceAtLeast(1)
+    return period >= first && period < first + length
+}
+
 /** Colour family for an event kind. Deliberately theme-based so light/dark stay readable. */
 @Composable
 internal fun eventAccent(kind: EduEventKind): Color = when (kind) {
