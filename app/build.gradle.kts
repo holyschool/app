@@ -54,6 +54,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "OFFICIAL_BACKEND_KEY", "\"$officialBackendKey\"")
+        // Startup phase logging; off in release so R8 strips the calls.
+        buildConfigField("boolean", "STARTUP_TRACE", "true")
     }
 
     signingConfigs {
@@ -71,9 +73,20 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            buildConfigField("boolean", "STARTUP_TRACE", "false")
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        // A release build that is signed with the debug key. It has the same R8, shrinking and
+        // profile setup as release, so `am start -W` numbers mean something, but it installs
+        // over a debug build without uninstalling (and losing the logged-in data).
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+            buildConfigField("boolean", "STARTUP_TRACE", "true")
         }
     }
     compileOptions {
