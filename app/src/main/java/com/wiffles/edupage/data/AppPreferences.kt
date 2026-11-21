@@ -256,6 +256,18 @@ class AppPreferences @Inject constructor(
         context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
     }
 
+    /**
+     * Parses the preferences file now.
+     *
+     * The first [Context.getSharedPreferences] call reads and parses the XML synchronously.
+     * On the first launch after an install that can take a few milliseconds, and the theme
+     * reads a preference during the very first composition, so the file is warmed on a
+     * background thread while the activity is still starting.
+     */
+    fun preload() {
+        prefs
+    }
+
     var breakVisibility: BreakVisibility
         get() = BreakVisibility.fromKey(prefs.getString(KEY_BREAK_VISIBILITY, null))
         set(value) = prefs.edit().putString(KEY_BREAK_VISIBILITY, value.key).apply()

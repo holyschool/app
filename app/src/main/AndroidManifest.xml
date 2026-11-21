@@ -21,6 +21,24 @@
             android:roundIcon="@mipmap/ic_launcher_round"
             android:supportsRtl="true"
             android:theme="@style/Theme.Edupage2">
+
+        <!--
+          WorkManager's default initializer runs inside a ContentProvider before
+          Application.onCreate, building the whole worker graph on the startup path. The app
+          only uses WorkManager for periodic refreshes, so EdupageApp initializes it later from
+          a background coroutine instead.
+        -->
+        <provider
+                android:name="androidx.startup.InitializationProvider"
+                android:authorities="${applicationId}.androidx-startup"
+                android:exported="false"
+                tools:node="merge">
+            <meta-data
+                    android:name="androidx.work.WorkManagerInitializer"
+                    android:value="androidx.startup"
+                    tools:node="remove" />
+        </provider>
+
         <service
                 android:name=".notification.AppFirebaseMessagingService"
                 android:exported="false">
@@ -119,10 +137,6 @@
                     android:resource="@xml/prepare_widget_info"/>
         </receiver>
 
-        <provider
-                android:name="androidx.startup.InitializationProvider"
-                android:authorities="${applicationId}.androidx-startup"
-                tools:node="remove" />
     </application>
 
 </manifest>
