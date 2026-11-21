@@ -66,7 +66,7 @@ adb shell "atrace -t 4 -b 40000 sched freq idle am wm view gfx res" > trace.txt
 | WorkManager initializer removed from the manifest and initialized from a background coroutine | Its `ContentProvider` built the whole worker graph during process start |
 | `AppPreferences.preload()` on the IO scope | The first `getSharedPreferences` parses an XML file; the theme reads a preference in the first composition |
 | Window background set per theme (`values`/`values-night`) | Removes the light flash before the first Compose frame in dark mode |
-| Baseline profile in `app/src/main/baseline-prof.txt` | AOT-compiles the startup path on install (see below) |
+| Baseline profile in `app/src/main/baselineProfiles/baseline-prof.txt` | AOT-compiles the startup path on install (see below) |
 | `android.r8.optimizedResourceShrinking=true` | Smaller release APK, faster install and dex load |
 | Compose BOM `2025.09.01` | Compose 1.9 / material3 1.4 include runtime and measurement improvements |
 
@@ -90,54 +90,49 @@ loading/verification and the GPU's first-frame pipeline, which is the OS/driver'
 
 ## Baseline profiles
 
-`app/src/main/baseline-prof.txt` is a **hand-seeded** profile covering the app's own startup
-classes: `EdupageApp`, `MainActivity`, the Hilt component, the theme, `MainScreen`, `PastelIcon`
-and the caches. `androidx.profileinstaller` (already pulled in transitively) installs it at first
-run. Compose and AndroidX ship their own profiles inside their AARs, so only the
-app's classes needed seeding.
+`app/src/main/baselineProfiles/baseline-prof.txt` is a profile generated from a real startup
+trace. `androidx.profileinstaller` (already pulled in transitively) installs it at first run;
+Compose and AndroidX ship their own profiles inside their AARs.
 
-It is a start, not the end state: a profile generated from a real trace is both more accurate and
-covers scrolling (`LazyColumn` prefetch, item composition). To generate one, add a
-`:baselineprofile` module:
+The generator lives in the `:baselineprofile` module (`com.android.test` +
+`androidx.baselineprofile`). It profiles the plain startup journey:
 
 ```kotlin
-// baselineprofile/build.gradle.kts
-plugins {
-    id("com.android.test")
-    id("org.jetbrains.kotlin.android")
-    id("androidx.baselineprofile")
-}
-
-android {
-    targetProjectPath = ":app"
-    // run on an API 33+ emulator/device
-}
-
-dependencies {
-    implementation("androidx.test.ext:junit:1.2.1")
-    implementation("androidx.test.uiautomator:uiautomator:2.3.0")
-    implementation("androidx.benchmark:benchmark-macro-junit4:1.3.4")
+@Test
+fun startup() = rule.collect(packageName = "com.wiffles.edupage") {
+    pressHome()
+    startActivityAndWait()
 }
 ```
 
-```kotlin
-@RunWith(AndroidJUnit4::class)
-class BaselineProfileGenerator {
-    @get:Rule val rule = BaselineProfileRule()
+Regenerate on an API 33+ device (no root needed) while the app is signed in, because the
+recorded journey must include the cached main UI rather than the login screen:
 
-    @Test
-    fun startup() = rule.collect(packageName = "com.wiffles.edupage") {
-        pressHome()
-        startActivityAndWait()
-        device.findObject(By.res("timetable_tab"))?.click()
-        device.waitForIdle()
-    }
-}
+```bash
+./gradlew :app:generateBaselineProfile \
+    -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile
 ```
 
-Then run `./gradlew :app:generateReleaseBaselineProfile` on a device and replace
-`app/src/main/baseline-prof.txt`. Add `androidx.benchmark.macro.junit4` +
-`StartupTimingMetric` in the same module to track TTID/TTFD over time.
+Notes:
+
+- The plugin collects on a synthetic non-minified release build and rewrites the rules for the
+  R8-minified variants, so the profile matches both `release` and `benchmark`.
+- `mergeIntoMain = true` writes the result to `app/src/main/generated/baselineProfiles/`. That
+  directory is not consumed by the `benchmark` variant, so copy it into the source set that is:
+
+  ```bash
+  cp app/src/main/generated/baselineProfiles/baseline-prof.txt \
+     app/src/main/baselineProfiles/baseline-prof.txt
+  ```
+
+- The connected generator test **uninstalls the target app from the test device** when it
+  finishes. Log in again before measuring (or before regenerating, so the next profile also
+  captures the signed-in path).
+- Only the baseline profile is generated. Marking rules `includeInStartupProfile = true` would
+  also produce ART startup rules, at the cost of a much larger file installed at boot; the
+  baseline profile already covers the startup classes.
+
+Add a `StartupTimingMetric` test in the same module to track TTID/TTFD over time.
 
 ## Further work
 
