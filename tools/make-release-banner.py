@@ -11,7 +11,7 @@ The words come from the release's notes, `.github/releases/<version>.md` (README
 there), the version from `app/build.gradle.kts`. CI runs it for every release
 (release.yml):
 
-    python3 tools/make-release-banner.py [--version 1.7.0] [--out path.png]
+    python3 tools/make-release-banner.py [--version 1.8.0] [--out path.png]
 """
 import argparse
 import math
