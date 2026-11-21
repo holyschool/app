@@ -570,9 +570,6 @@
 
     <string name="settings_experimental_ai_quiz">AI studijní nástroje</string>
     <string name="settings_experimental_ai_quiz_desc">Kvízy, kartičky a studijní chat s vlastním AI klíčem.</string>
-    <string name="settings_experimental_startup">Spuštění</string>
-    <string name="settings_fast_start">Rychlý start</string>
-    <string name="settings_fast_start_desc">Přeskočí úvodní obrazovku a otevře aplikaci rovnou z uložených dat, která pak na pozadí obnoví. Aplikace funguje i offline.</string>
     <string name="settings_experimental_overview">Přehled</string>
     <string name="settings_overview_timetable_redesign">Redesign rozvrhu v přehledu</string>
     <string name="settings_overview_timetable_redesign_desc">Zobrazí celý den jako kompaktní mřížku hodin, podobně jako výchozí rozvrh EduPage.</string>

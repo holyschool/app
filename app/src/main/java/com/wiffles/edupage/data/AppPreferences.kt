@@ -223,7 +223,6 @@ class AppPreferences @Inject constructor(
         private const val KEY_COMPACT_TIMETABLE = "compact_timetable"
         private const val KEY_TIMETABLE_WEEK_VIEW = "timetable_week_view"
         private const val KEY_OVERVIEW_TIMETABLE_REDESIGN = "overview_timetable_redesign"
-        private const val KEY_FAST_START = "fast_start"
         private const val KEY_LAST_DATA_WARM_MS = "last_data_warm_ms"
         private const val KEY_AUTO_REFRESH_MINS = "auto_refresh_mins"
         private const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"
@@ -560,19 +559,6 @@ class AppPreferences @Inject constructor(
     val overviewTimetableRedesignFlow: Flow<Boolean> = prefFlow(
         key = KEY_OVERVIEW_TIMETABLE_REDESIGN,
         current = { overviewTimetableRedesign },
-    )
-
-    /**
-     * Experimental: open straight into the app from cached data and validate the session in the
-     * background, so the first screen appears almost instantly on a cold start.
-     */
-    var fastStart: Boolean
-        get() = prefs.getBoolean(KEY_FAST_START, false)
-        set(value) = prefs.edit().putBoolean(KEY_FAST_START, value).apply()
-
-    val fastStartFlow: Flow<Boolean> = prefFlow(
-        key = KEY_FAST_START,
-        current = { fastStart },
     )
 
     /** When the background cache warmer last completed a full pass. */

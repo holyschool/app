@@ -57,6 +57,9 @@ adb shell "atrace -t 4 -b 40000 sched freq idle am wm view gfx res" > trace.txt
 | The overview is a `LazyColumn`, not a scrollable `Column` | The column measured and laid out all ten cards before the first frame. The lazy list builds only what is on screen (measured: 110 ms → ~20 ms of measure) |
 | `ShellViewModel` for the three shell preferences | The shell used to build `SettingsViewModel` (17 dependencies) just to read the meals/AI/default-tab flags. They are now read from `AppPreferences` by a ViewModel with one dependency; settings builds its own when it opens |
 | Splash screen no longer held until composition starts | The hold hid the real first-frame cost and delayed cached content pointlessly |
+| Logged-in users never see a splash | The nav graph starts on the main UI whenever onboarding is done and credentials exist (a plain-prefs flag, so the keystore stays shut) and restores the session behind it. The splash remains only for first run / logged-out, where there is nothing to draw |
+| Session validation and cache warming wait for the first frame | They decrypt credentials and hit the network. Running them from `onCreate` let them compete with composition; they now start in a `LaunchedEffect` after `withFrameNanos` |
+| `SessionRepository.ensureValidSession()` switches to `Dispatchers.IO` | Callers include `lifecycleScope` observers on the main thread; the keystore read and HTTP probe must never run there |
 | `DataWarmer` / `SessionRepository` injected as `dagger.Lazy` | Building the nine-dependency warm-up graph and the session check was main-thread work before the first frame |
 | `LockStore` flags read from a plain preferences file | The encrypted store touches the Android keystore; doing that in the first composition cost 20–150 ms on first launch. PIN hash and salt stay encrypted |
 | Settings recreate listener moved from `onCreate` into composition | `SettingsViewModel` (and its graph) was created on every launch just to listen for a rare event |
@@ -75,11 +78,11 @@ On a Nothing Phone (2a), API 37, best of ten cold starts with the benchmark buil
 | --- | --- |
 | process fork → `Application.onCreate` | ~30 ms |
 | `Application.onCreate` → `Activity.onCreate` | ~45 ms |
-| `Activity.onCreate` (splash, edge-to-edge, lazy session warm-up) → `setContent` | ~15 ms |
+| `Activity.onCreate` (edge-to-edge, start destination) → `setContent` | ~25 ms |
 | first composition (shell + overview) | ~35 ms |
 | first frame: measure / layout / draw | ~100 / ~10 / ~15 ms |
 | first frame: render thread (first-draw shaders, texture uploads) | ~40 ms |
-| `am start -W` TotalTime | **330–420 ms** |
+| `am start -W` TotalTime | **300–360 ms** |
 
 The first-frame measure and draw are the largest remaining app-owned cost. They fall with fewer
 nodes on screen (the lazy overview) and with a real baseline profile; the rest is class

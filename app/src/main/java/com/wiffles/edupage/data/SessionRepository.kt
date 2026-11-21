@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,7 +60,15 @@ class SessionRepository @Inject constructor(
         scope.launch { ensureValidSession() }
     }
 
-    suspend fun ensureValidSession(): SessionHealth = mutex.withLock {
+    /**
+     * Validates the saved session. Always runs off the caller's dispatcher: decrypting the
+     * credentials and probing the network must never stall the main thread, startup included.
+     */
+    suspend fun ensureValidSession(): SessionHealth = withContext(Dispatchers.IO) {
+        ensureValidSessionLocked()
+    }
+
+    private suspend fun ensureValidSessionLocked(): SessionHealth = mutex.withLock {
         val saved = credentialStore.load()
         if (saved == null) {
             _authInvalid.tryEmit(Unit)

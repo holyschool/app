@@ -359,9 +359,6 @@
     <string name="settings_experimental_cloud_desc">Browse, upload and manage your EduPage cloud storage.</string>
     <string name="settings_experimental_appearance">Accent colors &amp; appearance</string>
     <string name="settings_experimental_appearance_desc">Custom accent color, font size and more options.</string>
-    <string name="settings_experimental_startup">Startup</string>
-    <string name="settings_fast_start">Fast start</string>
-    <string name="settings_fast_start_desc">Skip the loading screen and open straight into the app from cached data, then refresh in the background. The app also keeps working when you are offline.</string>
     <string name="settings_experimental_overview">Overview</string>
     <string name="settings_overview_timetable_redesign">Overview timetable redesign</string>
     <string name="settings_overview_timetable_redesign_desc">Show the whole day as a compact period grid, similar to the default EduPage timetable.</string>

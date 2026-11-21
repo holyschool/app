@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
 import com.wiffles.edupage.data.AccountProfileStore
-import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.CredentialStore
 import com.wiffles.edupage.data.DataWarmer
 import com.wiffles.edupage.data.SessionRepository
@@ -31,7 +30,6 @@ class SplashViewModel @Inject constructor(
     private val edupage: Edupage,
     private val credentialStore: CredentialStore,
     private val accountProfileStore: AccountProfileStore,
-    private val appPreferences: AppPreferences,
     private val sessionRepository: SessionRepository,
     private val dataWarmer: DataWarmer,
 ) : ViewModel() {
@@ -58,15 +56,11 @@ class SplashViewModel @Inject constructor(
                 return@launch
             }
 
-            // Offline, or fast start enabled: show the cached UI right away and validate in the
-            // background (the app-singleton scope means this survives leaving the splash screen).
+            // Offline: show the cached UI right away and validate in the background (the
+            // app-singleton scope means this survives leaving the splash screen).
             val offline = !ConnectivityObserver.isOnline.value
-            if (offline || appPreferences.fastStart) {
-                Log.i(
-                    TAG,
-                    if (offline) "offline start: entering offline mode"
-                    else "fast start: rendering from cache"
-                )
+            if (offline) {
+                Log.i(TAG, "offline start: entering offline mode")
                 enterApp()
                 sessionRepository.ensureValidSessionAsync()
                 return@launch
