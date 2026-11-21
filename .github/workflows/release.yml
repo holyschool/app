@@ -1,8 +1,8 @@
 name: Signed release
 
 # Builds a release APK signed with the project keystore when a version tag is pushed,
-# then attaches it to the GitHub Release. The keystore and passwords are supplied through
-# repository secrets and are never stored in the repository.
+# draws the release banner, and publishes both on the GitHub Release. The keystore and
+# passwords are supplied through repository secrets and are never stored in the repository.
 #
 # Required repository secrets:
 #   KEYSTORE_BASE64     base64 of keystore/edupage-release.jks  (`base64 -w0 edupage-release.jks`)
@@ -11,6 +11,11 @@ name: Signed release
 #   KEY_PASSWORD        key password
 # Optional secret:
 #   OFFICIAL_BACKEND_KEY   value injected into BuildConfig.OFFICIAL_BACKEND_KEY
+#
+# The banner's words come from .github/releases/<version>.md (see the README there). Tag the
+# commit that bumps versionName, and commit that notes file first:
+#
+#   git tag v1.8.0 && git push origin v1.8.0
 
 on:
   push:
@@ -20,6 +25,10 @@ on:
 
 permissions:
   contents: write
+
+env:
+  # The release key's certificate (printed in the release notes): every release must carry it.
+  CERT_SHA256: 7879dc490e720a41a8e1426a863df8ac6da2a31425b097be11def5276de061d6
 
 jobs:
   release:
@@ -56,10 +65,61 @@ jobs:
           OFFICIAL_BACKEND_KEY: ${{ secrets.OFFICIAL_BACKEND_KEY }}
         run: ./gradlew :app:assembleRelease --stacktrace
 
-      - name: Attach APK to release
+      - name: Read the version
+        id: meta
+        run: |
+          gradle=$(sed -nE 's/^\s*versionName\s*=\s*"([^"]+)".*/\1/p' app/build.gradle.kts)
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            if [[ "$version" != "$gradle" ]]; then
+              echo "::error::tag $GITHUB_REF_NAME but versionName is $gradle: tag the commit that bumps it"
+              exit 1
+            fi
+          else
+            version="$gradle"
+          fi
+          if [[ ! -f ".github/releases/$version.md" ]]; then
+            echo "::error::.github/releases/$version.md is missing"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Draw the release banner
+        run: |
+          pip install --quiet numpy pillow
+          python3 tools/make-release-banner.py \
+            --version "${{ steps.meta.outputs.version }}" \
+            --out "edupage-${{ steps.meta.outputs.version }}-banner.png"
+
+      - name: Compose the release notes
+        env:
+          V: ${{ steps.meta.outputs.version }}
+        run: |
+          repo="${{ github.repository }}"
+          cp app/build/outputs/apk/release/app-release.apk "edupage-$V.apk"
+          cert=$(echo "$CERT_SHA256" | tr a-f A-F | sed 's/../&:/g; s/:$//')
+          {
+            echo "![Edupage $V](https://github.com/$repo/releases/download/v$V/edupage-$V-banner.png)"
+            echo
+            # The release text: everything below the first '---' (above it is the banner's).
+            sed '1,/^---/d' ".github/releases/$V.md"
+            echo
+            echo "**Install:** download \`edupage-$V.apk\` below. It updates earlier releases in place."
+            echo
+            echo "Signing certificate SHA-256: \`$cert\`"
+          } > release-notes.md
+
+      - name: Attach APK and banner to release
         if: startsWith(github.ref, 'refs/tags/') && env.KEYSTORE_BASE64 != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/app-release.apk
+          body_path: release-notes.md
+          files: |
+            edupage-${{ steps.meta.outputs.version }}.apk
+            edupage-${{ steps.meta.outputs.version }}-banner.png
           # Tags like v1.7.0-beta.1 are published as pre-releases.
           prerelease: ${{ contains(github.ref_name, '-') }}

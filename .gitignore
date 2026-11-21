@@ -31,3 +31,7 @@ keystore.properties
 /keystore/
 *.jks
 *.keystore
+
+# Python bytecode
+__pycache__/
+*.pyc
