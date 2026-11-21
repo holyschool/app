@@ -28,10 +28,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -163,7 +164,7 @@ fun OverviewScreen(
     val timetableRedesign by viewModel.overviewTimetableRedesign.collectAsState()
     val haptics        = rememberAppHaptics()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
-    val overviewScroll = rememberScrollState()
+    val overviewListState = rememberLazyListState()
     var showPrepare    by remember { mutableStateOf(false) }
 
     val prepareState by prepareViewModel.uiState.collectAsState()
@@ -233,97 +234,122 @@ fun OverviewScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Column(
+                // A lazy list, not a scrollable column: the column measured and laid out every
+                // card below the fold before the first frame could be drawn. The lazy list only
+                // builds what is on screen and fills in the rest while the user scrolls.
+                LazyColumn(
+                    state = overviewListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .scrollMotionBlur(
-                            scrollState = overviewScroll,
+                            lazyListState = overviewListState,
                             enabled = com.wiffles.edupage.ui.modifiers.MotionBlurGate.forTabs(),
-                        )
-                        .verticalScroll(overviewScroll)
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp + bottomPadding.calculateBottomPadding()),
+                        ),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 4.dp,
+                        bottom = 16.dp + bottomPadding.calculateBottomPadding(),
+                    ),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Spacer(Modifier.height(4.dp))
+                    item(key = "hero") {
+                        OverviewHero(
+                            timetableState = timetableState,
+                            messagesState = messagesState,
+                            todoCount = homeworkItems.count { !it.done },
+                        )
+                    }
 
-                    OverviewHero(
-                        timetableState = timetableState,
-                        messagesState = messagesState,
-                        todoCount = homeworkItems.count { !it.done },
-                    )
+                    item(key = "prepare") {
+                        val prepareSuccess = prepareState as? PrepareUiState.Success
+                        val prepareTotal = prepareSuccess?.lessons?.size
+                        val prepareDone = prepareSuccess?.let { s ->
+                            (preparedMap[s.date.toString()]?.size ?: 0).coerceAtMost(s.lessons.size)
+                        } ?: 0
+                        PrepareWidgetCard(
+                            totalCount = prepareTotal,
+                            preparedCount = prepareDone,
+                            onClick = { showPrepare = true },
+                        )
+                    }
 
-                    val prepareSuccess = prepareState as? PrepareUiState.Success
-                    val prepareTotal = prepareSuccess?.lessons?.size
-                    val prepareDone = prepareSuccess?.let { s ->
-                        (preparedMap[s.date.toString()]?.size ?: 0).coerceAtMost(s.lessons.size)
-                    } ?: 0
-                    PrepareWidgetCard(
-                        totalCount = prepareTotal,
-                        preparedCount = prepareDone,
-                        onClick = { showPrepare = true },
-                    )
+                    item(key = "timetable") {
+                        TimetableCard(
+                            state = timetableState,
+                            eventsState = eventsState,
+                            currentTime = currentTime,
+                            onGoToTimetable = onGoToTimetable,
+                            haptics = haptics,
+                            showSeconds = showSeconds,
+                            onRetry = viewModel::refresh,
+                            redesign = timetableRedesign,
+                        )
+                    }
 
-                    TimetableCard(
-                        state = timetableState,
-                        eventsState = eventsState,
-                        currentTime = currentTime,
-                        onGoToTimetable = onGoToTimetable,
-                        haptics = haptics,
-                        showSeconds = showSeconds,
-                        onRetry = viewModel::refresh,
-                        redesign = timetableRedesign,
-                    )
-
-                    GradesCard(
-                        state = gradesState,
-                        onGoToGrades = onGoToGrades,
-                        haptics = haptics,
-                        onRetry = viewModel::refresh,
-                    )
-
-                    HomeworkCard(
-                        items = homeworkItems,
-                        onHomework = onHomework,
-                        haptics = haptics,
-                    )
-
-                    MessagesCard(
-                        state = messagesState,
-                        onGoToMessages = onGoToMessages,
-                        haptics = haptics,
-                        onRetry = viewModel::refresh,
-                    )
-
-                    EventsCard(
-                        state = eventsState,
-                        onRetry = viewModel::refresh,
-                    )
-
-                    if (mealsEnabled) {
-                        MealsCard(
-                            state = mealsState,
-                            onGoToMeals = onGoToMeals,
+                    item(key = "grades") {
+                        GradesCard(
+                            state = gradesState,
+                            onGoToGrades = onGoToGrades,
                             haptics = haptics,
                             onRetry = viewModel::refresh,
                         )
                     }
 
-                    QuickActionsCard(
-                        onCompose   = onGoToMessages,
-                        onTimetable = onGoToTimetable,
-                        onGrades    = onGoToGrades,
-                        onMeals     = if (mealsEnabled) onGoToMeals else null,
-                        onHomework  = onHomework,
-                        haptics     = haptics,
-                    )
+                    item(key = "homework") {
+                        HomeworkCard(
+                            items = homeworkItems,
+                            onHomework = onHomework,
+                            haptics = haptics,
+                        )
+                    }
+
+                    item(key = "messages") {
+                        MessagesCard(
+                            state = messagesState,
+                            onGoToMessages = onGoToMessages,
+                            haptics = haptics,
+                            onRetry = viewModel::refresh,
+                        )
+                    }
+
+                    item(key = "events") {
+                        EventsCard(
+                            state = eventsState,
+                            onRetry = viewModel::refresh,
+                        )
+                    }
+
+                    if (mealsEnabled) {
+                        item(key = "meals") {
+                            MealsCard(
+                                state = mealsState,
+                                onGoToMeals = onGoToMeals,
+                                haptics = haptics,
+                                onRetry = viewModel::refresh,
+                            )
+                        }
+                    }
+
+                    item(key = "quick-actions") {
+                        QuickActionsCard(
+                            onCompose   = onGoToMessages,
+                            onTimetable = onGoToTimetable,
+                            onGrades    = onGoToGrades,
+                            onMeals     = if (mealsEnabled) onGoToMeals else null,
+                            onHomework  = onHomework,
+                            haptics     = haptics,
+                        )
+                    }
 
                     if (aiStudyEnabled && (onAiQuiz != null || onAiFlashcards != null || onAiChat != null)) {
-                        AiStudyCard(
-                            onQuiz       = onAiQuiz,
-                            onFlashcards = onAiFlashcards,
-                            onChat       = onAiChat,
-                        )
+                        item(key = "ai-study") {
+                            AiStudyCard(
+                                onQuiz       = onAiQuiz,
+                                onFlashcards = onAiFlashcards,
+                                onChat       = onAiChat,
+                            )
+                        }
                     }
                 }
             }

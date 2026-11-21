@@ -70,6 +70,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.wiffles.edupage.MainActivity
 import com.wiffles.edupage.R
+import com.wiffles.edupage.data.AccountEvents
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.wiffles.edupage.notification.DeepLinkHelper
 import com.wiffles.edupage.ui.about.AboutScreen
@@ -91,6 +92,7 @@ import com.wiffles.edupage.ui.theme.Edupage2Theme
 import com.wiffles.edupage.ui.timetable.TimetableScreen
 import com.wiffles.edupage.ui.util.ConnectivityObserver
 import com.wiffles.edupage.ui.util.rememberAppHaptics
+import com.wiffles.edupage.util.StartupTrace
 import kotlinx.coroutines.launch
 
 private data class TabItem(
@@ -115,28 +117,33 @@ private const val PUSH_DURATION = 320
 fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     val haptics       = rememberAppHaptics()
     val scope         = rememberCoroutineScope()
-    val settingsVm: SettingsViewModel = hiltViewModel()
-    val mealsEnabled by settingsVm.mealsEnabled.collectAsState()
-    val aiStudyEnabled by settingsVm.aiQuizEnabled.collectAsState()
-    val defaultTabPref by settingsVm.defaultTab.collectAsState()
+    // Only the preferences the shell actually draws with are read here. The settings ViewModel
+    // has a large dependency graph and is built when settings is opened, not on the way to the
+    // first frame.
+    val shellVm: ShellViewModel = hiltViewModel()
+    StartupTrace.mark("shell vm")
+    val mealsEnabled by shellVm.mealsEnabled.collectAsState()
+    val aiStudyEnabled by shellVm.aiQuizEnabled.collectAsState()
+    val defaultTabPref by shellVm.defaultTab.collectAsState()
     val tabs = tabList(mealsEnabled)
     val pagerState = rememberPagerState(initialPage = defaultTabPref.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))) { tabs.size }
-    // Composing a neighbouring tab costs more than the first frame can afford: every tab is a
-    // full screen with its own ViewModel and cache read. Only the visible page exists until the
-    // first frame has landed, then the neighbours are pre-composed so swiping stays smooth.
-    var precomposeNeighbours by remember { mutableStateOf(false) }
     val activity = LocalContext.current as? android.app.Activity
     LaunchedEffect(Unit) {
         withFrameNanos { }
-        precomposeNeighbours = true
+        StartupTrace.mark("first frame")
         // The shell with cached content is on screen now. Marking it tells both the system and
         // `adb shell am start -W` where the app actually finished, instead of stopping at the
         // first frame (which is just the theme window).
         activity?.reportFullyDrawn()
+        StartupTrace.mark("reported fully drawn")
     }
+    StartupTrace.mark("main screen compose")
     val gradesVm: GradesViewModel = hiltViewModel()
+    StartupTrace.mark("grades vm")
     val overviewVm: OverviewViewModel = hiltViewModel()
+    StartupTrace.mark("overview vm")
     val messagesVm: com.wiffles.edupage.ui.messages.MessagesViewModel = hiltViewModel()
+    StartupTrace.mark("messages vm")
     val unreadMessages by messagesVm.unreadCount.collectAsState()
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
 
@@ -154,7 +161,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     }
 
     LaunchedEffect(Unit) {
-        settingsVm.parentSwitchEvent.collect {
+        AccountEvents.parentSwitched.collect {
             gradesVm.refresh()
             overviewVm.refresh()
             messagesVm.refresh()
@@ -218,14 +225,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
 
     val bootUpdate = UpdateCenter.pending.collectAsState().value
     if (bootUpdate != null) {
-        val downloadProgress by settingsVm.downloadProgress.collectAsState()
-        UpdateAvailableSheet(
-            info = bootUpdate,
-            downloadProgress = downloadProgress,
-            onDownload = { settingsVm.downloadUpdate(bootUpdate) },
-            onSkip = { settingsVm.skipUpdate(bootUpdate.versionName) },
-            onDismiss = { UpdateCenter.dismiss() },
-        )
+        BootUpdateSheet(bootUpdate)
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -378,25 +378,28 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                 modifier = Modifier.fillMaxSize(),
                 userScrollEnabled = !showAbout &&
                     !(tabs.getOrNull(pagerState.currentPage)?.labelRes == R.string.tab_timetable && timetableWeekMode),
-                beyondViewportPageCount = if (precomposeNeighbours) 1 else 0,
+                beyondViewportPageCount = 0,
                 key = { it },
             ) { page ->
                 when (tabs[page].labelRes) {
-                    R.string.tab_overview -> OverviewScreen(
-                        innerPadding,
-                        viewModel       = overviewVm,
-                        onSettings      = goToSettings,
-                        onGoToMessages  = { scope.launch { pagerState.animateScrollToPage(1) } },
-                        onGoToTimetable = { scope.launch { pagerState.animateScrollToPage(2) } },
-                        onGoToGrades    = { scope.launch { pagerState.animateScrollToPage(3) } },
-                        onGoToMeals     = if (mealsEnabled) { { scope.launch { pagerState.animateScrollToPage(4) } } } else { null },
-                        onHomework      = { showHomework = true },
-                        aiStudyEnabled  = aiStudyEnabled,
-                        onAiQuiz        = { showAiQuiz = true },
-                        onAiFlashcards  = { showAiFlashcards = true },
-                        onAiChat        = { showAiChat = true },
-                        mealsEnabled    = mealsEnabled,
-                    )
+                    R.string.tab_overview -> {
+                        OverviewScreen(
+                            innerPadding,
+                            viewModel       = overviewVm,
+                            onSettings      = goToSettings,
+                            onGoToMessages  = { scope.launch { pagerState.animateScrollToPage(1) } },
+                            onGoToTimetable = { scope.launch { pagerState.animateScrollToPage(2) } },
+                            onGoToGrades    = { scope.launch { pagerState.animateScrollToPage(3) } },
+                            onGoToMeals     = if (mealsEnabled) { { scope.launch { pagerState.animateScrollToPage(4) } } } else { null },
+                            onHomework      = { showHomework = true },
+                            aiStudyEnabled  = aiStudyEnabled,
+                            onAiQuiz        = { showAiQuiz = true },
+                            onAiFlashcards  = { showAiFlashcards = true },
+                            onAiChat        = { showAiChat = true },
+                            mealsEnabled    = mealsEnabled,
+                        )
+                        StartupTrace.mark("overview composed")
+                    }
                     R.string.tab_messages -> MessagesScreen(innerPadding)
                     R.string.tab_timetable -> TimetableScreen(
                         innerPadding,
@@ -707,3 +710,16 @@ private fun BottomNavPreview() {
     }
 }
 
+@Composable
+private fun BootUpdateSheet(info: com.wiffles.edupage.network.AppUpdateInfo) {
+    // Built only while the update sheet is actually on screen, never on the startup path.
+    val viewModel: SettingsViewModel = hiltViewModel()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
+    UpdateAvailableSheet(
+        info = info,
+        downloadProgress = downloadProgress,
+        onDownload = { viewModel.downloadUpdate(info) },
+        onSkip = { viewModel.skipUpdate(info.versionName) },
+        onDismiss = { UpdateCenter.dismiss() },
+    )
+}
