@@ -28,6 +28,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavHostController
 import com.wiffles.edupage.data.AppPreferences
+import com.wiffles.edupage.data.CredentialStore
 import com.wiffles.edupage.data.DarkModePreference
 import com.wiffles.edupage.data.DataWarmer
 import com.wiffles.edupage.data.SessionRepository
@@ -51,6 +52,10 @@ import javax.inject.Inject
 class MainActivity : FragmentActivity() {
 
     @Inject lateinit var appPreferences: AppPreferences
+    @Inject lateinit var credentialStore: CredentialStore
+
+    /** Read once per activity: picks the start destination, never opens the keystore. */
+    private val hasSavedCredentials by lazy { credentialStore.hasSavedCredentials }
 
     // Resolved on first use: DataWarmer pulls in the whole cache/network graph and the session
     // check is network work, so neither may be built on the main thread during the first frame.
@@ -85,13 +90,6 @@ class MainActivity : FragmentActivity() {
 
         enableEdgeToEdge()
 
-        // A fast start has no loading screen to run the auto-login in, so validate the session
-        // and refill the caches behind the cached UI that is already on screen.
-        if (appPreferences.fastStart && appPreferences.onboardingCompleted) {
-            sessionRepository.get().ensureValidSessionAsync()
-            dataWarmer.get().warmAsync(force = true)
-        }
-
         lifecycleScope.launch {
             sessionRepository.get().authInvalid.collect {
                 requestLoginRoute()
@@ -124,6 +122,15 @@ class MainActivity : FragmentActivity() {
         StartupTrace.mark("before setContent")
         setContent {
             StartupTrace.mark("compose start")
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                // Session validation and cache warming touch the keystore and the network. Let
+                // the cached UI reach the screen first so neither can delay the first frame.
+                androidx.compose.runtime.withFrameNanos { }
+                if (appPreferences.onboardingCompleted) {
+                    sessionRepository.get().ensureValidSessionAsync()
+                    dataWarmer.get().warmAsync(force = true)
+                }
+            }
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 // SettingsViewModel is only needed for a rare recreate request. Wait for the
                 // first frame before building it (and its graph) on the startup path.
@@ -257,7 +264,11 @@ class MainActivity : FragmentActivity() {
                         }
                     }
                     val showWhatsNew by WhatsNewCenter.visible.collectAsState()
-                    AppNavGraph(navController = navController, appPreferences = appPreferences)
+                    AppNavGraph(
+                        navController       = navController,
+                        appPreferences      = appPreferences,
+                        hasSavedCredentials = hasSavedCredentials,
+                    )
                     WhatsNewHost(
                         visible = showWhatsNew && !locked,
                         versionName = appPreferences.appVersionName,

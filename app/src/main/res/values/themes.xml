@@ -5,9 +5,15 @@
         <item name="android:windowBackground">@color/window_background</item>
     </style>
 
+    <!--
+      The OS paints this window before the app can draw. It carries no logo: it is only the
+      app surface colour, so the first Compose frame replaces it without a visible change.
+      The colour comes from values/ and values-night/ so it matches the selected theme family.
+    -->
     <style name="Theme.Edupage2.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#010202</item>
+        <item name="windowSplashScreenBackground">@color/window_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/window_background</item>
         <item name="postSplashScreenTheme">@style/Theme.Edupage2</item>
     </style>
 
