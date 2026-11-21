@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.edupage.api.Edupage
 import com.edupage.api.model.people.EduAccount
 import com.wiffles.edupage.R
+import com.wiffles.edupage.data.AccountEvents
 import com.wiffles.edupage.data.AccountProfile
 import com.wiffles.edupage.data.AccountProfileStore
 import com.wiffles.edupage.data.AppLanguage
@@ -360,9 +361,6 @@ class SettingsViewModel @Inject constructor(
     val isParent: Boolean
         get() = edupage.isParent
 
-    private val _parentSwitchEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val parentSwitchEvent: SharedFlow<Unit> = _parentSwitchEvent.asSharedFlow()
-
     private val _profiles = MutableStateFlow<List<AccountProfile>>(emptyList())
     val profiles: StateFlow<List<AccountProfile>> = _profiles.asStateFlow()
 
@@ -431,7 +429,7 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.selectedChildId = child.personId
                 _currentChild.value = child
                 clearAllCaches()
-                _parentSwitchEvent.emit(Unit)
+                AccountEvents.notifyParentSwitched()
                 Log.i(TAG, "Switched to child: ${child.name} (${child.personId})")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to switch to child: ${e.message}", e)
@@ -446,7 +444,7 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.selectedChildId = -1
                 _currentChild.value = null
                 clearAllCaches()
-                _parentSwitchEvent.emit(Unit)
+                AccountEvents.notifyParentSwitched()
                 Log.i(TAG, "Switched back to parent view")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to switch to parent: ${e.message}", e)
