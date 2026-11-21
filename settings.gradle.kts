@@ -29,3 +29,4 @@ dependencyResolutionManagement {
 rootProject.name = "Edupage2"
 include(":app")
 include(":edupage-lib")
+include(":baselineprofile")

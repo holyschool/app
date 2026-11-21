@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.oss.licenses)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 if (file("google-services.json").exists()) {
@@ -103,6 +104,12 @@ android {
     }
 }
 
+baselineProfile {
+    // One profile for every variant, including the debug-signed benchmark build used to measure
+    // startup. The generator module writes it to src/main/generated/baselineProfiles.
+    mergeIntoMain = true
+}
+
 dependencies {
 
     implementation(project(":edupage-lib"))
@@ -162,4 +169,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Supplies the profile produced by the `:baselineprofile` generator module.
+    baselineProfile(project(":baselineprofile"))
 }
