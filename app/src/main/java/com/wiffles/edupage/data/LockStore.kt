@@ -18,12 +18,25 @@ class LockStore @Inject constructor(
 ) {
     companion object {
         private const val FILE_NAME = "edupage_lock_prefs"
+
+        /**
+         * The two flags live in a plain preferences file. They are not secrets, and reading them
+         * through the encrypted store used to wake the Android keystore on the first frame.
+         * Only the PIN hash and its salt stay encrypted.
+         */
+        private const val FLAGS_FILE = "edupage_lock_flags"
+        private const val KEY_MIGRATED = "flags_migrated"
+
         private const val KEY_ENABLED = "lock_enabled"
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_SALT = "pin_salt"
         private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
     }
 
+    /**
+     * The encrypted store, built on demand: creating the master key touches the keystore, which
+     * is far too expensive to do while the first frame is being drawn.
+     */
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -37,34 +50,64 @@ class LockStore @Inject constructor(
         )
     }
 
-    private val _isEnabledFlow = kotlinx.coroutines.flow.MutableStateFlow(prefs.getBoolean(KEY_ENABLED, false))
+    private val flags by lazy {
+        context.getSharedPreferences(FLAGS_FILE, Context.MODE_PRIVATE)
+    }
+
+    init {
+        // Upgrade path: until this version the flags lived in the encrypted file. Copy them once
+        // so later launches never have to open the keystore just to know whether to show the lock.
+        if (!flags.contains(KEY_MIGRATED)) {
+            val legacyFile = java.io.File(context.dataDir, "shared_prefs/$FILE_NAME.xml")
+            if (legacyFile.exists()) {
+                // If the old file cannot be read, fail closed and keep the lock on: showing the
+                // lock screen for someone who never set one is far less harmful than opening a
+                // locked app.
+                val (enabled, biometric) = runCatching {
+                    prefs.getBoolean(KEY_ENABLED, false) to
+                        prefs.getBoolean(KEY_BIOMETRIC_ENABLED, true)
+                }.getOrElse { true to true }
+                flags.edit()
+                    .putBoolean(KEY_ENABLED, enabled)
+                    .putBoolean(KEY_BIOMETRIC_ENABLED, biometric)
+                    .putBoolean(KEY_MIGRATED, true)
+                    .apply()
+            } else {
+                flags.edit().putBoolean(KEY_MIGRATED, true).apply()
+            }
+        }
+    }
+
+    private val _isEnabledFlow = kotlinx.coroutines.flow.MutableStateFlow(flags.getBoolean(KEY_ENABLED, false))
     val isEnabledFlow: kotlinx.coroutines.flow.StateFlow<Boolean> = _isEnabledFlow.asStateFlow()
 
-    private val _isBiometricEnabledFlow = kotlinx.coroutines.flow.MutableStateFlow(prefs.getBoolean(KEY_BIOMETRIC_ENABLED, true))
+    private val _isBiometricEnabledFlow =
+        kotlinx.coroutines.flow.MutableStateFlow(flags.getBoolean(KEY_BIOMETRIC_ENABLED, true))
     val isBiometricEnabledFlow: kotlinx.coroutines.flow.StateFlow<Boolean> = _isBiometricEnabledFlow.asStateFlow()
 
     val isEnabled: Boolean
-        get() = prefs.getBoolean(KEY_ENABLED, false)
+        get() = flags.getBoolean(KEY_ENABLED, false)
 
     val isBiometricEnabled: Boolean
-        get() = prefs.getBoolean(KEY_BIOMETRIC_ENABLED, true)
+        get() = flags.getBoolean(KEY_BIOMETRIC_ENABLED, true)
 
     fun setBiometricEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_BIOMETRIC_ENABLED, enabled).apply()
+        flags.edit().putBoolean(KEY_BIOMETRIC_ENABLED, enabled).apply()
         _isBiometricEnabledFlow.value = enabled
     }
 
     fun enable(pin: String) {
         val salt = UUID.randomUUID().toString()
-        prefs.edit().apply {
-            putBoolean(KEY_ENABLED, true)
-            putString(KEY_SALT, salt)
-            putString(KEY_PIN_HASH, hash(pin, salt))
-            if (!prefs.contains(KEY_BIOMETRIC_ENABLED)) {
-                putBoolean(KEY_BIOMETRIC_ENABLED, true)
-            }
-            apply()
-        }
+        // Store the secret first and synchronously, so a process death can never leave the app
+        // unlocked with a PIN already set.
+        prefs.edit()
+            .putString(KEY_SALT, salt)
+            .putString(KEY_PIN_HASH, hash(pin, salt))
+            .commit()
+        flags.edit()
+            .putBoolean(KEY_ENABLED, true)
+            .putBoolean(KEY_BIOMETRIC_ENABLED, isBiometricEnabled)
+            .apply()
         _isEnabledFlow.value = true
     }
 
@@ -86,9 +129,11 @@ class LockStore @Inject constructor(
 
     fun disable() {
         prefs.edit()
-            .remove(KEY_ENABLED)
             .remove(KEY_PIN_HASH)
             .remove(KEY_SALT)
+            .apply()
+        flags.edit()
+            .remove(KEY_ENABLED)
             .remove(KEY_BIOMETRIC_ENABLED)
             .apply()
         _isEnabledFlow.value = false

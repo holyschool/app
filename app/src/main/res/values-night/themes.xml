@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      The window background is painted by the system before the first Compose frame. In dark
+      mode a light window would flash white for that frame, so it matches the app's dark surface.
+    -->
+    <style name="Theme.Edupage2" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+
+</resources>

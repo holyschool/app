@@ -50,8 +50,11 @@ import javax.inject.Inject
 class MainActivity : FragmentActivity() {
 
     @Inject lateinit var appPreferences: AppPreferences
-    @Inject lateinit var sessionRepository: SessionRepository
-    @Inject lateinit var dataWarmer: DataWarmer
+
+    // Resolved on first use: DataWarmer pulls in the whole cache/network graph and the session
+    // check is network work, so neither may be built on the main thread during the first frame.
+    @Inject lateinit var sessionRepository: dagger.Lazy<SessionRepository>
+    @Inject lateinit var dataWarmer: dagger.Lazy<DataWarmer>
 
     private var navController: NavHostController? = null
 
@@ -72,9 +75,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        var composReady = false
-        val splashScreen = installSplashScreen()
-        splashScreen.setKeepOnScreenCondition { !composReady }
+        installSplashScreen()
 
         super.onCreate(savedInstanceState)
 
@@ -85,24 +86,20 @@ class MainActivity : FragmentActivity() {
         // A fast start has no loading screen to run the auto-login in, so validate the session
         // and refill the caches behind the cached UI that is already on screen.
         if (appPreferences.fastStart && appPreferences.onboardingCompleted) {
-            sessionRepository.ensureValidSessionAsync()
-            dataWarmer.warmAsync(force = true)
+            sessionRepository.get().ensureValidSessionAsync()
+            dataWarmer.get().warmAsync(force = true)
         }
 
         lifecycleScope.launch {
-            settingsViewModel.recreateActivity.collect { recreate() }
-        }
-
-        lifecycleScope.launch {
-            sessionRepository.authInvalid.collect {
+            sessionRepository.get().authInvalid.collect {
                 requestLoginRoute()
             }
         }
 
         // A successful (re)login means the session is usable: refill the offline caches.
         lifecycleScope.launch {
-            sessionRepository.sessionRestored.collect {
-                dataWarmer.warmAsync(force = true)
+            sessionRepository.get().sessionRestored.collect {
+                dataWarmer.get().warmAsync(force = true)
             }
         }
 
@@ -113,9 +110,9 @@ class MainActivity : FragmentActivity() {
             ConnectivityObserver.isOnline.collect { online ->
                 if (online && !wasOnline) {
                     Log.i(TAG, "network restored, validating session")
-                    sessionRepository.ensureValidSession()
+                    sessionRepository.get().ensureValidSession()
                     if (ConnectivityObserver.isOnline.value) {
-                        dataWarmer.warmAsync(force = true)
+                        dataWarmer.get().warmAsync(force = true)
                     }
                 }
                 wasOnline = online
@@ -123,7 +120,12 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            composReady = true
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                // SettingsViewModel is only needed for a rare recreate request. Wait for the
+                // first frame before building it (and its graph) on the startup path.
+                androidx.compose.runtime.withFrameNanos { }
+                settingsViewModel.recreateActivity.collect { recreate() }
+            }
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 if (appPreferences.onboardingCompleted &&
                     appPreferences.lastSeenVersionName != appPreferences.appVersionName
@@ -184,8 +186,8 @@ class MainActivity : FragmentActivity() {
                         val route = navController?.currentDestination?.route
                         if (route == null || route == Screen.Splash.route) return
                         lifecycleScope.launch {
-                            sessionRepository.ensureValidSession()
-                            dataWarmer.warmAsync()
+                            sessionRepository.get().ensureValidSession()
+                            dataWarmer.get().warmAsync()
                         }
                     }
 

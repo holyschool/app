@@ -59,9 +59,11 @@ import com.wiffles.edupage.network.UpdateCenter
 import com.wiffles.edupage.ui.update.UpdateAvailableSheet
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -119,6 +121,19 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
     val defaultTabPref by settingsVm.defaultTab.collectAsState()
     val tabs = tabList(mealsEnabled)
     val pagerState = rememberPagerState(initialPage = defaultTabPref.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))) { tabs.size }
+    // Composing a neighbouring tab costs more than the first frame can afford: every tab is a
+    // full screen with its own ViewModel and cache read. Only the visible page exists until the
+    // first frame has landed, then the neighbours are pre-composed so swiping stays smooth.
+    var precomposeNeighbours by remember { mutableStateOf(false) }
+    val activity = LocalContext.current as? android.app.Activity
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        precomposeNeighbours = true
+        // The shell with cached content is on screen now. Marking it tells both the system and
+        // `adb shell am start -W` where the app actually finished, instead of stopping at the
+        // first frame (which is just the theme window).
+        activity?.reportFullyDrawn()
+    }
     val gradesVm: GradesViewModel = hiltViewModel()
     val overviewVm: OverviewViewModel = hiltViewModel()
     val messagesVm: com.wiffles.edupage.ui.messages.MessagesViewModel = hiltViewModel()
@@ -363,7 +378,7 @@ fun MainScreen(onLogout: () -> Unit, onSwitchAccount: () -> Unit = {}) {
                 modifier = Modifier.fillMaxSize(),
                 userScrollEnabled = !showAbout &&
                     !(tabs.getOrNull(pagerState.currentPage)?.labelRes == R.string.tab_timetable && timetableWeekMode),
-                beyondViewportPageCount = 3,
+                beyondViewportPageCount = if (precomposeNeighbours) 1 else 0,
                 key = { it },
             ) { page ->
                 when (tabs[page].labelRes) {
