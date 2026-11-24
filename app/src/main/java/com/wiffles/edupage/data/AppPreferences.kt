@@ -475,7 +475,7 @@ class AppPreferences @Inject constructor(
         set(value) = prefs.edit().putBoolean(KEY_MEALS_ENABLED, value).apply()
 
     var liveClassNotif: Boolean
-        get() = prefs.getBoolean(KEY_LIVE_CLASS_NOTIF, false)
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_NOTIF, true)
         set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_NOTIF, value).apply()
 
     var autoCheckUpdates: Boolean
@@ -517,7 +517,7 @@ class AppPreferences @Inject constructor(
 
     /** Use the abbreviated subject name in the live class notification. */
     var liveClassShortSubject: Boolean
-        get() = prefs.getBoolean(KEY_LIVE_CLASS_SHORT_SUBJECT, false)
+        get() = prefs.getBoolean(KEY_LIVE_CLASS_SHORT_SUBJECT, true)
         set(value) = prefs.edit().putBoolean(KEY_LIVE_CLASS_SHORT_SUBJECT, value).apply()
 
     var liveClassShowRoom: Boolean
