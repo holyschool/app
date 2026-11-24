@@ -845,8 +845,8 @@
     <string name="notif_live_class_title">%1$s</string>
     <string name="notif_live_ends_in">ends in %1$s</string>
     <string name="notif_live_next">Next: %1$s</string>
-    <string name="notif_live_break_title">Break</string>
-    <string name="notif_live_break_text">%1$s left · %2$s</string>
+    <string name="notif_live_break_title">Break · %1$s</string>
+    <string name="notif_live_break_text">%1$s left%2$s</string>
     <string name="settings_live_class">Live class notification</string>
     <string name="settings_live_class_desc">Keep an ongoing notification with countdown, progress and the next classroom.</string>
     <string name="settings_live_class_display">Live notification content</string>

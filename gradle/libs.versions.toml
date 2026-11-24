@@ -28,7 +28,7 @@ navigationCompose = "2.9.0"
 # ViewModel
 lifecycleViewmodelCompose = "2.10.0"
 # Hilt
-hilt = "2.53.1"
+hilt = "2.54"
 hiltNavigationCompose = "1.2.0"
 hiltWork = "1.2.0"
 # WorkManager

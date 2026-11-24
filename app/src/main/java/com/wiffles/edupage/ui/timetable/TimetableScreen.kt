@@ -1,5 +1,10 @@
 package com.wiffles.edupage.ui.timetable
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,15 +42,17 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,10 +61,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -65,27 +76,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import java.time.Duration
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
-import java.util.Locale
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import com.edupage.api.model.Classroom
 import com.edupage.api.model.EduEvent
 import com.edupage.api.model.Subject
@@ -96,6 +90,9 @@ import com.wiffles.edupage.data.AppPreferences
 import com.wiffles.edupage.data.BreakVisibility
 import com.wiffles.edupage.data.CancelledLessonStyle
 import com.wiffles.edupage.data.LessonGrouping
+import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
+import com.wiffles.edupage.ui.modifiers.MotionBlurGate
+import com.wiffles.edupage.ui.modifiers.scrollMotionBlur
 import com.wiffles.edupage.ui.overview.EventHighlightCard
 import com.wiffles.edupage.ui.overview.EventTypeChip
 import com.wiffles.edupage.ui.overview.EventWeekChip
@@ -105,13 +102,15 @@ import com.wiffles.edupage.ui.overview.coversPeriod
 import com.wiffles.edupage.ui.overview.eventAccent
 import com.wiffles.edupage.ui.overview.eventDetailLine
 import com.wiffles.edupage.ui.overview.eventIcon
-
 import com.wiffles.edupage.ui.theme.Edupage2Theme
-import com.wiffles.edupage.ui.core.containers.RoundedCardContainer
-import com.wiffles.edupage.ui.modifiers.MotionBlurGate
-import com.wiffles.edupage.ui.modifiers.scrollMotionBlur
 import com.wiffles.edupage.ui.util.ShimmerBox
 import com.wiffles.edupage.ui.util.rememberAppHaptics
+import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -167,7 +166,7 @@ fun TimetableScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
                     Column {
                         Text(

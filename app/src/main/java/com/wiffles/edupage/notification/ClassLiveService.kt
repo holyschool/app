@@ -220,16 +220,28 @@ class ClassLiveService : Service() {
         val leftMin = Duration.between(now, start).toMinutes().coerceAtLeast(0)
         val elapsed = (totalMin - leftMin).coerceIn(0, totalMin).toInt()
         val showProgress = prefs.liveClassShowProgress
-        val title = getString(R.string.notif_live_break_title)
-        val text = if (showProgress) {
-            getString(
-                R.string.notif_live_break_text,
-                formatMinutes(leftMin),
-                describeLesson(next),
-            )
-        } else {
-            describeLesson(next)
+
+        val notificationTitle = listOfNotNull(
+            next.subjectShortName,
+            if (prefs.liveClassShowRoom) next.room else null
+        ).joinToString(" · ")
+
+        val notificationText = listOfNotNull(
+            if (!prefs.liveClassShortSubject) next.subject else null,
+            if (prefs.liveClassShowTeacher) next.teacher else null
+        ).joinToString(" · ").let {
+            if (it.isNotEmpty()) " · $it" else ""
         }
+
+        val title = getString(
+            R.string.notif_live_break_title,
+            notificationTitle
+        )
+        val text = getString(
+            R.string.notif_live_break_text,
+            formatMinutes(leftMin),
+            notificationText
+        )
 
         val builder = NotificationCompat.Builder(this, CHANNEL_LIVE_CLASS)
             .setSmallIcon(R.drawable.ic_notification)
